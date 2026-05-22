@@ -1,0 +1,23 @@
+{
+  "name": "mortgage-decision-helper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --configLoader native",
+    "build": "tsc -b && vite build --configLoader native && node tools/create-standalone.mjs",
+    "test": "vitest run --configLoader native",
+    "preview": "vite preview --host 127.0.0.1 --configLoader native"
+  },
+  "dependencies": {
+    "vite": "^7.1.12",
+    "typescript": "^5.9.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "vitest": "^3.2.4"
+  }
+}
