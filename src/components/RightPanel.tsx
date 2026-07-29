@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DecisionResult, MortgageInputs, ScenarioResult } from "../lib/calculations";
+import { GLOSSARY } from "../lib/glossary";
 import { formatEur, formatPct, formatSignedEur } from "../lib/format";
 import { Readout, StatusPill } from "./ui";
 
@@ -76,30 +77,34 @@ export default function RightPanel({ selected, inputs, decision }: RightPanelPro
             label="All-in monatlich"
             value={formatEur(selected.allInMonthly)}
             sub={delta ? since(delta.allInMonthly) : `${formatPct(selected.burdenRatio * 100)} vom Haushaltsnetto`}
+            info={GLOSSARY.allInMonthly}
           />
           <Readout
             label="Cash nach Kauf"
             value={formatEur(selected.cashLeft)}
             sub={delta ? since(delta.cashLeft) : `Reserve-Gap: ${formatEur(selected.reserveGap)}`}
             tone={selected.reserveGap < 0 ? "red" : "green"}
+            info={GLOSSARY.cashLeft}
           />
           <Readout
             label={`Zinsen in ${inputs.fixedRateYears} Jahren`}
             value={formatEur(selected.mortgage.interestFixed)}
             sub={delta ? since(delta.interestFixed) : "Verlässlich — innerhalb der Zinsbindung"}
             tone="amber"
+            info={GLOSSARY.interestFixed}
           />
           <Readout
             label="Restschuld danach"
             value={formatEur(selected.mortgage.remainingAfterFixed)}
             sub={`Darlehen: ${formatEur(selected.loan)}`}
+            info={GLOSSARY.remainingAfterFixed}
           />
         </div>
       </div>
 
       {decision.noSafeScenario ? (
         <div className="logic-panel logic-danger">
-          <p>Kein Szenario ist sauber. Nicht als sicher behandeln.</p>
+          <p>Keine Variante ist tragbar — nicht als sichere Option behandeln.</p>
         </div>
       ) : null}
     </aside>

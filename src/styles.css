@@ -332,6 +332,76 @@ button {
 }
 
 /* ==========================================================================
+   Tooltips — hover AND focus, so they are reachable by keyboard and touch
+   ========================================================================== */
+
+.infotip {
+  position: relative;
+  display: inline-flex;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.infotip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-family: "Inter Tight Local", sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.infotip-trigger:hover,
+.infotip-trigger:focus-visible {
+  color: var(--paper);
+  border-color: var(--sage);
+  background: var(--sage);
+  outline: none;
+}
+
+.infotip-body {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 40;
+  width: max-content;
+  max-width: 260px;
+  transform: translateX(-50%);
+  padding: 9px 11px;
+  border-radius: 8px;
+  color: var(--paper);
+  background: var(--ink);
+  font-family: "Inter Tight Local", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 6px 18px rgba(37, 35, 32, 0.18);
+}
+
+.infotip-body::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--ink);
+}
+
+/* ==========================================================================
    Verdict — the answer, first thing on the page
    ========================================================================== */
 
@@ -351,9 +421,24 @@ button {
 }
 
 .verdict p {
-  margin: 0;
+  margin: 0 0 8px;
   color: var(--soft);
   line-height: 1.55;
+}
+
+.verdict p:last-child {
+  margin-bottom: 0;
+}
+
+.verdict-miss {
+  font-weight: 500;
+}
+
+/* Tooltips inside a serif heading must not inherit its size. */
+.verdict h2 .infotip-trigger {
+  width: 18px;
+  height: 18px;
+  font-size: 0.7rem;
 }
 
 .verdict-ok {
@@ -1017,6 +1102,428 @@ button {
 }
 
 /* ==========================================================================
+   Cash beim Kauf — answers "how much do we need upfront" (spec §2.1)
+   ========================================================================== */
+
+.cash-block {
+  margin-top: 18px;
+  padding: 16px 20px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: rgba(251, 248, 241, 0.5);
+}
+
+.cash-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cash-item {
+  min-width: 0;
+}
+
+.cash-item span {
+  display: block;
+  color: var(--muted);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.cash-item strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-family: "Fraunces Local", Georgia, serif;
+  font-size: 1.24rem;
+  font-weight: 500;
+}
+
+.cash-item small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.cash-item-total strong {
+  font-size: 1.6rem;
+}
+
+.cash-op {
+  padding-bottom: 22px;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.cash-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  color: var(--soft);
+  font-size: 0.88rem;
+}
+
+.cash-footer-rent {
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Verlauf — the time dimension. Supporting evidence, not the verdict.
+   ========================================================================== */
+
+.chart-figure {
+  margin: 0;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart-grid {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--muted);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.chart-tick-y {
+  text-anchor: end;
+}
+
+.chart-tick-x {
+  text-anchor: middle;
+}
+
+.chart-axis-label {
+  fill: var(--muted);
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.chart-marker {
+  stroke: var(--amber);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  opacity: 0.6;
+}
+
+.chart-series-label {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+  color: var(--soft);
+  font-size: 0.8rem;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* Dash pattern repeats the line style, so series stay distinguishable in greyscale. */
+.chart-swatch-dashed {
+  background: repeating-linear-gradient(
+    90deg,
+    currentColor 0 4px,
+    transparent 4px 7px
+  ) !important;
+  height: 2px;
+}
+
+.chart-legend-marker::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 12px;
+  margin-right: 6px;
+  border-left: 1.5px dashed var(--amber);
+  vertical-align: middle;
+}
+
+.progress-readouts {
+  margin-top: 20px;
+}
+
+.progress-caveat {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ==========================================================================
+   Save / load — named snapshots in localStorage, never leaves this browser
+   ========================================================================== */
+
+.save-panel {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--rule);
+  border-radius: 10px;
+}
+
+.save-panel-unavailable {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.save-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.save-field {
+  flex: 1;
+  min-width: 220px;
+}
+
+.save-field span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.save-field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--sage);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  outline: 0;
+}
+
+.save-field input:focus {
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px rgba(94, 120, 97, 0.22);
+}
+
+.save-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.save-chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.save-chip-load {
+  border: 0;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.save-chip-load:hover {
+  background: rgba(94, 120, 97, 0.1);
+}
+
+.save-chip-delete,
+.save-chip-cancel {
+  border: 0;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.save-chip-delete:hover {
+  color: var(--alert);
+}
+
+.save-chip-confirm {
+  border: 0;
+  padding: 0 10px;
+  background: rgba(183, 92, 77, 0.12);
+  color: var(--alert);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.save-empty {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+/* ==========================================================================
+   Sondertilgung plan — sparse {year, amount} rows, so one-offs are possible
+   ========================================================================== */
+
+/* Freely chosen comparison target, rather than a hardwired 15% EK (D10). */
+.baseline-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--sage);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.baseline-group {
+  display: grid;
+  gap: 6px;
+}
+
+.baseline-label {
+  color: var(--muted);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.baseline-summary {
+  margin: 14px 0 18px;
+  color: var(--soft);
+  line-height: 1.55;
+}
+
+.special-covered,
+.special-short,
+.special-unreachable {
+  display: block;
+}
+
+.special-covered small,
+.special-short small,
+.special-unreachable small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.76rem;
+}
+
+.special-covered {
+  color: var(--sage);
+  font-weight: 600;
+}
+
+.special-short {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.special-unreachable {
+  color: var(--alert);
+  font-weight: 600;
+}
+
+.special-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.special-entry {
+  display: grid;
+  grid-template-columns: 78px minmax(120px, 190px) 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.special-entry-year {
+  color: var(--soft);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.special-entry-monthly {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.special-entry-remove {
+  border: 0;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.special-entry-remove:hover {
+  color: var(--alert);
+}
+
+.special-add {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.special-add .save-field {
+  max-width: 180px;
+  min-width: 0;
+}
+
+/* Linked Tilgung / Laufzeit / Monatsrate — one value, three ways to enter it */
+.tilgung-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.tilgung-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tilgung-modes .button {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 0.74rem;
+}
+
+/* ==========================================================================
    Warten — collapsed by default: a different decision from the EK question
    ========================================================================== */
 
@@ -1116,6 +1623,18 @@ button {
   .wait-columns,
   .apartment-facts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .special-entry {
+    grid-template-columns: 70px minmax(0, 1fr) auto;
+  }
+
+  .special-entry-monthly {
+    display: none;
+  }
+
+  .cash-op {
+    display: none;
   }
 }
 

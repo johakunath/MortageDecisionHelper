@@ -6,7 +6,7 @@ Short ADR-style entries. Append; don't rewrite history. If a decision is reverse
 
 ## D1 — Sondertilgung break-even compares against 15% EK *without* Sondertilgung
 
-**Date:** 2026-05-18 · **Status:** accepted
+**Date:** 2026-05-18 · **Status:** superseded by [D10](#d10--the-sondertilgung-baseline-is-chosen-not-hardwired) — the *without Sondertilgung* reasoning below still holds and is now one of two selectable modes; the fixed 15% target does not
 
 **Context.** [PRODUCT_SPEC §7.4](PRODUCT_SPEC.md#74-sondertilgung) asks how much annual Sondertilgung a lower-EK scenario needs to match 15% EK's interest — but never says what 15% EK is itself doing. The implementation resolved this accidentally: `requiredSpecialToMatch` was passed a target computed *with* the full yearly Sondertilgung path, while its own candidates ran a flat scalar. So the headline number answered a question neither spouse was asking.
 
@@ -113,6 +113,97 @@ Sondertilgung stays (it is one spouse's core argument) but slimmed: the ten year
 **Rationale.** With nothing collapsible inside it, the header height is a constant (`--header-height`), so everything sticking below it clears it with one number that cannot drift. This removes the `ResizeObserver` entirely — fewer moving parts than measuring a height that only varies because of a decision we control.
 
 **Consequence.** If anything of variable height is ever added to `.app-header`, `--header-height` breaks and the rail and right panel slide under it. Don't — put it in the body instead.
+
+---
+
+## D11 — Plain language instead of "Kein sauberes Szenario"
+
+**Date:** 2026-05-18 · **Status:** accepted · **Amends:** [PRODUCT_SPEC §5.3](PRODUCT_SPEC.md#5-core-principles)
+
+**Context.** The spec mandates the exact string *"Kein sauberes Szenario"*. The owner — one of the two people the tool is for — said plainly that he does not understand it. A verdict nobody understands fails the requirement it was written to satisfy.
+
+**Decision.** Keep the *rule* from §5.3 exactly (never present the least-bad option as safe) and replace the *wording*:
+
+| Before | After |
+|---|---|
+| "Kein sauberes Szenario" | "Keine der drei Varianten ist tragbar" |
+| "sauber möglich" / "kein sauberes Szenario" (Wohnungs-Chip) | "tragbar" / "nicht tragbar" |
+| "OK" | "Tragbar" |
+| "Knapp" | "Gerade so tragbar" |
+| "Kauf nicht gedeckt" | "Geld reicht nicht" |
+| "Reserve verletzt" | "Reserve zu dünn" |
+| "Monatlich eng" | "Rate zu hoch" |
+
+Every status now names *what is wrong* rather than which internal constraint failed, and "tragbar" is defined inline via a tooltip.
+
+**Consequence.** The literal spec string is gone from the UI. Tests assert `noSafeScenario` and `diagnosis.failed`, never the display string, so wording stays free to improve.
+
+---
+
+## D12 — Kaufnebenkosten: two presets, and 11,57% as default
+
+**Date:** 2026-05-18 · **Status:** accepted
+
+**Decision.** Only the two real German cases: **8% ohne Makler** and **11,57% mit Makler**, plus a free numeric field. Default is 11,57%.
+
+**Rationale.** The intermediate 9% preset corresponded to nothing. The default is the *more expensive* case on purpose — a decision-support tool must not make the purchase look cheaper than it is likely to be.
+
+**Consequence, and a warning.** Raising the default broke `CASE_PRESETS.case600` — the fixture whose entire job is to prove "at least one scenario is feasible" ([§17](PRODUCT_SPEC.md#17-test-cases)) — because it inherited the default. It now **pins `closingCostRate: 8` itself**. QA fixtures must specify every input that determines their expected outcome; one that tracks a default silently stops testing what it claims to test.
+
+---
+
+## D13 — Zinsbindung: 15 Jahre default, presets plus free entry
+
+**Date:** 2026-05-18 · **Status:** accepted
+
+**Context.** The field existed but was buried among eight inputs in the Finanzierung group, and nothing connected it to the three interest rates — even though in the German market the binding period is precisely what determines the rate offered.
+
+**Decision.** Default **15 years** (was 10). Presets 10 / 15 / 20 plus a free numeric field. The three rate labels now read "Zins 10% EK · 15 J.", so changing the binding visibly invalidates the rates and prompts re-entry.
+
+**Consequence.** `fixedRateYears` drives `interestFixed`, `remainingAfterFixed` and the `EkTradeoff` horizon, so every trade-off figure now spans 15 years rather than 10. Feasibility is unaffected — it depends only on cash and monthly burden.
+
+---
+
+## D10 — The Sondertilgung baseline is chosen, not hardwired
+
+**Date:** 2026-05-18 · **Status:** accepted · **Supersedes:** [D1](#d1--sondertilgung-break-even-compares-against-15-ek-without-sondertilgung)
+
+**Context.** D1 fixed the break-even target at "15% EK without Sondertilgung". That answers one question well and every neighbouring one not at all. The comparisons the couple actually makes — *"our 10% plan versus 5% and paying more"* — could not be expressed at all, and 15% EK is not the case they start from.
+
+**Decision.**
+1. The comparison target is user-selectable: **any EK level**, either **without Sondertilgung** or **with the current yearly plan**.
+2. The default is **10% EK + Nebenkosten, without Sondertilgung** — the standard German financing case and the couple's actual starting point.
+3. Every row is labelled "X% EK **+ Nebenkosten**".
+
+**On that third point:** Kaufnebenkosten are never financed in this model — the loan is always `Kaufpreis − Anzahlung` and the Nebenkosten come out of cash (`cashNeeded`). That was already true but nowhere stated, and "10% EK" on its own is ambiguous about exactly the thing German first-time buyers most often get wrong. The label removes the ambiguity.
+
+**Consequence.** `requiredSpecialToMatch` still takes an explicit target, so the baseline can never be implicit again. `compareSpecialScenarios` wraps it and returns one row per EK level, each with interest under both plan modes, the delta to the target, and the flat annual amount needed to reach it. Raising the baseline (or giving the baseline its own Sondertilgung) must raise every other row's required amount — both directions are pinned by tests.
+
+---
+
+## D9 — Capabilities restored from the original prototype
+
+**Date:** 2026-05-18 · **Status:** accepted
+
+**Context.** An audit against the very first prototype found capabilities lost across the rewrites, plus fields that were still computed but had no display surface after D6 deleted the scenario cards.
+
+**Decision.** Restore, each in a form that fits the narrowed product:
+
+| Restored | Form |
+|---|---|
+| Time-series charts | New `Verlauf` section: Restschuld / kumulierte Zinsen / Eigenkapital, with a dashed "ohne Sondertilgung" twin for the selected scenario and markers on Sondertilgung years |
+| Save / load named datasets | `localStorage` only — named snapshots plus an autosave that survives reload. No backend, nothing transmitted |
+| Tilgung ↔ Laufzeit ↔ Monatsrate | A three-way mode switch on one field. `repaymentRate` remains the single stored value; the other two are always derived |
+| Arbitrary Sondertilgung years | Sparse `{year, amount}` rows instead of a fixed grid, so a one-off in year 20 is expressible |
+| `cashNeeded`, `downPayment`, `rentDelta` | New `CashBlock` in §1 — answers PRODUCT_SPEC §2.1, which had become invisible |
+| `runtimeYears`, `propertyValueAtPayoff`, `netWorthAtPayoff` | Readouts under the chart, where the long-horizon caveat applies to all three at once |
+
+**Deliberately not restored:** free-form scenarios with editable names, add/delete, and EK entered as € — the product question is fixed at 5/10/15% EK, and re-adding them would restore the generic-calculator framing the spec moved away from.
+
+**Notes.**
+- The chart is hand-rolled SVG (~80 lines). A charting library would be inlined into `dist/mortgage-helper-standalone.html` in full, and that file is opened from disk.
+- Every series is labelled at its right-hand end and carries its own dash pattern, so the lines stay distinguishable without colour ([spec §14](PRODUCT_SPEC.md#14-ek-trade-off-matrix)).
+- Padding the Sondertilgung array uses **zeros, never the average**. Padding with the average made adding year 14 silently invent payments in years 11–13.
 
 ---
 

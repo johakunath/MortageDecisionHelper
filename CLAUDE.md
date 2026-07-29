@@ -42,11 +42,13 @@ This app's failure mode is accretion: it once rendered the same EK comparison fi
 
 ## Hard rules from the spec
 
-1. **Never present the least-bad option as safe.** If no scenario satisfies both the reserve target and the burden threshold, the app says *"Kein sauberes Szenario"* and names the failing constraint. Winner tiles must be suppressed in that state.
-2. **Inputs and outputs must be visually unmistakable.** A `Readout` must never be confusable with an `InputField`.
-3. **Never carry meaning by colour alone.** Every signed value needs a glyph or word alongside the colour. Two people read this screen together, one may be colour-blind, and the sign convention is inverted between columns (lower interest is good, lower cash is bad).
-4. **Never compare a fixed-period figure against a full-term figure.** See [`docs/ASSUMPTIONS.md §1`](docs/ASSUMPTIONS.md).
-5. **Respect the non-goals** in [PRODUCT_SPEC §18](docs/PRODUCT_SPEC.md#18-non-goals). The spec explicitly states the app does not need more scope. Prefer fixing what exists.
+1. **Never present the least-bad option as safe.** If no scenario satisfies both the reserve target and the burden threshold, the app says so and names the failing constraint. Winner tiles must be suppressed in that state. The wording is *"Keine der drei Varianten ist tragbar"* — the spec's original *"Kein sauberes Szenario"* was replaced because the owner did not understand it ([D11](docs/DECISIONS.md)). Status labels say what is wrong ("Rate zu hoch"), never which internal constraint failed.
+2. **Explain domain terms in place.** German mortgage vocabulary gets an `InfoTip`; the text lives in `src/lib/glossary.ts`, never inline, so a term is never explained two different ways.
+3. **Inputs and outputs must be visually unmistakable.** A `Readout` must never be confusable with an `InputField`.
+4. **Never carry meaning by colour alone.** Every signed value needs a glyph or word alongside the colour. Two people read this screen together, one may be colour-blind, and the sign convention is inverted between columns (lower interest is good, lower cash is bad).
+5. **Never compare a fixed-period figure against a full-term figure.** See [`docs/ASSUMPTIONS.md §1`](docs/ASSUMPTIONS.md).
+6. **Respect the non-goals** in [PRODUCT_SPEC §18](docs/PRODUCT_SPEC.md#18-non-goals). The spec explicitly states the app does not need more scope. Prefer fixing what exists.
+7. **QA fixtures pin their own inputs.** `CASE_PRESETS` must specify every value that determines their expected outcome. One that inherits a default silently stops testing what it claims to ([D12](docs/DECISIONS.md)).
 
 ## Commands
 

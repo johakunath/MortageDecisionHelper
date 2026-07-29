@@ -44,7 +44,7 @@ export default function ApartmentSwitcher({
             <span className="apartment-chip-label">{result.apartment.label}</span>
             <span className="apartment-chip-price">{formatEur(result.apartment.purchasePrice)}</span>
             <StatusPill tone={result.decision.noSafeScenario ? "red" : "green"}>
-              {result.decision.noSafeScenario ? "kein sauberes Szenario" : "sauber möglich"}
+              {result.decision.noSafeScenario ? "nicht tragbar" : "tragbar"}
             </StatusPill>
           </button>
         ))}

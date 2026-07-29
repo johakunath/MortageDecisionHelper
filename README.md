@@ -57,6 +57,14 @@ Both thresholds are personal heuristics, not bank rules.
 
 ---
 
+## Saving your work
+
+Everything stays **in this browser** — there is no server and nothing is transmitted.
+
+- The current state is saved automatically and survives a reload
+- Named snapshots ("Immowelt 600k 04/2026") can be saved and loaded from the **Annahmen** section
+- Clearing browser data, or opening the app in a different browser or profile, loses the saves
+
 ## What this model does *not* do
 
 - **No refinancing model.** Interest during the fixed-rate period is reliable; the full-term total assumes today's rate holds forever and is **illustrative only**

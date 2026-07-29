@@ -8,10 +8,14 @@ import {
   compareApartmentCases,
   compareEkScenarios,
   compareExternal,
+  compareSpecialScenarios,
   evaluateDecision,
   interestForPlan,
   monthlyAnnuity,
+  repaymentRateFromMonthlyPayment,
+  repaymentRateFromRuntimeYears,
   requiredSpecialToMatch,
+  runtimeYearsFromRepaymentRate,
   simulateMortgage,
 } from "./calculations";
 import { CASE_PRESETS, DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
@@ -196,16 +200,31 @@ describe("calculation engine", () => {
   });
 
   it("distinguishes an unaffordable purchase from a thin reserve", () => {
-    const roomy = { ...DEFAULT_INPUTS, purchasePrice: 600000, householdNetIncome: 20000 };
+    const roomy = {
+      ...DEFAULT_INPUTS,
+      purchasePrice: 600000,
+      householdNetIncome: 20000,
+      reserveTarget: 20000,
+    };
+
+    // Derived, not hardcoded: the two cases are defined by their position relative to
+    // cashNeeded, so they keep testing the same distinction whatever the defaults do.
+    const cashNeeded = calculateCashNeeded(
+      roomy.purchasePrice,
+      EK_SCENARIOS[1].ekRate,
+      roomy.closingCostRate,
+      roomy.renovation,
+      roomy.moving,
+    );
 
     const reserveOnly = buildScenario(
       EK_SCENARIOS[1],
-      { ...roomy, availableCapital: 120000, reserveTarget: 20000 },
+      { ...roomy, availableCapital: cashNeeded + roomy.reserveTarget / 2 },
       DEFAULT_RATES,
     );
     const cannotAfford = buildScenario(
       EK_SCENARIOS[1],
-      { ...roomy, availableCapital: 100000, reserveTarget: 20000 },
+      { ...roomy, availableCapital: cashNeeded - 10000 },
       DEFAULT_RATES,
     );
 
@@ -287,6 +306,81 @@ describe("calculation engine", () => {
     expect(columns[2].adjustedAvailableCapital).toBeGreaterThan(
       columns[1].adjustedAvailableCapital,
     );
+  });
+
+  it("compares every EK level against a freely chosen baseline", () => {
+    const against10 = compareSpecialScenarios(
+      EK_SCENARIOS,
+      "ek10",
+      "none",
+      DEFAULT_INPUTS,
+      DEFAULT_RATES,
+    );
+
+    // The baseline row is itself, so it needs nothing and has no delta.
+    const baselineRow = against10.rows.find((row) => row.base.id === "ek10")!;
+    expect(baselineRow.isBaseline).toBe(true);
+    expect(baselineRow.deltaToBaseline).toBeCloseTo(0, 6);
+    expect(against10.baselineInterest).toBeCloseTo(baselineRow.interestNoSpecial, 6);
+
+    // 5% EK borrows more, so it costs more interest and must repay extra to catch up.
+    const row5 = against10.rows.find((row) => row.base.id === "ek5")!;
+    expect(row5.deltaToBaseline).toBeGreaterThan(0);
+    expect(row5.required.amount).not.toBeNull();
+
+    // 15% EK is already cheaper than the 10% baseline, so it needs nothing.
+    const row15 = against10.rows.find((row) => row.base.id === "ek15")!;
+    expect(row15.deltaToBaseline).toBeLessThan(0);
+    expect(row15.required.amount).toBe(0);
+
+    // Moving the baseline to 15% raises the bar for 5% EK.
+    const against15 = compareSpecialScenarios(
+      EK_SCENARIOS,
+      "ek15",
+      "none",
+      DEFAULT_INPUTS,
+      DEFAULT_RATES,
+    );
+    const row5Against15 = against15.rows.find((row) => row.base.id === "ek5")!;
+    expect(row5Against15.required.amount!).toBeGreaterThan(row5.required.amount!);
+  });
+
+  it("makes the baseline harder to reach when it runs its own Sondertilgung", () => {
+    const vsPlain = compareSpecialScenarios(EK_SCENARIOS, "ek10", "none", DEFAULT_INPUTS, DEFAULT_RATES);
+    const vsPlan = compareSpecialScenarios(EK_SCENARIOS, "ek10", "plan", DEFAULT_INPUTS, DEFAULT_RATES);
+
+    // A baseline that also pays Sondertilgung ends up cheaper, so matching it costs more.
+    expect(vsPlan.baselineInterest).toBeLessThan(vsPlain.baselineInterest);
+
+    const plainRequired = vsPlain.rows.find((row) => row.base.id === "ek5")!.required.amount!;
+    const planRequired = vsPlan.rows.find((row) => row.base.id === "ek5")!.required.amount;
+    expect(planRequired === null || planRequired > plainRequired).toBe(true);
+  });
+
+  it("round-trips repayment rate through runtime and monthly payment", () => {
+    const rate = 3.85;
+    const loan = 540000;
+
+    // Tilgungssatz -> Laufzeit -> Tilgungssatz must return the original.
+    const runtime = runtimeYearsFromRepaymentRate(rate, 2.4);
+    expect(runtime).toBeGreaterThan(20);
+    expect(runtime).toBeLessThan(30);
+    expect(repaymentRateFromRuntimeYears(rate, runtime)).toBeCloseTo(2.4, 4);
+
+    // Tilgungssatz -> Monatsrate -> Tilgungssatz must return the original.
+    const payment = monthlyAnnuity(loan, rate, 2.4);
+    expect(repaymentRateFromMonthlyPayment(loan, rate, payment)).toBeCloseTo(2.4, 6);
+
+    // Higher repayment must shorten the runtime, never lengthen it.
+    expect(runtimeYearsFromRepaymentRate(rate, 3.5)).toBeLessThan(runtime);
+  });
+
+  it("handles the zero-interest edge case in the annuity conversions", () => {
+    // With no interest the loan amortises linearly: 2% per year takes 50 years.
+    expect(runtimeYearsFromRepaymentRate(0, 2)).toBeCloseTo(50, 6);
+    expect(repaymentRateFromRuntimeYears(0, 50)).toBeCloseTo(2, 6);
+    // A repayment rate that never clears the interest must not report a finite runtime.
+    expect(runtimeYearsFromRepaymentRate(3, 0)).toBe(Infinity);
   });
 
   it("flags external figures outside the tolerance band", () => {

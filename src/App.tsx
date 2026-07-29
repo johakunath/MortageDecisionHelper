@@ -1,58 +1,93 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ApartmentSwitcher, { ApartmentFacts } from "./components/ApartmentSwitcher";
+import CashBlock from "./components/CashBlock";
 import CompromiseFinder from "./components/CompromiseFinder";
 import ExecutiveSummary from "./components/ExecutiveSummary";
 import InputsPanel from "./components/InputsPanel";
+import ProgressSection from "./components/ProgressSection";
 import RightPanel from "./components/RightPanel";
+import SavePanel from "./components/SavePanel";
 import SondertilgungPanel from "./components/SondertilgungPanel";
 import TradeoffMatrix from "./components/TradeoffMatrix";
 import TradeoffStatement from "./components/TradeoffStatement";
 import WaitPanel from "./components/WaitPanel";
 import { InputField, Section } from "./components/ui";
 import {
-  averageAnnualSpecialRepayment,
   buildApartmentInputs,
+  buildScenario,
   buildScenarios,
   buildWaitScenarios,
   compareApartmentCases,
   compareEkScenarios,
+  compareSpecialScenarios,
   evaluateDecision,
-  interestForPlan,
-  requiredSpecialToMatch,
   type ApartmentCase,
   type InterestRates,
   type MortgageInputs,
   type ScenarioId,
+  type SpecialPlanMode,
 } from "./lib/calculations";
 import {
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
-  DEFAULT_RATES,
   EK_SCENARIOS,
   SECTIONS,
   type InputGroupId,
   type SectionId,
 } from "./lib/defaults";
 import { formatEur } from "./lib/format";
+import {
+  defaultState,
+  deleteNamed,
+  listSaves,
+  loadAutosave,
+  loadNamed,
+  saveNamed,
+  storageAvailable,
+  writeAutosave,
+  type PersistedState,
+} from "./lib/storage";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
 type ApartmentNumericKey = "purchasePrice" | "renovation" | "monthlyOwnershipCosts";
 
-function cloneDefaultApartmentCases(): ApartmentCase[] {
-  return DEFAULT_APARTMENT_CASES.map((apartment) => ({
-    ...apartment,
-    annualSpecialRepayments: [...apartment.annualSpecialRepayments],
-  }));
-}
+/**
+ * Restored synchronously during the first render, not in an effect: loading in an
+ * effect would paint the defaults first and then visibly replace every number on the
+ * screen a frame later.
+ */
+const INITIAL_STATE: PersistedState = loadAutosave() ?? defaultState();
 
 export default function App() {
-  const [inputs, setInputs] = useState<MortgageInputs>({ ...DEFAULT_INPUTS });
-  const [rates, setRates] = useState<InterestRates>({ ...DEFAULT_RATES });
-  const [apartmentCases, setApartmentCases] = useState<ApartmentCase[]>(cloneDefaultApartmentCases);
-  const [activeApartmentId, setActiveApartmentId] = useState<string>(DEFAULT_APARTMENT_CASES[0].id);
-  const [selectedId, setSelectedId] = useState<ScenarioId>("ek10");
+  const [inputs, setInputs] = useState<MortgageInputs>(INITIAL_STATE.inputs);
+  const [rates, setRates] = useState<InterestRates>(INITIAL_STATE.rates);
+  const [apartmentCases, setApartmentCases] = useState<ApartmentCase[]>(INITIAL_STATE.apartmentCases);
+  const [activeApartmentId, setActiveApartmentId] = useState<string>(INITIAL_STATE.activeApartmentId);
+  const [selectedId, setSelectedId] = useState<ScenarioId>(INITIAL_STATE.selectedId);
   const [inputGroup, setInputGroup] = useState<InputGroupId>("household");
   const [activeSection, setActiveSection] = useState<SectionId>("decision");
+  const [baselineId, setBaselineId] = useState<ScenarioId>("ek10");
+  const [baselineMode, setBaselineMode] = useState<SpecialPlanMode>("none");
+  const [saves, setSaves] = useState<string[]>(() => listSaves());
+  const storageWorks = useMemo(() => storageAvailable(), []);
+
+  const snapshot = useMemo<PersistedState>(
+    () => ({ version: 1, inputs, rates, apartmentCases, activeApartmentId, selectedId }),
+    [inputs, rates, apartmentCases, activeApartmentId, selectedId],
+  );
+
+  // Autosave, so an accidental reload never costs a session's worth of assumptions.
+  useEffect(() => {
+    writeAutosave(snapshot);
+  }, [snapshot]);
+
+  function applyState(state: PersistedState) {
+    setInputs(state.inputs);
+    setRates(state.rates);
+    setApartmentCases(state.apartmentCases);
+    setActiveApartmentId(state.activeApartmentId);
+    setSelectedId(state.selectedId);
+  }
 
   // The apartment owns purchasePrice/renovation/ownership costs/Sondertilgung, and
   // this is the ONLY place they become a usable MortgageInputs. Everything downstream
@@ -79,18 +114,12 @@ export default function App() {
     [apartmentCases, inputs, rates],
   );
 
-  // Break-even target: 15% EK making NO special repayments (docs/DECISIONS.md D1).
-  const ek15BaselineInterest = useMemo(
-    () => interestForPlan(EK_SCENARIOS[2], activeInputs, rates, { kind: "none" }),
-    [activeInputs, rates],
-  );
-  const special5 = useMemo(
-    () => requiredSpecialToMatch(EK_SCENARIOS[0], ek15BaselineInterest, activeInputs, rates),
-    [ek15BaselineInterest, activeInputs, rates],
-  );
-  const special10 = useMemo(
-    () => requiredSpecialToMatch(EK_SCENARIOS[1], ek15BaselineInterest, activeInputs, rates),
-    [ek15BaselineInterest, activeInputs, rates],
+  // Sondertilgung comparison against a freely chosen baseline (docs/DECISIONS.md D10).
+  // Default is 10% EK + Nebenkosten without Sondertilgung — the standard German
+  // financing case, and the one the couple actually starts from.
+  const specialComparison = useMemo(
+    () => compareSpecialScenarios(EK_SCENARIOS, baselineId, baselineMode, activeInputs, rates),
+    [baselineId, baselineMode, activeInputs, rates],
   );
 
   const waitScenarios = useMemo(
@@ -103,6 +132,13 @@ export default function App() {
     () => compareEkScenarios(scenarios[0], scenarios[2], activeInputs),
     [scenarios, activeInputs],
   );
+
+  // The selected scenario run with no Sondertilgung — the dashed comparison line that
+  // shows what the extra repayments actually buy.
+  const selectedWithoutSpecial = useMemo(() => {
+    const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
+    return buildScenario(base, activeInputs, rates, { kind: "none" });
+  }, [selected.id, activeInputs, rates]);
 
   function updateInput(key: NumericInputKey, value: number) {
     setInputs((current) => ({ ...current, [key]: value }));
@@ -123,9 +159,10 @@ export default function App() {
       current.map((apartment) => {
         if (apartment.id !== apartmentId) return apartment;
 
-        const fallback = averageAnnualSpecialRepayment(apartment.annualSpecialRepayments, 0);
+        // Pad with zeros, never with the average: adding a one-off in year 14 must not
+        // silently invent payments in years 11–13 the user never asked for.
         const next = [...apartment.annualSpecialRepayments];
-        while (next.length <= yearIndex) next.push(fallback);
+        while (next.length <= yearIndex) next.push(0);
         next[yearIndex] = value;
 
         return { ...apartment, annualSpecialRepayments: next.map((amount) => (Number.isFinite(amount) ? amount : 0)) };
@@ -152,11 +189,7 @@ export default function App() {
 
   function applyPreset(preset: "reset" | "safety" | "special") {
     if (preset === "reset") {
-      setInputs({ ...DEFAULT_INPUTS });
-      setRates({ ...DEFAULT_RATES });
-      setApartmentCases(cloneDefaultApartmentCases());
-      setActiveApartmentId(DEFAULT_APARTMENT_CASES[0].id);
-      setSelectedId("ek10");
+      applyState(defaultState());
       setInputGroup("household");
       return;
     }
@@ -269,6 +302,7 @@ export default function App() {
               selected={selected}
               onSelectScenario={setSelectedId}
             />
+            <CashBlock selected={selected} inputs={activeInputs} />
           </section>
 
           <section id="section-assumptions" ref={registerSection("assumptions")} className="page-section">
@@ -284,6 +318,21 @@ export default function App() {
               onSafetyFocus={() => applyPreset("safety")}
               onMoreSpecial={() => applyPreset("special")}
             />
+            <SavePanel
+              saves={saves}
+              storageWorks={storageWorks}
+              onSave={(name) => {
+                if (saveNamed(name, snapshot)) setSaves(listSaves());
+              }}
+              onLoad={(name) => {
+                const loaded = loadNamed(name);
+                if (loaded) applyState(loaded);
+              }}
+              onDelete={(name) => {
+                deleteNamed(name);
+                setSaves(listSaves());
+              }}
+            />
           </section>
 
           <section id="section-tradeoff" ref={registerSection("tradeoff")} className="page-section">
@@ -297,13 +346,27 @@ export default function App() {
             </Section>
           </section>
 
+          <section id="section-progress" ref={registerSection("progress")} className="page-section">
+            <div className="section-kicker">4 · Verlauf</div>
+            <ProgressSection
+              scenarios={scenarios}
+              selected={selected}
+              selectedWithoutSpecial={selectedWithoutSpecial}
+              inputs={activeInputs}
+            />
+          </section>
+
           <section id="section-special" ref={registerSection("special")} className="page-section">
-            <div className="section-kicker">4 · Sondertilgung</div>
+            <div className="section-kicker">5 · Sondertilgung</div>
             <SondertilgungPanel
               inputs={activeInputs}
               selected={selected}
-              special5={special5}
-              special10={special10}
+              bases={EK_SCENARIOS}
+              comparison={specialComparison}
+              baselineId={baselineId}
+              baselineMode={baselineMode}
+              onBaselineChange={setBaselineId}
+              onBaselineModeChange={setBaselineMode}
               onSpecialRepaymentChange={(yearIndex, value) =>
                 updateApartmentSpecialRepayment(activeApartmentId, yearIndex, value)
               }
@@ -311,7 +374,7 @@ export default function App() {
           </section>
 
           <section id="section-wait" ref={registerSection("wait")} className="page-section">
-            <div className="section-kicker">5 · Warten</div>
+            <div className="section-kicker">6 · Warten</div>
             <details className="wait-details">
               <summary>Lohnt es sich zu warten?</summary>
               <Section

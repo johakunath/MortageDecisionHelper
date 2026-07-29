@@ -8,7 +8,10 @@ import type {
 
 export const DEFAULT_INPUTS: MortgageInputs = {
   purchasePrice: 720000,
-  closingCostRate: 9,
+  // 11,57% = mit Makler (Grunderwerbsteuer + Notar + Grundbuch + Provision).
+  // Bewusst der teurere der beiden Fälle: eine Entscheidungshilfe soll die Kosten
+  // nicht zu niedrig ansetzen. Ohne Makler sind es 8%.
+  closingCostRate: 11.57,
   availableCapital: 145000,
   reserveTarget: 20000,
   renovation: 0,
@@ -18,7 +21,9 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   householdNetIncome: 8500,
   maxBurdenRate: 40,
   repaymentRate: 2.4,
-  fixedRateYears: 10,
+  // 15 Jahre: mehr Planungssicherheit als die üblichen 10, und bei den aktuellen
+  // Konditionen nur wenig teurer. Frei änderbar — die Zinssätze müssen dann mit.
+  fixedRateYears: 15,
   annualSpecialRepayment: 6000,
   annualSpecialRepayments: [6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000],
   specialRepaymentLimitRate: 5,
@@ -93,6 +98,11 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       reserveTarget: 25000,
       monthlyOwnershipCosts: 760,
       householdNetIncome: 9000,
+      // Pinned, not inherited: this fixture exists to prove "at least one scenario is
+      // feasible" (PRODUCT_SPEC §17). If it tracked the default it would silently stop
+      // testing that the moment the default Kaufnebenkosten changed — which is exactly
+      // what happened when the default moved to 11,57%.
+      closingCostRate: 8,
     },
     rates: { ek5: 4.05, ek10: 3.8, ek15: 3.55 },
   },
@@ -126,8 +136,9 @@ export const SECTIONS = [
   { id: "decision", number: 1, label: "Entscheidung" },
   { id: "assumptions", number: 2, label: "Annahmen" },
   { id: "tradeoff", number: 3, label: "Was kostet EK?" },
-  { id: "special", number: 4, label: "Sondertilgung" },
-  { id: "wait", number: 5, label: "Warten" },
+  { id: "progress", number: 4, label: "Verlauf" },
+  { id: "special", number: 5, label: "Sondertilgung" },
+  { id: "wait", number: 6, label: "Warten" },
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];

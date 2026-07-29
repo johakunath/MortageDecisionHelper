@@ -4,7 +4,9 @@ import type {
   MortgageInputs,
   ScenarioResult,
 } from "../lib/calculations";
+import { GLOSSARY } from "../lib/glossary";
 import { formatEur, formatPct } from "../lib/format";
+import { InfoTip } from "./ui";
 
 type ExecutiveSummaryProps = {
   decision: DecisionResult;
@@ -37,39 +39,48 @@ function describeBlockers(failed: ConstraintId[]): string {
 export default function ExecutiveSummary({ decision, inputs, selected }: ExecutiveSummaryProps) {
   const { diagnosis } = decision;
 
-  // PRODUCT_SPEC §5.3: when nothing is clean, say so plainly and name the reason.
+  // PRODUCT_SPEC §5.3: when nothing works, say so plainly and name the reason.
+  // "Kein sauberes Szenario" was the spec's phrasing but meant nothing to the people
+  // actually reading it — the headline now states the problem in their own words.
   if (decision.noSafeScenario) {
     const miss = diagnosis.narrowestMiss;
 
     return (
       <div className="verdict verdict-blocked">
-        <h2>Kein sauberes Szenario</h2>
+        <h2>
+          Keine der drei Varianten ist tragbar
+          <InfoTip text={GLOSSARY.cleanScenario} term="Tragbar" />
+        </h2>
         <p>
-          Kein Weg hält gleichzeitig die Reserve von{" "}
-          <strong>{formatEur(inputs.reserveTarget)}</strong> und die Grenze von{" "}
-          <strong>{formatPct(inputs.maxBurdenRate)}</strong> Haushaltsbelastung.
-          {diagnosis.failedInAll.length > 0 ? <> Überall gilt: {describeBlockers(diagnosis.failedInAll)}.</> : null}
-          {miss ? (
-            <>
-              {" "}Am nächsten dran: <strong>{miss.scenarioId.replace("ek", "")}% EK</strong>
-              {miss.constraint === "burden"
-                ? `, ${formatPct(Math.abs(miss.gap) * 100)} über der Grenze.`
-                : `, ${formatEur(Math.abs(miss.gap))} zu wenig.`}
-            </>
-          ) : null}
+          Tragbar heißt für euch: nach dem Kauf bleiben mindestens{" "}
+          <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig <em>und</em> die
+          Monatsrate bleibt unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom
+          Haushaltsnetto. Beides zusammen schafft hier keine Variante.
+          {diagnosis.failedInAll.length > 0 ? <> Bei allen dreien gilt: {describeBlockers(diagnosis.failedInAll)}.</> : null}
         </p>
+        {miss ? (
+          <p className="verdict-miss">
+            Am nächsten dran ist <strong>{miss.scenarioId.replace("ek", "")}% EK</strong> —{" "}
+            {miss.constraint === "burden"
+              ? `die Rate liegt ${formatPct(Math.abs(miss.gap) * 100)} über eurer Grenze.`
+              : `es fehlen ${formatEur(Math.abs(miss.gap))}.`}
+          </p>
+        ) : null}
       </div>
     );
   }
 
   return (
     <div className="verdict verdict-ok">
-      <h2>{decision.recommendation?.label} als Kompromiss</h2>
+      <h2>
+        {decision.recommendation?.label} ist tragbar
+        <InfoTip text={GLOSSARY.cleanScenario} term="Tragbar" />
+      </h2>
       <p>
-        Sauber heißt: mindestens <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve nach dem
-        Kauf und höchstens <strong>{formatPct(inputs.maxBurdenRate)}</strong> Haushaltsbelastung.
-        Gewählt ist <strong>{selected.label}</strong> mit{" "}
-        {formatPct(selected.burdenRatio * 100)} Belastung.
+        Tragbar heißt: nach dem Kauf bleiben mindestens{" "}
+        <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig und die Monatsrate bleibt
+        unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto. Gewählt ist{" "}
+        <strong>{selected.label}</strong> mit {formatPct(selected.burdenRatio * 100)} Belastung.
       </p>
     </div>
   );

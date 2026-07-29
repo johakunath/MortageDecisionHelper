@@ -263,6 +263,57 @@ export function monthlyAnnuity(
   return principal * ((interestRatePct + repaymentRatePct) / 100) / 12;
 }
 
+/*
+ * Anfangstilgung, Laufzeit and Monatsrate are three ways of saying the same thing:
+ * fix any one and the other two follow. These closed-form conversions let the user
+ * enter whichever they actually know ("we can pay 2.400 €/month", "we want to be
+ * done in 25 years") instead of being forced to think in Tilgungssatz.
+ *
+ * They deliberately ignore Sondertilgung — they describe the *contract*, not the
+ * plan. The real payoff date, which extra repayments pull forward, comes from
+ * simulateMortgage().
+ */
+
+/** Years to full repayment at a given initial repayment rate, without Sondertilgung. */
+export function runtimeYearsFromRepaymentRate(
+  interestRatePct: number,
+  repaymentRatePct: number,
+): number {
+  if (repaymentRatePct <= 0) return Infinity;
+  if (interestRatePct <= 0) return 100 / repaymentRatePct;
+
+  const ratio = interestRatePct / (interestRatePct + repaymentRatePct);
+  if (ratio >= 1) return Infinity;
+
+  const monthlyRate = interestRatePct / 1200;
+  return -Math.log(1 - ratio) / Math.log(1 + monthlyRate) / 12;
+}
+
+/** The initial repayment rate that pays the loan off in exactly `years`. */
+export function repaymentRateFromRuntimeYears(
+  interestRatePct: number,
+  years: number,
+): number {
+  if (years <= 0) return 0;
+  if (interestRatePct <= 0) return 100 / years;
+
+  const monthlyRate = interestRatePct / 1200;
+  const months = years * 12;
+  const growth = Math.pow(1 + monthlyRate, months);
+  const monthlyFactor = (monthlyRate * growth) / (growth - 1);
+  return Math.max(0.01, (monthlyFactor * 12 - interestRatePct / 100) * 100);
+}
+
+/** The initial repayment rate implied by a target monthly payment. */
+export function repaymentRateFromMonthlyPayment(
+  loan: number,
+  interestRatePct: number,
+  monthlyPayment: number,
+): number {
+  if (loan <= 0) return 0;
+  return Math.max(0.01, (monthlyPayment * 1200) / loan - interestRatePct);
+}
+
 /** Amount requested for a given year, before the contractual cap. */
 function requestedSpecialForYear(plan: SpecialPlan, yearIndex: number): number {
   switch (plan.kind) {
@@ -468,19 +519,21 @@ export function buildScenario(
   // subset of `reserve` and exists to tell the two failures apart in the UI.
   const feasible = cashLeft >= inputs.reserveTarget && burdenRatio <= maxBurdenRatio;
 
-  let status = "OK";
+  // Plain-language labels: these are read aloud between two non-experts, so they say
+  // what is wrong rather than naming an internal constraint.
+  let status = "Tragbar";
   let statusTone: Tone = "green";
   if (failed.includes("cash")) {
-    status = "Kauf nicht gedeckt";
+    status = "Geld reicht nicht";
     statusTone = "red";
   } else if (failed.includes("reserve")) {
-    status = "Reserve verletzt";
+    status = "Reserve zu dünn";
     statusTone = "red";
   } else if (failed.includes("burden")) {
-    status = "Monatlich eng";
+    status = "Rate zu hoch";
     statusTone = "amber";
   } else if (cashLeft < inputs.reserveTarget * 1.5) {
-    status = "Knapp";
+    status = "Gerade so tragbar";
     statusTone = "amber";
   }
 
@@ -776,6 +829,67 @@ export function requiredSpecialToMatch(
   }
 
   return { amount: high, feasible: true, maxSpecial };
+}
+
+/** Which Sondertilgung variant a row is being measured under. */
+export type SpecialPlanMode = "none" | "plan";
+
+export type SpecialMatchRow = {
+  base: ScenarioBase;
+  isBaseline: boolean;
+  /** Total interest for this EK level with no special repayments at all. */
+  interestNoSpecial: number;
+  /** Total interest for this EK level running the configured yearly plan. */
+  interestWithPlan: number;
+  /** Interest minus the baseline's, under the row's own plan mode. Negative = cheaper. */
+  deltaToBaseline: number;
+  /** Flat annual Sondertilgung this EK level needs to reach the baseline. */
+  required: SpecialBreakEven;
+};
+
+export type SpecialComparison = {
+  baselineInterest: number;
+  rows: SpecialMatchRow[];
+};
+
+/**
+ * Compares every EK level against a freely chosen baseline — any EK level, with or
+ * without its own Sondertilgung.
+ *
+ * The baseline used to be hardwired to "15% EK without Sondertilgung". That answered
+ * exactly one question well and every other one not at all: the couple's real
+ * comparisons are things like "10% EK plus our plan vs 5% EK paying more", which the
+ * fixed target could not express.
+ */
+export function compareSpecialScenarios(
+  bases: ScenarioBase[],
+  baselineId: ScenarioId,
+  baselineMode: SpecialPlanMode,
+  inputs: MortgageInputs,
+  rates: InterestRates,
+): SpecialComparison {
+  const planFor = (mode: SpecialPlanMode): SpecialPlan =>
+    mode === "none" ? { kind: "none" } : planFromInputs(inputs);
+
+  const baselineBase = bases.find((base) => base.id === baselineId) ?? bases[0];
+  const baselineInterest = interestForPlan(baselineBase, inputs, rates, planFor(baselineMode));
+
+  const rows = bases.map((base) => {
+    const interestNoSpecial = interestForPlan(base, inputs, rates, { kind: "none" });
+    const interestWithPlan = interestForPlan(base, inputs, rates, planFromInputs(inputs));
+    const own = baselineMode === "none" ? interestNoSpecial : interestWithPlan;
+
+    return {
+      base,
+      isBaseline: base.id === baselineId,
+      interestNoSpecial,
+      interestWithPlan,
+      deltaToBaseline: own - baselineInterest,
+      required: requiredSpecialToMatch(base, baselineInterest, inputs, rates),
+    };
+  });
+
+  return { baselineInterest, rows };
 }
 
 export function buildWaitScenario(

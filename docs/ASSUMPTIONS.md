@@ -83,6 +83,20 @@ Must be paired with the mortgage interest saved **over the same horizon** (`fixe
 
 ---
 
+### Tilgung ↔ Laufzeit ↔ Monatsrate
+
+Three expressions of one contract. Closed-form, and they deliberately **ignore Sondertilgung** — they describe the contract, not the plan. The real payoff date, which extra repayments pull forward, comes from `simulateMortgage`.
+
+```
+runtime  = −ln(1 − zins/(zins+tilgung)) / ln(1 + zins/1200) / 12
+tilgung  = (monthlyFactor × 12 − zins/100) × 100      where monthlyFactor is the annuity factor
+tilgung  = monatsrate × 1200 / darlehen − zins
+```
+
+At zero interest all three degrade to linear amortisation (`runtime = 100 / tilgung`). Only `repaymentRate` is stored; the other two are always derived, so they cannot drift apart.
+
+The reference loan for the Monatsrate view is 10% EK on the active apartment — the rate is a property of the contract, so it must not shift when a different EK door is selected.
+
 ## 3. Thresholds
 
 | Threshold | Default | Nature |
@@ -94,6 +108,10 @@ Must be paired with the mortgage interest saved **over the same horizon** (`fixe
 **Feasible ("sauber") requires both:** `cashLeft ≥ reserveTarget` **and** `burdenRatio ≤ threshold`.
 
 **Recommendation precedence:** prefer 10% EK when feasible → otherwise the feasible scenario with the lowest total interest → otherwise none, and say so.
+
+**Kaufnebenkosten are never financed.** The loan is always `Kaufpreis − Anzahlung`; closing costs, renovation and moving are paid from cash and appear in `cashNeeded`. Every scenario is therefore "X% EK **+ Nebenkosten**", and the UI labels it that way — "10% EK" alone is ambiguous about precisely the point German first-time buyers most often misjudge.
+
+**Sondertilgung break-even baseline** is chosen by the user, not fixed: any EK level, either without Sondertilgung or running the configured yearly plan. Default: 10% EK + Nebenkosten, without Sondertilgung. See [DECISIONS.md D10](DECISIONS.md).
 
 Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only ever drawn from **feasible** scenarios. When nothing is feasible there is no winner — see [PRODUCT_SPEC §5.3](PRODUCT_SPEC.md#5-core-principles).
 
