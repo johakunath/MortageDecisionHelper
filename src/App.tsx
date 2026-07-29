@@ -1,355 +1,361 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ApartmentSwitcher, { ApartmentFacts } from "./components/ApartmentSwitcher";
 import CompromiseFinder from "./components/CompromiseFinder";
+import ExecutiveSummary from "./components/ExecutiveSummary";
 import InputsPanel from "./components/InputsPanel";
-import QASection from "./components/QASection";
 import RightPanel from "./components/RightPanel";
-import ScenarioCard from "./components/ScenarioCard";
 import SondertilgungPanel from "./components/SondertilgungPanel";
 import TradeoffMatrix from "./components/TradeoffMatrix";
+import TradeoffStatement from "./components/TradeoffStatement";
 import WaitPanel from "./components/WaitPanel";
-import { MetricBar, Readout, Section } from "./components/ui";
+import { InputField, Section } from "./components/ui";
 import {
+  averageAnnualSpecialRepayment,
+  buildApartmentInputs,
   buildScenarios,
-  buildWaitScenario,
+  buildWaitScenarios,
+  compareApartmentCases,
+  compareEkScenarios,
   evaluateDecision,
-  opportunityCost,
+  interestForPlan,
   requiredSpecialToMatch,
+  type ApartmentCase,
   type InterestRates,
   type MortgageInputs,
   type ScenarioId,
 } from "./lib/calculations";
 import {
-  CASE_PRESETS,
+  DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
   DEFAULT_RATES,
   EK_SCENARIOS,
-  MAIN_TABS,
+  SECTIONS,
   type InputGroupId,
-  type MainTabId,
-  type PresetId,
+  type SectionId,
 } from "./lib/defaults";
-import { formatEur, formatPct, formatYears } from "./lib/format";
+import { formatEur } from "./lib/format";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
+type ApartmentNumericKey = "purchasePrice" | "renovation" | "monthlyOwnershipCosts";
+
+function cloneDefaultApartmentCases(): ApartmentCase[] {
+  return DEFAULT_APARTMENT_CASES.map((apartment) => ({
+    ...apartment,
+    annualSpecialRepayments: [...apartment.annualSpecialRepayments],
+  }));
+}
 
 export default function App() {
   const [inputs, setInputs] = useState<MortgageInputs>({ ...DEFAULT_INPUTS });
   const [rates, setRates] = useState<InterestRates>({ ...DEFAULT_RATES });
+  const [apartmentCases, setApartmentCases] = useState<ApartmentCase[]>(cloneDefaultApartmentCases);
+  const [activeApartmentId, setActiveApartmentId] = useState<string>(DEFAULT_APARTMENT_CASES[0].id);
   const [selectedId, setSelectedId] = useState<ScenarioId>("ek10");
-  const [activeTab, setActiveTab] = useState<MainTabId>("decision");
-  const [inputGroup, setInputGroup] = useState<InputGroupId>("purchase");
+  const [inputGroup, setInputGroup] = useState<InputGroupId>("household");
+  const [activeSection, setActiveSection] = useState<SectionId>("decision");
+
+  // The apartment owns purchasePrice/renovation/ownership costs/Sondertilgung, and
+  // this is the ONLY place they become a usable MortgageInputs. Everything downstream
+  // reads activeInputs, never `inputs` directly — which is what makes it structurally
+  // impossible to show one apartment's numbers beside another's. See D3.
+  const activeApartment = useMemo(
+    () => apartmentCases.find((apartment) => apartment.id === activeApartmentId) ?? apartmentCases[0],
+    [apartmentCases, activeApartmentId],
+  );
+  const activeInputs = useMemo(
+    () => buildApartmentInputs(inputs, activeApartment),
+    [inputs, activeApartment],
+  );
 
   const scenarios = useMemo(
-    () => buildScenarios(EK_SCENARIOS, inputs, rates),
-    [inputs, rates],
+    () => buildScenarios(EK_SCENARIOS, activeInputs, rates),
+    [activeInputs, rates],
   );
   const selected = scenarios.find((scenario) => scenario.id === selectedId) ?? scenarios[1];
   const decision = useMemo(() => evaluateDecision(scenarios), [scenarios]);
-  const ek15 = scenarios.find((scenario) => scenario.id === "ek15") ?? scenarios[2];
-  const special5 = useMemo(
-    () => requiredSpecialToMatch(EK_SCENARIOS[0], ek15.mortgage.interestTotal, inputs, rates),
-    [ek15.mortgage.interestTotal, inputs, rates],
-  );
-  const special10 = useMemo(
-    () => requiredSpecialToMatch(EK_SCENARIOS[1], ek15.mortgage.interestTotal, inputs, rates),
-    [ek15.mortgage.interestTotal, inputs, rates],
-  );
-  const wait = useMemo(
-    () => buildWaitScenario(selected, selected, inputs, rates),
-    [selected, inputs, rates],
+
+  const apartmentResults = useMemo(
+    () => compareApartmentCases(apartmentCases, EK_SCENARIOS, inputs, rates),
+    [apartmentCases, inputs, rates],
   );
 
-  const maxInterest = Math.max(1, ...scenarios.map((scenario) => scenario.mortgage.interestTotal));
-  const maxCash = Math.max(1, ...scenarios.map((scenario) => Math.abs(scenario.cashLeft)));
-  const etfOpportunity15vs10 = opportunityCost(
-    Math.max(0, scenarios[2].downPayment - scenarios[1].downPayment),
-    inputs.etfReturnRate,
-    inputs.fixedRateYears,
+  // Break-even target: 15% EK making NO special repayments (docs/DECISIONS.md D1).
+  const ek15BaselineInterest = useMemo(
+    () => interestForPlan(EK_SCENARIOS[2], activeInputs, rates, { kind: "none" }),
+    [activeInputs, rates],
   );
-  const modelName = `${Math.round(inputs.purchasePrice / 1000)}k Modell`;
-  const selectedReserveCopy = selected.reserveGap < 0
-    ? `das Reserve-Ziel von ${formatEur(inputs.reserveTarget)} ist verletzt.`
-    : `innerhalb deines Reserve-Ziels von ${formatEur(inputs.reserveTarget)}.`;
+  const special5 = useMemo(
+    () => requiredSpecialToMatch(EK_SCENARIOS[0], ek15BaselineInterest, activeInputs, rates),
+    [ek15BaselineInterest, activeInputs, rates],
+  );
+  const special10 = useMemo(
+    () => requiredSpecialToMatch(EK_SCENARIOS[1], ek15BaselineInterest, activeInputs, rates),
+    [ek15BaselineInterest, activeInputs, rates],
+  );
+
+  const waitScenarios = useMemo(
+    () => buildWaitScenarios(selected, selected, activeInputs, rates, [0, 12, 24]),
+    [selected, activeInputs, rates],
+  );
+
+  // Headline trade-off: maximum contrast, 5% vs 15% EK, over one shared horizon.
+  const headlineTradeoff = useMemo(
+    () => compareEkScenarios(scenarios[0], scenarios[2], activeInputs),
+    [scenarios, activeInputs],
+  );
 
   function updateInput(key: NumericInputKey, value: number) {
     setInputs((current) => ({ ...current, [key]: value }));
-  }
-
-  function updateSpecialRepayment(yearIndex: number, value: number) {
-    setInputs((current) => {
-      const next = [...current.annualSpecialRepayments];
-      while (next.length <= yearIndex) {
-        next.push(current.annualSpecialRepayment);
-      }
-      next[yearIndex] = value;
-      const filled = next.map((amount) => Number.isFinite(amount) ? amount : 0);
-      return {
-        ...current,
-        annualSpecialRepayments: filled,
-        annualSpecialRepayment:
-          filled.length > 0 ? filled.reduce((sum, amount) => sum + amount, 0) / filled.length : 0,
-      };
-    });
   }
 
   function updateRate(key: ScenarioId, value: number) {
     setRates((current) => ({ ...current, [key]: value }));
   }
 
-  function applyPreset(preset: PresetId | "reset" | "safety" | "special") {
+  function updateApartmentCase(apartmentId: string, patch: Partial<Pick<ApartmentCase, ApartmentNumericKey>>) {
+    setApartmentCases((current) =>
+      current.map((apartment) => (apartment.id === apartmentId ? { ...apartment, ...patch } : apartment)),
+    );
+  }
+
+  function updateApartmentSpecialRepayment(apartmentId: string, yearIndex: number, value: number) {
+    setApartmentCases((current) =>
+      current.map((apartment) => {
+        if (apartment.id !== apartmentId) return apartment;
+
+        const fallback = averageAnnualSpecialRepayment(apartment.annualSpecialRepayments, 0);
+        const next = [...apartment.annualSpecialRepayments];
+        while (next.length <= yearIndex) next.push(fallback);
+        next[yearIndex] = value;
+
+        return { ...apartment, annualSpecialRepayments: next.map((amount) => (Number.isFinite(amount) ? amount : 0)) };
+      }),
+    );
+  }
+
+  function addApartment() {
+    const id = `flat-${Date.now()}`;
+    setApartmentCases((current) => [
+      ...current,
+      {
+        id,
+        label: `Wohnung ${String.fromCharCode(65 + current.length)}`,
+        purchasePrice: DEFAULT_APARTMENT_CASES[0].purchasePrice,
+        renovation: 0,
+        monthlyOwnershipCosts: DEFAULT_APARTMENT_CASES[0].monthlyOwnershipCosts,
+        selectedScenarioId: "ek10",
+        annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
+      },
+    ]);
+    setActiveApartmentId(id);
+  }
+
+  function applyPreset(preset: "reset" | "safety" | "special") {
     if (preset === "reset") {
       setInputs({ ...DEFAULT_INPUTS });
       setRates({ ...DEFAULT_RATES });
+      setApartmentCases(cloneDefaultApartmentCases());
+      setActiveApartmentId(DEFAULT_APARTMENT_CASES[0].id);
       setSelectedId("ek10");
-      setInputGroup("purchase");
+      setInputGroup("household");
       return;
     }
 
-    if (preset === "safety") {
-      setInputs((current) => ({
-        ...current,
-        reserveTarget: 35000,
-        annualSpecialRepayment: 3000,
-        annualSpecialRepayments: current.annualSpecialRepayments.map(() => 3000),
-        repaymentRate: 2.2,
-      }));
-      setSelectedId("ek5");
-      return;
-    }
-
-    if (preset === "special") {
-      setInputs((current) => ({
-        ...current,
-        annualSpecialRepayment: 12000,
-        annualSpecialRepayments: current.annualSpecialRepayments.map(() => 12000),
-        repaymentRate: 2.8,
-      }));
-      setSelectedId("ek10");
-      return;
-    }
-
-    const selectedPreset = CASE_PRESETS[preset];
-    setInputs({ ...selectedPreset.inputs });
-    setRates({ ...selectedPreset.rates });
-    setSelectedId(selectedPreset.selectedId);
-    setActiveTab("decision");
-    setInputGroup("purchase");
+    const yearlyAmount = preset === "safety" ? 3000 : 12000;
+    setInputs((current) => ({
+      ...current,
+      ...(preset === "safety" ? { reserveTarget: 35000, repaymentRate: 2.2 } : { repaymentRate: 2.8 }),
+    }));
+    setApartmentCases((current) =>
+      current.map((apartment) =>
+        apartment.id === activeApartmentId
+          ? { ...apartment, annualSpecialRepayments: apartment.annualSpecialRepayments.map(() => yearlyAmount) }
+          : apartment,
+      ),
+    );
+    setSelectedId(preset === "safety" ? "ek5" : "ek10");
   }
 
-  const scenarioChooser = (
-    <Section
-      title="Szenario wählen"
-      subtitle="Klicke 5%, 10% oder 15%. Die Auswahl aktualisiert Ergebnisbox und Trade-offs."
-      right={<span className="muted">Kaufnebenkosten: {formatEur(selected.closingCosts)}</span>}
-    >
-      <div className="scenario-stack">
-        {scenarios.map((scenario) => (
-          <ScenarioCard
-            key={scenario.id}
-            scenario={scenario}
-            selected={selectedId === scenario.id}
-            onSelect={() => setSelectedId(scenario.id)}
-          />
-        ))}
-      </div>
-    </Section>
+  // Drives the step rail. The page is one scroll surface so two people reading
+  // together share a referent they can point at (docs/DECISIONS.md D2).
+  const sectionRefs = useRef<Partial<Record<SectionId, HTMLElement | null>>>({});
+  const registerSection = useCallback(
+    (id: SectionId) => (el: HTMLElement | null) => {
+      sectionRefs.current[id] = el;
+    },
+    [],
   );
 
-  const decisionContent = (
-    <div className="content-stack">
-      <div className="selection-zone">
-        <CompromiseFinder
-          scenarios={scenarios}
-          decision={decision}
-          selected={selected}
-          onSelectScenario={setSelectedId}
-        />
-      </div>
-      <div className="zone-label">Was das bedeutet</div>
-      <section className="story-section">
-        <div className="story-kicker">Was {selected.ekRate}% bedeutet</div>
-        <p>
-          Du bringst <span>{formatEur(selected.downPayment)}</span> Eigenkapital mit und nimmst{" "}
-          <span>{formatEur(selected.loan)}</span> als Darlehen auf. Die Bank verlangt{" "}
-          <span>{formatPct(selected.interestRate)}</span> Zins. Daraus wird eine monatliche Rate von{" "}
-          <span>{formatEur(selected.mortgage.regularMonthlyPayment)}</span>; mit Eigentumskosten
-          landest du bei <span>{formatEur(selected.allInMonthly)}</span> all-in.
-        </p>
-        <p>
-          Nach dem Kauf bleiben dir{" "}
-          <span className={selected.cashLeft < 0 ? "negative" : "positive"}>
-            {formatEur(selected.cashLeft)}
-          </span>{" "}
-          in der Reserve, {selectedReserveCopy} Über die volle Laufzeit zahlst du{" "}
-          <span>{formatEur(selected.mortgage.interestTotal)}</span> Zinsen.
-        </p>
-      </section>
-      <section className="quiet-metrics">
-        <div>
-          <strong>{formatEur(selected.mortgage.regularMonthlyPayment)}</strong>
-          <span>Monatsrate</span>
-          <small>{formatPct(selected.interestRate)} Zins · {formatPct(inputs.repaymentRate)} Tilgung</small>
-        </div>
-        <div>
-          <strong>{formatEur(selected.allInMonthly)}</strong>
-          <span>All-in monatlich</span>
-          <small>Delta zur Warmmiete: {formatEur(selected.rentDelta)}</small>
-        </div>
-        <div>
-          <strong className={selected.cashLeft < 0 ? "negative" : "positive"}>
-            {formatEur(selected.cashLeft)}
-          </strong>
-          <span>Cash nach Kauf</span>
-          <small>Reserve-Gap: {formatEur(selected.reserveGap)}</small>
-        </div>
-        <div>
-          <strong>{formatYears(selected.mortgage.runtimeYears)}</strong>
-          <span>Laufzeit</span>
-          <small>Restschuld nach {inputs.fixedRateYears} J.: {formatEur(selected.mortgage.remainingAfterFixed)}</small>
-        </div>
-      </section>
-      <Section
-        title="EK Trade-off Matrix"
-        subtitle="Der Kern der Entscheidung: Was kaufen wir uns durch mehr Eigenkapital, und welchen Puffer geben wir dafür auf?"
-      >
-        <TradeoffMatrix scenarios={scenarios} />
-      </Section>
-    </div>
-  );
+  useEffect(() => {
+    const elements = Object.entries(sectionRefs.current) as [SectionId, HTMLElement | null][];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        const topEntry = visible[0];
+        if (topEntry) {
+          const id = elements.find(([, el]) => el === topEntry.target)?.[0];
+          if (id) setActiveSection(id);
+        }
+      },
+      { rootMargin: "-15% 0px -70% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] },
+    );
 
-  const compareContent = (
-    <div className="content-stack">
-      {scenarioChooser}
-      <Section
-        title="Vergleich als Balken"
-        subtitle="Zinskosten und Cash-Puffer nebeneinander. So bleibt der Zielkonflikt sichtbar."
-      >
-        <div className="bar-grid">
-          <div className="bar-stack">
-            {scenarios.map((scenario) => (
-              <MetricBar
-                key={scenario.id}
-                label={`${scenario.label} · Zinsen gesamt`}
-                value={scenario.mortgage.interestTotal}
-                max={maxInterest}
-                tone="blue"
-              />
-            ))}
-          </div>
-          <div className="bar-stack">
-            {scenarios.map((scenario) => (
-              <MetricBar
-                key={scenario.id}
-                label={`${scenario.label} · Cash übrig`}
-                value={scenario.cashLeft}
-                max={maxCash}
-                tone={scenario.cashLeft < 0 ? "red" : "green"}
-              />
-            ))}
-          </div>
-        </div>
-      </Section>
-      <Section
-        title="ETF-Kontext"
-        subtitle="Keine Empfehlung zum Verkauf, nur ein sichtbarer Opportunitätsrahmen für mehr eingebrachtes EK."
-      >
-        <Readout
-          label="15% statt 10% EK gebunden"
-          value={formatEur(scenarios[2].downPayment - scenarios[1].downPayment)}
-          sub={`Möglicher ETF-Ertrag über ${inputs.fixedRateYears} Jahre: ${formatEur(etfOpportunity15vs10)}`}
-          tone="amber"
-        />
-      </Section>
-    </div>
-  );
+    elements.forEach(([, el]) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  function scrollToSection(id: SectionId) {
+    sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div className="app-shell">
-      <div className="topbar">
-        <div className="brand-row">
-          <span className="brand-dot" />
-          <span className="brand-text">haus · ein ruhiger rechner</span>
+      {/*
+        Topbar and apartment switcher share ONE sticky container. They used to be two
+        stacked sticky elements with a hardcoded offset between them, which left a
+        sliver of scrolling content visible in the seam whenever the offset and the
+        real header height disagreed.
+      */}
+      <header className="app-header">
+        <div className="topbar">
+          <div className="brand-row">
+            <span className="brand-dot" />
+            <span className="brand-text">haus · ein ruhiger rechner</span>
+          </div>
         </div>
-
-        <nav className="main-tabs" aria-label="Bereiche">
-          {MAIN_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`top-nav-item ${activeTab === tab.id ? "is-active" : ""}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <header className={`hero ${activeTab === "decision" ? "" : "hero-compact"}`}>
-        <div className="hero-kicker">Heute · {modelName}</div>
-        <h1>
-          Mehr Eigenkapital macht das Darlehen leichter.
-          <span> Es macht das Polster dünner.</span>
-        </h1>
-        <p>
-          Wir schauen drei Wege an: <em>fünf, zehn, fünfzehn Prozent</em>. Was bleibt
-          danach im Konto, was zahlst du jeden Monat, und was kostet dich das Ganze
-          über die Jahre. Keine Empfehlung, eine ruhige Auswertung.
-        </p>
-        <div className={`hero-status ${decision.noSafeScenario ? "danger" : "ok"}`}>
-          {decision.noSafeScenario ? "Kein sauberes Szenario" : `${decision.recommendation?.label} als Kompromiss`}
-        </div>
+        <ApartmentSwitcher
+          results={apartmentResults}
+          activeApartmentId={activeApartmentId}
+          onSelect={setActiveApartmentId}
+          onAdd={addApartment}
+        />
       </header>
 
       <div className="app-grid">
+        <nav className="step-rail" aria-label="Abschnitte">
+          {SECTIONS.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              className={`step-rail-item ${activeSection === section.id ? "is-active" : ""}`}
+              onClick={() => scrollToSection(section.id)}
+              aria-current={activeSection === section.id}
+            >
+              <span className="step-rail-number">{section.number}</span>
+              <span className="step-rail-label">{section.label}</span>
+            </button>
+          ))}
+        </nav>
+
         <main>
-          {activeTab === "decision" ? decisionContent : null}
-          {activeTab === "inputs" ? (
+          <section id="section-decision" ref={registerSection("decision")} className="page-section">
+            <ApartmentFacts
+              apartment={activeApartment}
+              onChange={(patch) => updateApartmentCase(activeApartmentId, patch)}
+            />
+            <ExecutiveSummary decision={decision} inputs={activeInputs} selected={selected} />
+            <TradeoffStatement
+              tradeoff={headlineTradeoff}
+              etfReturnRate={inputs.etfReturnRate}
+              onEtfReturnChange={(value) => updateInput("etfReturnRate", value)}
+            />
+            <CompromiseFinder
+              scenarios={scenarios}
+              decision={decision}
+              selected={selected}
+              onSelectScenario={setSelectedId}
+            />
+          </section>
+
+          <section id="section-assumptions" ref={registerSection("assumptions")} className="page-section">
+            <div className="section-kicker">2 · Annahmen</div>
             <InputsPanel
-              inputs={inputs}
+              inputs={activeInputs}
               rates={rates}
               activeGroup={inputGroup}
               onGroupChange={setInputGroup}
               onInputChange={updateInput}
               onRateChange={updateRate}
-              onPreset={applyPreset}
+              onReset={() => applyPreset("reset")}
+              onSafetyFocus={() => applyPreset("safety")}
+              onMoreSpecial={() => applyPreset("special")}
             />
-          ) : null}
-          {activeTab === "compare" ? compareContent : null}
-          {activeTab === "sonder" ? (
+          </section>
+
+          <section id="section-tradeoff" ref={registerSection("tradeoff")} className="page-section">
+            <div className="section-kicker">3 · Was kostet EK?</div>
+            <Section
+              title="EK Trade-off Matrix"
+              subtitle="Was kaufen wir uns durch mehr Eigenkapital, und welchen Puffer geben wir dafür auf?"
+              right={<span className="muted">Kaufnebenkosten: {formatEur(selected.closingCosts)}</span>}
+            >
+              <TradeoffMatrix scenarios={scenarios} />
+            </Section>
+          </section>
+
+          <section id="section-special" ref={registerSection("special")} className="page-section">
+            <div className="section-kicker">4 · Sondertilgung</div>
             <SondertilgungPanel
-              inputs={inputs}
+              inputs={activeInputs}
               selected={selected}
               special5={special5}
               special10={special10}
-              onSpecialRepaymentChange={updateSpecialRepayment}
+              onSpecialRepaymentChange={(yearIndex, value) =>
+                updateApartmentSpecialRepayment(activeApartmentId, yearIndex, value)
+              }
             />
-          ) : null}
-          {activeTab === "wait" ? (
-            <div className="content-stack">
-              <InputsPanel
-                inputs={inputs}
-                rates={rates}
-                activeGroup={inputGroup}
-                onGroupChange={setInputGroup}
-                onInputChange={updateInput}
-                onRateChange={updateRate}
-                onPreset={applyPreset}
-                forceGroup="wait"
-              />
-              <WaitPanel wait={wait} waitMonths={inputs.waitMonths} />
-            </div>
-          ) : null}
-          {activeTab === "qa" ? <QASection /> : null}
+          </section>
+
+          <section id="section-wait" ref={registerSection("wait")} className="page-section">
+            <div className="section-kicker">5 · Warten</div>
+            <details className="wait-details">
+              <summary>Lohnt es sich zu warten?</summary>
+              <Section
+                title="Warten: Annahmen"
+                subtitle="Eine andere Frage als die EK-Wahl — wann kaufen, nicht wie viel Eigenkapital."
+              >
+                <div className="input-grid">
+                  <InputField
+                    label="Wartezeit"
+                    value={inputs.waitMonths}
+                    suffix="Monate"
+                    step={1}
+                    min={0}
+                    onChange={(value) => updateInput("waitMonths", value)}
+                    highlight
+                  />
+                  <InputField
+                    label="Netto-Sparrate"
+                    value={inputs.waitSavingsMonthly}
+                    onChange={(value) => updateInput("waitSavingsMonthly", value)}
+                    hint="Nach Miete — Miete wird separat gezeigt, nicht nochmal abgezogen"
+                  />
+                  <InputField
+                    label="Kaufpreiswachstum"
+                    value={inputs.waitPropertyGrowthRate}
+                    suffix="% p.a."
+                    step={0.1}
+                    onChange={(value) => updateInput("waitPropertyGrowthRate", value)}
+                  />
+                  <InputField
+                    label="Zinsänderung"
+                    value={inputs.waitRateShift}
+                    suffix="%-Pkt."
+                    step={0.1}
+                    onChange={(value) => updateInput("waitRateShift", value)}
+                  />
+                </div>
+              </Section>
+              <WaitPanel scenarios={waitScenarios} />
+            </details>
+          </section>
         </main>
 
-        <RightPanel
-          selected={selected}
-          inputs={inputs}
-          decision={decision}
-          special5={special5}
-          special10={special10}
-        />
+        <RightPanel selected={selected} inputs={activeInputs} decision={decision} />
       </div>
     </div>
   );

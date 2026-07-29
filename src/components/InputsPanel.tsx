@@ -1,11 +1,7 @@
 import type { InterestRates, MortgageInputs, ScenarioId } from "../lib/calculations";
-import {
-  CASE_PRESETS,
-  INPUT_GROUPS,
-  type InputGroupId,
-  type PresetId,
-} from "../lib/defaults";
-import { Button, InputField, Section, SegmentedChoice } from "./ui";
+import { INPUT_GROUPS, type InputGroupId } from "../lib/defaults";
+import { formatEur } from "../lib/format";
+import { Button, InputField, Readout, Section, SegmentedChoice } from "./ui";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
 
@@ -16,10 +12,17 @@ type InputsPanelProps = {
   onGroupChange: (group: InputGroupId) => void;
   onInputChange: (key: NumericInputKey, value: number) => void;
   onRateChange: (key: ScenarioId, value: number) => void;
-  onPreset: (preset: PresetId | "reset" | "safety" | "special") => void;
-  forceGroup?: InputGroupId;
+  onReset: () => void;
+  onSafetyFocus: () => void;
+  onMoreSpecial: () => void;
 };
 
+/**
+ * Couple-level assumptions only. Purchase price, renovation and monthly ownership
+ * costs live on the active apartment (ApartmentSwitcher) — see docs/DECISIONS.md D3.
+ * Wait-related fields live inline in the Warten section (§6), not here, since that
+ * group was previously duplicated as both a tab and an input group.
+ */
 export default function InputsPanel({
   inputs,
   rates,
@@ -27,54 +30,34 @@ export default function InputsPanel({
   onGroupChange,
   onInputChange,
   onRateChange,
-  onPreset,
-  forceGroup,
+  onReset,
+  onSafetyFocus,
+  onMoreSpecial,
 }: InputsPanelProps) {
-  const visibleGroup = forceGroup ?? activeGroup;
-
   return (
     <Section
-      title="Eingaben"
+      title="Annahmen"
       subtitle="Kompakte Annahmen wie in einem Finanzrechner. Alles hier ist editierbar; Ergebnisse bleiben getrennt."
       right={
-        forceGroup ? null : (
-          <div className="button-row">
-            {INPUT_GROUPS.map((group) => (
-              <Button
-                key={group.id}
-                active={visibleGroup === group.id}
-                onClick={() => onGroupChange(group.id)}
-              >
-                {group.label}
-              </Button>
-            ))}
-          </div>
-        )
+        <div className="button-row">
+          {INPUT_GROUPS.map((group) => (
+            <Button key={group.id} active={activeGroup === group.id} onClick={() => onGroupChange(group.id)}>
+              {group.label}
+            </Button>
+          ))}
+        </div>
       }
     >
       <div className="preset-row">
         <div className="button-row">
-          {(Object.keys(CASE_PRESETS) as PresetId[]).map((presetId) => (
-            <Button key={presetId} onClick={() => onPreset(presetId)}>
-              {CASE_PRESETS[presetId].label}
-            </Button>
-          ))}
-        </div>
-        <div className="button-row">
-          <Button onClick={() => onPreset("reset")}>Reset</Button>
-          <Button onClick={() => onPreset("safety")}>Sicherheitsfokus</Button>
-          <Button onClick={() => onPreset("special")}>Mehr Sondertilgung</Button>
+          <Button variant="action" onClick={onReset}>Reset</Button>
+          <Button variant="action" onClick={onSafetyFocus}>Sicherheitsfokus</Button>
+          <Button variant="action" onClick={onMoreSpecial}>Mehr Sondertilgung</Button>
         </div>
       </div>
 
-      {visibleGroup === "purchase" ? (
+      {activeGroup === "household" ? (
         <div className="input-grid">
-          <InputField
-            label="Kaufpreis"
-            value={inputs.purchasePrice}
-            onChange={(value) => onInputChange("purchasePrice", value)}
-            highlight
-          />
           <InputField
             label="EK verfügbar"
             value={inputs.availableCapital}
@@ -118,11 +101,6 @@ export default function InputsPanel({
             })}% p.a.`}
           />
           <InputField
-            label="Renovierung"
-            value={inputs.renovation}
-            onChange={(value) => onInputChange("renovation", value)}
-          />
-          <InputField
             label="Umzug / Möbel"
             value={inputs.moving}
             onChange={(value) => onInputChange("moving", value)}
@@ -132,15 +110,10 @@ export default function InputsPanel({
             value={inputs.currentWarmRent}
             onChange={(value) => onInputChange("currentWarmRent", value)}
           />
-          <InputField
-            label="Eigentumskosten mtl."
-            value={inputs.monthlyOwnershipCosts}
-            onChange={(value) => onInputChange("monthlyOwnershipCosts", value)}
-          />
         </div>
       ) : null}
 
-      {visibleGroup === "finance" ? (
+      {activeGroup === "finance" ? (
         <div className="input-grid">
           <InputField
             label="Haushaltsnetto"
@@ -164,11 +137,10 @@ export default function InputsPanel({
             min={1}
             onChange={(value) => onInputChange("fixedRateYears", value)}
           />
-          <InputField
+          <Readout
             label="Sondertilgung p.a."
-            value={inputs.annualSpecialRepayment}
-            onChange={(value) => onInputChange("annualSpecialRepayment", value)}
-            hint="Fallback für Jahre ohne Einzelwert"
+            value={formatEur(inputs.annualSpecialRepayment)}
+            sub="Ø aus dem Jahresplan der aktiven Wohnung — hier nicht editierbar"
           />
           <InputField
             label="Zins 5% EK"
@@ -205,40 +177,7 @@ export default function InputsPanel({
         </div>
       ) : null}
 
-      {visibleGroup === "wait" ? (
-        <div className="input-grid">
-          <InputField
-            label="Wartezeit"
-            value={inputs.waitMonths}
-            suffix="Monate"
-            step={1}
-            min={0}
-            onChange={(value) => onInputChange("waitMonths", value)}
-            highlight
-          />
-          <InputField
-            label="Sparrate während Warten"
-            value={inputs.waitSavingsMonthly}
-            onChange={(value) => onInputChange("waitSavingsMonthly", value)}
-          />
-          <InputField
-            label="Kaufpreiswachstum"
-            value={inputs.waitPropertyGrowthRate}
-            suffix="% p.a."
-            step={0.1}
-            onChange={(value) => onInputChange("waitPropertyGrowthRate", value)}
-          />
-          <InputField
-            label="Zinsänderung"
-            value={inputs.waitRateShift}
-            suffix="%-Pkt."
-            step={0.1}
-            onChange={(value) => onInputChange("waitRateShift", value)}
-          />
-        </div>
-      ) : null}
-
-      {visibleGroup === "advanced" ? (
+      {activeGroup === "advanced" ? (
         <div className="input-grid">
           <InputField
             label="ETF-Rendite Annahme"
@@ -247,6 +186,15 @@ export default function InputsPanel({
             step={0.5}
             min={0}
             onChange={(value) => onInputChange("etfReturnRate", value)}
+          />
+          <InputField
+            label="Max. Haushaltsbelastung"
+            value={inputs.maxBurdenRate}
+            suffix="%"
+            step={1}
+            min={1}
+            onChange={(value) => onInputChange("maxBurdenRate", value)}
+            hint="Persönliche Schwelle, keine Bankregel"
           />
         </div>
       ) : null}

@@ -1,108 +1,107 @@
-import type {
-  DecisionResult,
-  MortgageInputs,
-  ScenarioResult,
-  SpecialBreakEven,
-} from "../lib/calculations";
-import { formatEur, formatPct, formatYears } from "../lib/format";
+import { useEffect, useRef, useState } from "react";
+import type { DecisionResult, MortgageInputs, ScenarioResult } from "../lib/calculations";
+import { formatEur, formatPct, formatSignedEur } from "../lib/format";
 import { Readout, StatusPill } from "./ui";
 
 type RightPanelProps = {
   selected: ScenarioResult;
   inputs: MortgageInputs;
   decision: DecisionResult;
-  special5: SpecialBreakEven;
-  special10: SpecialBreakEven;
 };
 
-export default function RightPanel({
-  selected,
-  inputs,
-  decision,
-  special5,
-  special10,
-}: RightPanelProps) {
+type MetricSnapshot = { allInMonthly: number; cashLeft: number; interestFixed: number };
+
+function snapshot(selected: ScenarioResult): MetricSnapshot {
+  return {
+    allInMonthly: selected.allInMonthly,
+    cashLeft: selected.cashLeft,
+    interestFixed: selected.mortgage.interestFixed,
+  };
+}
+
+/**
+ * Delta only when the assumptions changed for the SAME scenario — not when the user
+ * picked a different EK%. Switching scenarios is a comparison the trade-off matrix
+ * owns; mixing the two here would make the panel lie about what moved and why.
+ */
+function useMetricDelta(selected: ScenarioResult, inputs: MortgageInputs): MetricSnapshot | null {
+  const prevRef = useRef<{ signature: string; selectedId: string; metrics: MetricSnapshot } | null>(null);
+  const [delta, setDelta] = useState<MetricSnapshot | null>(null);
+  const signature = JSON.stringify(inputs);
+
+  useEffect(() => {
+    const prev = prevRef.current;
+    const current = snapshot(selected);
+
+    if (prev && prev.selectedId === selected.id && prev.signature !== signature) {
+      setDelta({
+        allInMonthly: current.allInMonthly - prev.metrics.allInMonthly,
+        cashLeft: current.cashLeft - prev.metrics.cashLeft,
+        interestFixed: current.interestFixed - prev.metrics.interestFixed,
+      });
+    } else {
+      setDelta(null);
+    }
+
+    prevRef.current = { signature, selectedId: selected.id, metrics: current };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, selected.id]);
+
+  return delta;
+}
+
+/**
+ * Four numbers, sized to fit the viewport without an internal scrollbar — "always
+ * visible" only means anything if nothing is hidden below a fold. The break-even
+ * block that used to live here was removed: it duplicated the Sondertilgung section.
+ * See docs/DECISIONS.md D6.
+ */
+export default function RightPanel({ selected, inputs, decision }: RightPanelProps) {
+  const delta = useMetricDelta(selected, inputs);
+  const since = (value: number) => `${formatSignedEur(value)} seit letzter Änderung`;
+
   return (
     <aside className="right-panel">
-      <div className="result-panel">
-        <div className="eyebrow">Deine Zahlen</div>
-        <h2>{selected.label}</h2>
-        <StatusPill tone={selected.statusTone}>{selected.status}</StatusPill>
+      <div className="result-panel" aria-live="polite">
+        <div className="result-panel-head">
+          <div>
+            <div className="eyebrow">Deine Zahlen</div>
+            <h2>{selected.label}</h2>
+          </div>
+          <StatusPill tone={selected.statusTone}>{selected.status}</StatusPill>
+        </div>
+
         <div className="result-list">
-          <Readout
-            label="Darlehen"
-            value={formatEur(selected.loan)}
-            sub={`Anzahlung: ${formatEur(selected.downPayment)}`}
-          />
-          <Readout
-            label="Monatsrate Darlehen"
-            value={formatEur(selected.mortgage.regularMonthlyPayment)}
-            sub={`${formatPct(selected.interestRate)} Zins · ${formatPct(inputs.repaymentRate)} Tilgung`}
-            tone="blue"
-          />
           <Readout
             label="All-in monatlich"
             value={formatEur(selected.allInMonthly)}
-            sub={`Delta zur Warmmiete: ${formatEur(selected.rentDelta)}`}
+            sub={delta ? since(delta.allInMonthly) : `${formatPct(selected.burdenRatio * 100)} vom Haushaltsnetto`}
           />
           <Readout
             label="Cash nach Kauf"
             value={formatEur(selected.cashLeft)}
-            sub={`Reserve-Gap: ${formatEur(selected.reserveGap)}`}
+            sub={delta ? since(delta.cashLeft) : `Reserve-Gap: ${formatEur(selected.reserveGap)}`}
             tone={selected.reserveGap < 0 ? "red" : "green"}
-          />
-          <Readout
-            label="Immobilienwert"
-            value={formatEur(selected.propertyValueAtPayoff)}
-            sub={`bei Abzahlung · real ${formatPct(selected.realPropertyReturnRate)} p.a.`}
-            tone="orange"
-          />
-          <Readout
-            label="Nettovermögen"
-            value={formatEur(selected.netWorthAtPayoff)}
-            sub="Immobilienwert - EK/Kosten - Zinsen"
-            tone={selected.netWorthAtPayoff >= 0 ? "green" : "red"}
           />
           <Readout
             label={`Zinsen in ${inputs.fixedRateYears} Jahren`}
             value={formatEur(selected.mortgage.interestFixed)}
-            sub={`Restschuld: ${formatEur(selected.mortgage.remainingAfterFixed)}`}
+            sub={delta ? since(delta.interestFixed) : "Verlässlich — innerhalb der Zinsbindung"}
             tone="amber"
           />
           <Readout
-            label="Zinsen gesamt"
-            value={formatEur(selected.mortgage.interestTotal)}
-            sub={`Laufzeit: ${formatYears(selected.mortgage.runtimeYears)}`}
+            label="Restschuld danach"
+            value={formatEur(selected.mortgage.remainingAfterFixed)}
+            sub={`Darlehen: ${formatEur(selected.loan)}`}
           />
         </div>
       </div>
 
-      <div className={`logic-panel ${decision.noSafeScenario ? "logic-danger" : "logic-ok"}`}>
-        <h3>Empfehlungslogik</h3>
-        <p>
-          {decision.noSafeScenario
-            ? "Kein Szenario erfüllt gleichzeitig Reserve-Ziel und maximale 40% Haushaltsbelastung. Nicht als sicher empfehlen."
-            : `${decision.recommendation?.label} ist aktuell der Kompromiss nach Regel: 10% EK bevorzugen, sofern sauber machbar.`}
-        </p>
-      </div>
-
-      <div className="break-even-panel">
-        <h3>Sondertilgung Break-even</h3>
-        <dl>
-          <div>
-            <dt>5% → 15%</dt>
-            <dd>{special5.amount == null ? "nicht möglich" : `${formatEur(special5.amount)}/Jahr`}</dd>
-          </div>
-          <div>
-            <dt>10% → 15%</dt>
-            <dd>{special10.amount == null ? "nicht möglich" : `${formatEur(special10.amount)}/Jahr`}</dd>
-          </div>
-          <div>
-            <dt>Max. bei 5%</dt>
-            <dd>{formatEur(special5.maxSpecial)}/Jahr</dd>
-          </div>
-        </dl>
-      </div>
+      {decision.noSafeScenario ? (
+        <div className="logic-panel logic-danger">
+          <p>Kein Szenario ist sauber. Nicht als sicher behandeln.</p>
+        </div>
+      ) : null}
     </aside>
   );
 }

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatEur } from "../lib/format";
+import { formatSignedEur } from "../lib/format";
 import type { Tone } from "../lib/calculations";
 
 type SectionProps = {
@@ -28,14 +28,20 @@ type ButtonProps = {
   children: ReactNode;
   active?: boolean;
   onClick: () => void;
-  variant?: "default" | "dark";
+  /**
+   * "tab" — switches which group of fields is shown (navigation, has an active state).
+   * "action" — does something when pressed (reset, apply a preset); never "active".
+   * These must not look alike: a pressed-looking control that is really a one-shot
+   * action reads as state the user thinks they can toggle back.
+   */
+  variant?: "tab" | "action";
 };
 
-export function Button({ children, active = false, onClick, variant = "default" }: ButtonProps) {
+export function Button({ children, active = false, onClick, variant = "tab" }: ButtonProps) {
   return (
     <button
       type="button"
-      className={`button ${active ? "is-active" : ""} ${variant === "dark" ? "button-dark" : ""}`}
+      className={`button button-${variant} ${active ? "is-active" : ""}`}
       onClick={onClick}
     >
       {children}
@@ -143,40 +149,74 @@ export function SegmentedChoice({
   );
 }
 
-type MiniMetricProps = {
-  label: string;
-  value: ReactNode;
-  positive?: boolean;
-  negative?: boolean;
+type Verdict = "better" | "worse" | "neutral";
+
+const DEFAULT_VERDICT_WORDS: Record<Verdict, string> = {
+  better: "besser",
+  worse: "schlechter",
+  neutral: "neutral",
 };
 
-export function MiniMetric({ label, value, positive, negative }: MiniMetricProps) {
-  return (
-    <div className="mini-metric">
-      <span>{label}</span>
-      <strong className={positive ? "positive" : negative ? "negative" : ""}>{value}</strong>
-    </div>
-  );
-}
-
-type MetricBarProps = {
-  label: string;
+type SignedValueProps = {
+  /** The delta itself, already signed (positive = increase). */
   value: number;
-  max: number;
-  tone?: Tone;
+  /**
+   * Which direction of change is favourable. "neutral" renders the glyph and number
+   * without a verdict — for figures where a sign only means "short" vs. "over", not
+   * "good" vs. "bad" (e.g. an absolute cash balance where the label already carries
+   * the judgement).
+   */
+  betterWhen: "higher" | "lower" | "neutral";
+  /** Defaults to signed euros; pass formatSignedPct or a custom formatter for other units. */
+  format?: (value: number) => string;
+  /** Override the verdict words, e.g. { worse: "Reserve verletzt" } for absolute figures. */
+  verdictLabels?: Partial<Record<Verdict, string>>;
+  /** Absolute values smaller than this count as unchanged. Guards against float noise. */
+  epsilon?: number;
 };
 
-export function MetricBar({ label, value, max, tone = "blue" }: MetricBarProps) {
-  const width = max <= 0 ? 0 : Math.min(100, Math.max(4, (Math.abs(value) / max) * 100));
+/**
+ * Renders glyph → signed number → plain-word verdict, in that order. Colour is applied
+ * last, via CSS, and is never the only carrier of meaning (PRODUCT_SPEC §14). Because
+ * `betterWhen` is passed explicitly per call site rather than inferred from the sign,
+ * "−45.000 €" can correctly read as "besser" in one column and "schlechter" in
+ * another — the exact inversion that made the old .positive/.negative classes
+ * ambiguous is structurally impossible here.
+ */
+export function SignedValue({
+  value,
+  betterWhen,
+  format = formatSignedEur,
+  verdictLabels,
+  epsilon = 0.5,
+}: SignedValueProps) {
+  const direction: "up" | "down" | "flat" =
+    value > epsilon ? "up" : value < -epsilon ? "down" : "flat";
+
+  let verdict: Verdict = "neutral";
+  if (betterWhen !== "neutral" && direction !== "flat") {
+    const goesUp = direction === "up";
+    const isBetter = betterWhen === "higher" ? goesUp : !goesUp;
+    verdict = isBetter ? "better" : "worse";
+  }
+
+  const glyph = direction === "up" ? "▲" : direction === "down" ? "▼" : "–";
+  const words = { ...DEFAULT_VERDICT_WORDS, ...verdictLabels };
+  const verdictWord = words[verdict];
+  const signWord = direction === "up" ? "plus" : direction === "down" ? "minus" : "unverändert";
+  const displayValue = direction === "flat" ? 0 : value;
+
   return (
-    <div className="metric-bar">
-      <div className="metric-bar-top">
-        <span>{label}</span>
-        <strong>{formatEur(value)}</strong>
-      </div>
-      <div className="metric-track">
-        <div className={`metric-fill metric-fill-${tone}`} style={{ width: `${width}%` }} />
-      </div>
-    </div>
+    <span
+      className={`signed-value signed-${verdict}`}
+      aria-label={`${signWord} ${format(displayValue)}, ${verdictWord}`}
+    >
+      <span className="signed-glyph" aria-hidden="true">{glyph}</span>
+      <span className="signed-number">{format(displayValue)}</span>
+      {betterWhen !== "neutral" || verdictLabels ? (
+        <span className="signed-word">{verdictWord}</span>
+      ) : null}
+    </span>
   );
 }
+

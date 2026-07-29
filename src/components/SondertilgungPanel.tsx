@@ -1,6 +1,6 @@
 import type { MortgageInputs, ScenarioResult, SpecialBreakEven } from "../lib/calculations";
-import { formatEur, formatPct } from "../lib/format";
-import { Readout, Section } from "./ui";
+import { formatEur } from "../lib/format";
+import { Section } from "./ui";
 
 type SondertilgungPanelProps = {
   inputs: MortgageInputs;
@@ -10,6 +10,32 @@ type SondertilgungPanelProps = {
   onSpecialRepaymentChange: (yearIndex: number, value: number) => void;
 };
 
+function breakEvenLine(label: string, breakEven: SpecialBreakEven, configured: number) {
+  if (breakEven.amount == null) {
+    return (
+      <p key={label}>
+        <strong>{label}:</strong> nicht erreichbar — selbst die maximal erlaubte Sondertilgung von{" "}
+        {formatEur(breakEven.maxSpecial)}/Jahr reicht nicht. Weniger EK wäre hier eine reine
+        Liquiditätsentscheidung.
+      </p>
+    );
+  }
+
+  const covered = configured >= breakEven.amount;
+  return (
+    <p key={label}>
+      <strong>{label}:</strong> {formatEur(breakEven.amount)}/Jahr —{" "}
+      {covered ? "vom aktuellen Plan gedeckt." : `mehr als die geplanten ${formatEur(configured)}/Jahr.`}
+    </p>
+  );
+}
+
+/**
+ * Slimmed deliberately (docs/DECISIONS.md D6): this section answers one question —
+ * can Sondertilgung substitute for Eigenkapital? — and the ten year-by-year inputs
+ * that used to dominate it are editing detail, not the answer, so they sit behind a
+ * disclosure.
+ */
 export default function SondertilgungPanel({
   inputs,
   selected,
@@ -17,50 +43,34 @@ export default function SondertilgungPanel({
   special10,
   onSpecialRepaymentChange,
 }: SondertilgungPanelProps) {
+  const configured = inputs.annualSpecialRepayment;
   const visibleYears = Math.min(Math.max(inputs.fixedRateYears, 5), 15);
   const specialRows = Array.from({ length: visibleYears }, (_, index) => ({
     year: index + 1,
-    amount: inputs.annualSpecialRepayments[index] ?? inputs.annualSpecialRepayment,
+    amount: inputs.annualSpecialRepayments[index] ?? 0,
   }));
 
   return (
     <Section
       title="Sondertilgung"
-      subtitle="Prüft, ob niedrigeres EK später realistisch durch konkrete jährliche Sondertilgungen kompensiert werden kann."
+      subtitle="Kann weniger Eigenkapital später durch Sondertilgung aufgeholt werden? Verglichen mit 15% EK ohne eigene Sondertilgung."
     >
-      <div className="readout-grid three">
-        <Readout
-          label="5% → 15%-Zinskosten"
-          value={special5.amount == null ? "Nicht möglich" : `${formatEur(special5.amount)}/Jahr`}
-          sub={`Max. erlaubt: ${formatEur(special5.maxSpecial)}/Jahr`}
-          tone={special5.feasible ? "green" : "red"}
-        />
-        <Readout
-          label="10% → 15%-Zinskosten"
-          value={special10.amount == null ? "Nicht möglich" : `${formatEur(special10.amount)}/Jahr`}
-          sub={`Max. erlaubt: ${formatEur(special10.maxSpecial)}/Jahr`}
-          tone={special10.feasible ? "green" : "red"}
-        />
-        <Readout
-          label="Ø geplante Sondertilgung"
-          value={`${formatEur(inputs.annualSpecialRepayment)}/Jahr`}
-          sub={`Cap in Auswahl: ${formatEur(selected.mortgage.maxAnnualSpecial)} (${formatPct(inputs.specialRepaymentLimitRate)})`}
-          tone="blue"
-        />
+      <div className="interpretation">
+        {breakEvenLine("5% EK", special5, configured)}
+        {breakEvenLine("10% EK", special10, configured)}
+        <p className="interpretation-caveat">
+          Rechnerisches Ergebnis, keine Verhaltensgarantie: die offene Frage bleibt, ob diese
+          Sondertilgung tatsächlich jedes Jahr geleistet wird. Cap laut Vertrag:{" "}
+          {formatEur(selected.mortgage.maxAnnualSpecial)}/Jahr.
+        </p>
       </div>
 
-      <div className="special-editor">
-        <div className="special-editor-head">
-          <div>
-            <h3>Jährliche Sondertilgungen</h3>
-            <p>Jedes Jahr kann einzeln gesetzt werden. Der Bank-Cap wird in der Simulation automatisch angewendet.</p>
-          </div>
-          <span>Auswahl: {selected.label}</span>
-        </div>
+      <details className="special-editor-details">
+        <summary>Jahresplan bearbeiten (Ø {formatEur(configured)}/Jahr)</summary>
         <div className="special-grid">
           {specialRows.map((row, index) => (
             <label key={row.year} className="special-row">
-              <span>Jahr {row.year}</span>
+              <span>J{row.year}</span>
               <input
                 type="number"
                 min={0}
@@ -72,13 +82,7 @@ export default function SondertilgungPanel({
             </label>
           ))}
         </div>
-      </div>
-
-      <div className={`interpretation ${special5.feasible ? "interpretation-ok" : "interpretation-danger"}`}>
-        {special5.feasible
-          ? "Interpretation: 5% EK kann in diesem Modell durch Sondertilgung auf die Zinskosten von 15% EK gebracht werden. Die offene Frage ist, ob diese Sondertilgung jedes Jahr realistisch bleibt."
-          : "Interpretation: Selbst maximale Sondertilgung reicht nicht, um 5% EK auf die Zinskosten von 15% EK zu bringen. Niedriges EK wäre dann primär eine Liquiditätsentscheidung."}
-      </div>
+      </details>
     </Section>
   );
 }

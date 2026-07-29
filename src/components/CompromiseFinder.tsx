@@ -1,6 +1,6 @@
-import type { DecisionResult, ScenarioResult } from "../lib/calculations";
+import { BETTER_WHEN, type DecisionResult, type ScenarioResult } from "../lib/calculations";
 import { formatEur, formatPct } from "../lib/format";
-import { StatusPill } from "./ui";
+import { SignedValue, StatusPill } from "./ui";
 
 type CompromiseFinderProps = {
   scenarios: ScenarioResult[];
@@ -41,8 +41,12 @@ function ScenarioDoor({
       <div className="door-meta">
         <span>{formatEur(scenario.mortgage.regularMonthlyPayment)} mtl.</span>
         <i />
-        <span className={scenario.cashLeft < 0 ? "negative" : "positive"}>
-          {formatEur(scenario.cashLeft)} übrig
+        <span className="door-meta-cash">
+          <SignedValue
+            value={scenario.cashLeft}
+            betterWhen={BETTER_WHEN.cashLeft}
+            verdictLabels={{ better: "übrig", worse: "Reserve verletzt" }}
+          />
         </span>
       </div>
     </button>

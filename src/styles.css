@@ -48,6 +48,13 @@
   --alert: #b75c4d;
   --amber: #9f703f;
   --blue: #526d8f;
+  /*
+   * Height of the sticky header, which everything sticky below clears.
+   * This is a constant on purpose: the header holds only the brand row and the
+   * apartment chips, both fixed-height. The collapsible apartment facts live in the
+   * page body precisely so this number can never drift out of sync.
+   */
+  --header-height: 142px;
 }
 
 * {
@@ -71,10 +78,29 @@ button {
   cursor: pointer;
 }
 
+/* ==========================================================================
+   Shell — desktop is the priority viewport (see CLAUDE.md)
+   ========================================================================== */
+
 .app-shell {
   width: min(1480px, 100%);
   margin: 0 auto;
-  padding: 34px 72px 64px;
+  padding: 0 72px 64px;
+}
+
+/*
+ * ONE sticky container for brand + apartment switcher. Two independently-stuck
+ * elements with a hardcoded offset between them left a sliver of scrolling content
+ * visible in the seam. The background must be fully opaque for the same reason.
+ */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0 -72px;
+  padding: 0 72px;
+  background: var(--cream);
+  border-bottom: 1px solid var(--rule);
 }
 
 .topbar {
@@ -82,19 +108,20 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 28px;
-  padding-bottom: 28px;
+  padding: 14px 0 10px;
 }
 
 .brand-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: max-content;
+  min-width: 0;
 }
 
 .brand-dot {
   width: 9px;
   height: 9px;
+  flex: 0 0 auto;
   border-radius: 999px;
   background: var(--sage);
 }
@@ -106,39 +133,153 @@ button {
   font-style: italic;
 }
 
-.main-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 18px;
-  min-width: 0;
-  max-width: 100%;
+.app-grid {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) 340px;
+  gap: 28px 40px;
+  align-items: start;
+  margin-top: 24px;
 }
 
-.top-nav-item {
+.app-grid > main,
+.right-panel {
+  min-width: 0;
+}
+
+.page-section {
+  padding-bottom: 28px;
+  /* Keeps an anchored scroll target from landing under the sticky header. */
+  scroll-margin-top: calc(var(--header-height) + 12px);
+}
+
+.page-section + .page-section {
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+}
+
+/* ==========================================================================
+   Step rail — labels always visible; a bare number tells two people
+   reading together nothing about where they are
+   ========================================================================== */
+
+.step-rail {
+  position: sticky;
+  top: var(--header-height);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.step-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
   border: 0;
-  border-bottom: 1px solid transparent;
-  padding: 0 0 3px;
+  border-left: 2px solid var(--rule);
+  border-radius: 0 6px 6px 0;
   color: var(--muted);
   background: transparent;
+  font-size: 0.86rem;
+  text-align: left;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.step-rail-number {
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+.step-rail-item:hover {
+  color: var(--ink);
+  border-left-color: var(--soft);
+  background: rgba(251, 248, 241, 0.7);
+}
+
+.step-rail-item.is-active {
+  color: var(--ink);
+  border-left-color: var(--sage);
+  background: var(--paper);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Apartment switcher — the context the EK decision is made in
+   ========================================================================== */
+
+.apartment-switcher {
+  padding-bottom: 12px;
+}
+
+.apartment-chip-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.apartment-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 132px;
+  padding: 8px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  color: inherit;
+  background: var(--paper);
+  text-align: left;
+  transition: border-color 140ms ease;
+}
+
+.apartment-chip:hover {
+  border-color: var(--soft);
+}
+
+.apartment-chip.is-active {
+  border-color: var(--ink);
+  background: #fffdf8;
+}
+
+.apartment-chip-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.apartment-chip-price {
+  color: var(--soft);
   font-size: 0.84rem;
 }
 
-.top-nav-item:hover,
-.top-nav-item.is-active {
+/* In the page body, not the sticky header — see ApartmentSwitcher.tsx. */
+.apartment-facts {
+  margin-top: 18px;
+}
+
+.apartment-facts summary {
+  color: var(--muted);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.apartment-facts summary:hover {
   color: var(--ink);
-  border-bottom-color: currentColor;
 }
 
-.hero {
-  position: relative;
-  max-width: 920px;
-  padding: 32px 0 24px;
+.apartment-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
 }
 
-.hero-kicker,
+/* ==========================================================================
+   Typography helpers
+   ========================================================================== */
+
 .section-kicker,
-.story-kicker,
 .readout-label,
 .input-field span,
 .segmented-field > span,
@@ -152,145 +293,153 @@ button {
   text-transform: uppercase;
 }
 
-.hero h1 {
-  margin: 20px 0 0;
+.section-kicker {
+  margin: 32px 0 10px;
+}
+
+.section {
+  padding: 8px 0 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.section h2 {
+  margin: 0;
   color: var(--ink);
   font-family: "Fraunces Local", Georgia, serif;
-  font-size: clamp(3rem, 5.4vw, 5.65rem);
+  font-size: clamp(1.6rem, 2.4vw, 2rem);
   font-weight: 350;
-  line-height: 1.02;
-  letter-spacing: 0;
-  overflow-wrap: anywhere;
+  line-height: 1.12;
 }
 
-.hero h1 span {
+.section-header p {
+  max-width: 640px;
+  margin: 8px 0 0;
+  color: var(--soft);
+  line-height: 1.5;
+}
+
+.section-action,
+.muted {
   color: var(--muted);
+  font-size: 0.88rem;
 }
 
-.hero p {
-  max-width: 760px;
-  margin: 24px 0 0;
-  color: #3b3a36;
+/* ==========================================================================
+   Verdict — the answer, first thing on the page
+   ========================================================================== */
+
+.verdict {
+  margin-top: 26px;
+  padding: 20px 24px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+
+.verdict h2 {
+  margin: 0 0 8px;
   font-family: "Fraunces Local", Georgia, serif;
-  font-size: clamp(1.15rem, 1.6vw, 1.45rem);
-  font-weight: 300;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 350;
+  line-height: 1.1;
+}
+
+.verdict p {
+  margin: 0;
+  color: var(--soft);
   line-height: 1.55;
 }
 
-.hero p em {
-  color: var(--ink);
-  font-style: italic;
+.verdict-ok {
+  border-color: rgba(94, 120, 97, 0.38);
+  background: rgba(243, 249, 240, 0.6);
 }
 
-.hero-compact {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 34px;
-  align-items: end;
-  max-width: none;
-  padding: 18px 0 14px;
-}
-
-.hero-compact .hero-kicker {
-  grid-column: 1 / -1;
-}
-
-.hero-compact h1 {
-  max-width: 760px;
-  margin-top: 12px;
-  font-size: clamp(2rem, 3.2vw, 3.25rem);
-  line-height: 1.06;
-}
-
-.hero-compact p {
-  max-width: 520px;
-  margin-top: 10px;
-  font-size: 1.02rem;
-  line-height: 1.45;
-}
-
-.hero-compact .hero-status {
-  margin-top: 0;
-  margin-bottom: 4px;
-}
-
-.hero-status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  margin-top: 22px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  padding: 0 12px;
-  color: var(--soft);
-  background: rgba(251, 248, 241, 0.7);
-  font-family: "JetBrains Mono Local", ui-monospace, monospace;
-  font-size: 0.74rem;
-}
-
-.hero-status.ok {
-  border-color: rgba(94, 120, 97, 0.32);
+.verdict-ok h2 {
   color: var(--sage);
 }
 
-.hero-status.danger {
-  border-color: rgba(183, 92, 77, 0.36);
+.verdict-blocked {
+  border-color: rgba(183, 92, 77, 0.38);
+  background: rgba(255, 241, 236, 0.55);
+}
+
+.verdict-blocked h2 {
   color: var(--alert);
 }
 
-.app-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 48px;
-  align-items: start;
-  margin-top: 24px;
-}
+/* ==========================================================================
+   Trade-off statement (the Kernsatz) — the couple's disagreement as a number
+   ========================================================================== */
 
-.app-grid > main,
-.right-panel {
-  min-width: 0;
-}
-
-.content-stack,
-.scenario-stack,
-.bar-stack,
-.result-list {
-  display: grid;
-  gap: 18px;
-}
-
-.selection-zone {
+.tradeoff-statement {
+  margin-top: 14px;
+  padding: 18px 22px;
   border: 1px solid var(--rule);
   border-radius: 12px;
-  padding: 0 24px 18px;
   background: var(--paper);
 }
 
-.zone-label {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  color: var(--muted);
-  font-family: "JetBrains Mono Local", ui-monospace, monospace;
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: uppercase;
-  margin-top: 8px;
+.tradeoff-statement p {
+  margin: 0 0 10px;
+  color: var(--ink);
+  line-height: 1.6;
 }
 
-.zone-label::before,
-.zone-label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--rule);
+.tradeoff-net {
+  margin-bottom: 0 !important;
+  font-weight: 500;
 }
+
+.tradeoff-net-favours {
+  color: var(--sage);
+}
+
+.tradeoff-net-against {
+  color: var(--alert);
+}
+
+.tradeoff-etf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: #fffdf8;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tradeoff-etf-chip input {
+  width: 3ch;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  font-weight: inherit;
+  text-align: right;
+}
+
+.tradeoff-etf-chip:focus-within {
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px rgba(94, 120, 97, 0.22);
+}
+
+/* ==========================================================================
+   Compromise finder — the one authoritative EK selector
+   ========================================================================== */
 
 .compromise-finder {
   display: grid;
-  gap: 18px;
-  padding: 28px 0 18px;
+  gap: 16px;
+  padding: 26px 0 0;
 }
 
 .compromise-copy {
@@ -304,33 +453,28 @@ button {
   margin: 0;
   color: var(--muted);
   font-family: "Fraunces Local", Georgia, serif;
-  font-size: 0.96rem;
+  font-size: 0.94rem;
   font-style: italic;
 }
 
 .compromise-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 14px;
 }
 
 .compromise-door {
   min-width: 0;
   border: 1px solid var(--rule);
-  border-radius: 22px;
-  padding: 26px 26px 22px;
+  border-radius: 18px;
+  padding: 20px 20px 16px;
   color: inherit;
   background: var(--paper);
   text-align: left;
-  transition:
-    background 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    transform 150ms ease;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 .compromise-door:hover {
-  transform: translateY(-2px);
   border-color: rgba(37, 35, 32, 0.42);
 }
 
@@ -343,10 +487,9 @@ button {
 .door-rate {
   color: inherit;
   font-family: "Fraunces Local", Georgia, serif;
-  font-size: clamp(3.45rem, 5.9vw, 5.25rem);
+  font-size: clamp(2.6rem, 4.4vw, 3.6rem);
   font-weight: 400;
   line-height: 0.9;
-  letter-spacing: 0;
 }
 
 .door-rate span {
@@ -356,37 +499,36 @@ button {
 }
 
 .door-name {
-  margin-top: 12px;
+  margin-top: 10px;
   font-family: "JetBrains Mono Local", ui-monospace, monospace;
-  font-size: 0.72rem;
-  letter-spacing: 0;
+  font-size: 0.7rem;
   text-transform: uppercase;
   opacity: 0.82;
 }
 
 .door-verdict {
-  min-height: 58px;
-  margin-top: 14px;
+  min-height: 42px;
+  margin-top: 10px;
   font-family: "Fraunces Local", Georgia, serif;
-  font-size: 1.42rem;
+  font-size: 1.16rem;
   font-style: italic;
-  line-height: 1.22;
+  line-height: 1.25;
 }
 
 .door-status {
-  min-height: 28px;
+  min-height: 26px;
 }
 
 .door-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 18px;
-  padding-top: 16px;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid currentColor;
   font-family: "JetBrains Mono Local", ui-monospace, monospace;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   opacity: 0.94;
@@ -400,175 +542,39 @@ button {
   opacity: 0.48;
 }
 
-.story-section {
-  max-width: 860px;
-  padding: 38px 0 8px;
+.door-meta-cash {
+  display: inline-flex;
 }
 
-.story-section p {
-  margin: 0 0 14px;
-  color: var(--ink);
-  font-family: "Fraunces Local", Georgia, serif;
-  font-size: clamp(1.35rem, 2vw, 1.65rem);
-  font-weight: 300;
-  line-height: 1.5;
-}
-
-.story-section p span {
-  display: inline-block;
-  padding: 0 0.16em;
-  color: var(--ink);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.quiet-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 32px;
-  margin-top: 8px;
-  padding: 24px 20px 20px;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: rgba(251, 248, 241, 0.6);
-}
-
-.quiet-metrics div {
-  min-width: 0;
-}
-
-.quiet-metrics strong {
-  display: block;
-  color: var(--ink);
-  font-family: "Fraunces Local", Georgia, serif;
-  font-size: clamp(1.85rem, 3vw, 2.4rem);
-  font-weight: 400;
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.quiet-metrics span {
-  display: block;
-  margin-top: 10px;
-  color: var(--ink);
-  font-size: 0.88rem;
-}
-
-.quiet-metrics small {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.35;
-}
-
-.section {
-  padding: 42px 0 10px;
-  border-top: 1px solid var(--rule);
-}
-
-.section-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 24px;
-}
-
-.section h2,
-.result-panel h2 {
-  margin: 0;
-  color: var(--ink);
-  font-family: "Fraunces Local", Georgia, serif;
-  font-size: clamp(1.9rem, 3vw, 2.45rem);
-  font-weight: 350;
-  line-height: 1.12;
-}
-
-.section-header p {
-  max-width: 720px;
-  margin: 8px 0 0;
-  color: var(--soft);
-  line-height: 1.55;
-}
-
-.section-action,
-.muted {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.button-row,
-.preset-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.preset-row {
-  justify-content: space-between;
-  margin-bottom: 18px;
-}
-
-.button {
-  min-height: 36px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  padding: 0 12px;
-  color: var(--soft);
-  background: var(--paper);
-  font-size: 0.84rem;
-  font-weight: 600;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease,
-    color 140ms ease,
-    transform 140ms ease;
-}
-
-.button:hover {
-  border-color: var(--ink);
-  color: var(--ink);
-  transform: translateY(-1px);
-}
-
-.button.is-active {
-  color: var(--paper);
-  background: var(--ink);
-  border-color: var(--ink);
-}
-
-.readout-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.readout-grid.three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.readout-grid.four {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
+/* ==========================================================================
+   Outputs: calculated, read-only. Never share a rule with inputs (spec §5.2).
+   ========================================================================== */
 
 .readout,
-.metric-bar,
-.input-field,
-.segmented-field,
-.result-panel,
 .logic-panel,
-.break-even-panel,
-.qa-block,
 .interpretation {
+  position: relative;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: rgba(251, 248, 241, 0.84);
+  background: rgba(251, 248, 241, 0.5);
 }
 
 .readout {
   min-width: 0;
-  min-height: 104px;
   padding: 14px;
+}
+
+.readout::after {
+  content: "berechnet";
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  color: var(--muted);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  opacity: 0.55;
 }
 
 .readout-value {
@@ -582,9 +588,9 @@ button {
 }
 
 .readout-sub {
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--soft);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   line-height: 1.4;
 }
 
@@ -594,7 +600,7 @@ button {
 
 .readout-green {
   border-color: rgba(94, 120, 97, 0.38);
-  background: rgba(243, 249, 240, 0.72);
+  background: rgba(243, 249, 240, 0.6);
 }
 
 .readout-amber,
@@ -604,163 +610,42 @@ button {
 
 .readout-red {
   border-color: rgba(183, 92, 77, 0.38);
-  background: rgba(255, 241, 236, 0.72);
+  background: rgba(255, 241, 236, 0.62);
 }
 
-.status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  border: 1px solid;
-  border-radius: 999px;
-  padding: 0 9px;
-  font-family: "JetBrains Mono Local", ui-monospace, monospace;
-  font-size: 0.68rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.status-green {
-  color: var(--sage);
-  background: rgba(94, 120, 97, 0.11);
-  border-color: rgba(94, 120, 97, 0.3);
-}
-
-.status-amber,
-.status-orange {
-  color: var(--amber);
-  background: rgba(201, 131, 115, 0.12);
-  border-color: rgba(201, 131, 115, 0.3);
-}
-
-.status-red {
-  color: var(--alert);
-  background: rgba(183, 92, 77, 0.12);
-  border-color: rgba(183, 92, 77, 0.32);
-}
-
-.status-blue,
-.status-slate {
-  color: var(--soft);
-  background: rgba(230, 223, 206, 0.42);
-  border-color: var(--rule);
-}
-
-.scenario-card {
-  width: 100%;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 18px;
-  color: inherit;
-  background: var(--paper);
-  text-align: left;
-  transition:
-    border-color 140ms ease,
-    background 140ms ease,
-    transform 140ms ease;
-}
-
-.scenario-card:hover,
-.scenario-card.is-selected {
-  border-color: var(--ink);
-  transform: translateY(-1px);
-}
-
-.scenario-card-header,
-.special-editor-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.scenario-card-header span {
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
-.scenario-card h3 {
-  margin: 3px 0 0;
-  font-family: "Fraunces Local", Georgia, serif;
-  font-size: 1.7rem;
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
-.scenario-grid {
+.readout-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.scenario-card p {
-  margin: 14px 0 0;
-  color: var(--soft);
-  line-height: 1.55;
-}
-
-.mini-metric span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.mini-metric strong {
-  display: block;
-  margin-top: 3px;
-  color: var(--ink);
-  font-size: 1rem;
-  overflow-wrap: anywhere;
-}
-
-.positive {
-  color: var(--sage) !important;
-}
-
-.negative {
-  color: var(--alert) !important;
-}
-
-.table-wrap {
-  overflow-x: auto;
-  border-top: 1px solid var(--rule);
-}
-
-.tradeoff-table {
-  width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
-}
-
-.tradeoff-table th,
-.tradeoff-table td {
-  padding: 15px 14px;
-  border-bottom: 1px solid var(--rule);
-  text-align: left;
-  vertical-align: top;
-}
-
-.tradeoff-table td {
-  color: var(--soft);
-  line-height: 1.45;
-}
-
-.input-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
+
+.readout-grid.one {
+  grid-template-columns: 1fr;
+}
+
+/* ==========================================================================
+   Inputs: editable controls
+   ========================================================================== */
 
 .input-field,
 .segmented-field {
   display: block;
   min-width: 0;
   padding: 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--sage);
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .input-field-highlight {
   border-color: rgba(94, 120, 97, 0.54);
+  border-left-color: var(--sage);
+}
+
+.input-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .input-row {
@@ -773,6 +658,15 @@ button {
   border: 1px solid var(--rule);
   border-radius: 8px;
   background: #fffdf8;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+/* The nested <input> has outline:0, so the row must carry the focus ring or
+   keyboard users get no visible focus at all. */
+.input-row:focus-within,
+.special-row:focus-within {
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px rgba(94, 120, 97, 0.22);
 }
 
 .input-row input,
@@ -825,172 +719,283 @@ button {
   border-color: var(--ink);
 }
 
+/* ==========================================================================
+   Buttons — two visually distinct kinds, deliberately.
+   .button-tab    switches which fields are shown; has state, may look pressed.
+   .button-action fires once; must NOT look pressed, or it reads as a toggle.
+   ========================================================================== */
+
+.button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.button-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  background: transparent;
+}
+
+.button-tab:hover {
+  color: var(--ink);
+  border-bottom-color: var(--rule);
+}
+
+.button-tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--sage);
+}
+
+.button-action {
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+  color: var(--soft);
+  background: transparent;
+}
+
+.button-action:hover {
+  border-style: solid;
+  border-color: var(--soft);
+  color: var(--ink);
+}
+
+.button-row,
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-row {
+  margin-bottom: 16px;
+}
+
+/* ==========================================================================
+   Status pills
+   ========================================================================== */
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.66rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-green {
+  color: var(--sage);
+  background: rgba(94, 120, 97, 0.11);
+  border-color: rgba(94, 120, 97, 0.3);
+}
+
+.status-amber,
+.status-orange {
+  color: var(--amber);
+  background: rgba(201, 131, 115, 0.12);
+  border-color: rgba(201, 131, 115, 0.3);
+}
+
+.status-red {
+  color: var(--alert);
+  background: rgba(183, 92, 77, 0.12);
+  border-color: rgba(183, 92, 77, 0.32);
+}
+
+.status-blue,
+.status-slate {
+  color: var(--soft);
+  background: rgba(230, 223, 206, 0.42);
+  border-color: var(--rule);
+}
+
+/* ==========================================================================
+   Signed values — glyph, then signed number, then word. Colour is the LAST
+   carrier, never the only one (spec §14).
+   ========================================================================== */
+
+.signed-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-variant-numeric: tabular-nums;
+}
+
+.signed-glyph {
+  font-size: 0.85em;
+}
+
+.signed-word {
+  font-size: 0.82em;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.signed-better {
+  color: var(--sage);
+}
+
+.signed-worse {
+  color: var(--alert);
+}
+
+.signed-neutral {
+  color: inherit;
+}
+
+/* ==========================================================================
+   Tables
+   ========================================================================== */
+
+.table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--rule);
+}
+
+.tradeoff-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+}
+
+.tradeoff-table th,
+.tradeoff-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.tradeoff-table td {
+  color: var(--soft);
+  line-height: 1.45;
+}
+
+/* ==========================================================================
+   Right panel — full viewport height, never scrolls internally.
+   "Always visible" only means something if nothing hides below an inner fold.
+   ========================================================================== */
+
 .right-panel {
   position: sticky;
-  top: 18px;
-  display: grid;
+  top: var(--header-height);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
-  gap: 14px;
-}
-
-.result-panel,
-.logic-panel,
-.break-even-panel,
-.qa-block,
-.interpretation {
-  padding: 16px;
-}
-
-.result-panel h2 {
-  margin: 6px 0 10px;
+  height: calc(100vh - var(--header-height) - 24px);
 }
 
 .result-panel {
-  border-color: rgba(94, 120, 97, 0.38);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  border: 1px solid rgba(94, 120, 97, 0.38);
+  border-radius: 8px;
   background:
     linear-gradient(145deg, rgba(238, 243, 234, 0.96), rgba(246, 241, 231, 0.84)),
     #eef3ea;
 }
 
-.logic-panel h3,
-.break-even-panel h3,
-.qa-block h3 {
-  margin: 0 0 9px;
-  color: var(--ink);
-  font-size: 1rem;
+.result-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.logic-panel p,
-.qa-block ul,
-.interpretation {
+.result-panel h2 {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-family: "Fraunces Local", Georgia, serif;
+  font-size: 1.6rem;
+  font-weight: 350;
+  line-height: 1.1;
+}
+
+.result-list {
+  display: grid;
+  flex: 1;
+  gap: 10px;
+  margin-top: 14px;
+  /* Equal rows let the four readouts fill the column exactly. */
+  grid-auto-rows: 1fr;
+}
+
+.right-panel .readout {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+
+.logic-panel {
+  padding: 12px 14px;
   color: var(--soft);
-  line-height: 1.6;
+  line-height: 1.5;
+  font-size: 0.88rem;
 }
 
 .logic-panel p {
   margin: 0;
 }
 
-.logic-ok {
-  border-color: rgba(94, 120, 97, 0.34);
-}
-
 .logic-danger {
   border-color: rgba(183, 92, 77, 0.38);
 }
 
-.break-even-panel dl {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-}
+/* ==========================================================================
+   Sondertilgung
+   ========================================================================== */
 
-.break-even-panel div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.break-even-panel dt {
-  color: var(--muted);
-}
-
-.break-even-panel dd {
-  margin: 0;
-  color: var(--ink);
-  font-weight: 700;
-  text-align: right;
-}
-
-.bar-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 26px;
-}
-
-.metric-bar {
-  padding: 14px;
-}
-
-.metric-bar-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+.interpretation {
+  padding: 16px 18px;
   color: var(--soft);
-  font-size: 0.9rem;
+  line-height: 1.6;
 }
 
-.metric-bar-top strong {
-  color: var(--ink);
-  white-space: nowrap;
+.interpretation p {
+  margin: 0 0 8px;
 }
 
-.metric-track {
-  height: 7px;
-  margin-top: 10px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--rule);
+.interpretation p:last-child {
+  margin-bottom: 0;
 }
 
-.metric-fill {
-  height: 100%;
-  border-radius: inherit;
+.interpretation-caveat {
+  margin-top: 10px !important;
+  color: var(--muted) !important;
+  font-size: 0.84rem;
+  font-style: italic;
 }
 
-.metric-fill-blue {
-  background: var(--ink);
+.special-editor-details {
+  margin-top: 14px;
 }
 
-.metric-fill-green {
-  background: var(--sage);
-}
-
-.metric-fill-red {
-  background: var(--alert);
-}
-
-.special-editor {
-  margin-top: 22px;
-  padding: 18px;
-  border: 1px solid rgba(94, 120, 97, 0.26);
-  border-radius: 8px;
-  background: rgba(251, 248, 241, 0.62);
-}
-
-.special-editor-head {
-  margin-bottom: 14px;
-}
-
-.special-editor-head h3 {
-  margin: 0;
-  color: var(--ink);
-  font-family: "Fraunces Local", Georgia, serif;
-  font-size: 1.35rem;
-  font-weight: 400;
-}
-
-.special-editor-head p {
-  margin: 4px 0 0;
+.special-editor-details summary {
   color: var(--soft);
-  line-height: 1.45;
-}
-
-.special-editor-head > span {
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  border: 1px solid rgba(94, 120, 97, 0.3);
-  border-radius: 999px;
-  color: var(--sage);
-  background: rgba(94, 120, 97, 0.1);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .special-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
+  margin-top: 14px;
 }
 
 .special-row {
@@ -1011,30 +1016,79 @@ button {
   font-weight: 700;
 }
 
-.qa-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
+/* ==========================================================================
+   Warten — collapsed by default: a different decision from the EK question
+   ========================================================================== */
+
+.wait-details summary {
+  padding: 8px 0;
+  color: var(--soft);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.qa-block ul {
-  margin: 0;
-  padding-left: 18px;
+.wait-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 8px;
 }
+
+.wait-column {
+  min-width: 0;
+}
+
+.wait-column-head {
+  margin-bottom: 12px;
+  color: var(--ink);
+  font-family: "Fraunces Local", Georgia, serif;
+  font-size: 1.1rem;
+}
+
+/* ==========================================================================
+   Responsive. Desktop is the priority viewport; these are graceful fallbacks.
+   ========================================================================== */
 
 @media (max-width: 1180px) {
   .app-shell {
-    padding: 28px 34px 56px;
+    padding: 0 34px 56px;
+  }
+
+  .app-header {
+    margin: 0 -34px;
+    padding: 0 34px;
   }
 
   .app-grid {
     grid-template-columns: 1fr;
   }
 
+  .step-rail {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .step-rail-item {
+    border-left: 0;
+    border-bottom: 2px solid var(--rule);
+    border-radius: 6px 6px 0 0;
+  }
+
+  .step-rail-item.is-active {
+    border-bottom-color: var(--sage);
+  }
+
   .right-panel {
     position: static;
     order: -1;
+    height: auto;
+  }
+
+  .result-list {
+    grid-auto-rows: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .input-grid,
@@ -1046,81 +1100,47 @@ button {
 @media (max-width: 880px) {
   .topbar,
   .compromise-copy,
-  .section-header,
-  .preset-row,
-  .scenario-card-header,
-  .special-editor-head {
+  .section-header {
     display: grid;
   }
 
-  .main-tabs {
-    justify-content: flex-start;
+  .apartment-chip-row {
+    flex-wrap: wrap;
   }
 
   .compromise-grid,
-  .quiet-metrics,
-  .readout-grid.three,
-  .readout-grid.four,
-  .bar-grid,
-  .qa-grid,
-  .scenario-grid,
+  .readout-grid,
+  .result-list,
   .input-grid,
-  .special-grid {
+  .special-grid,
+  .wait-columns,
+  .apartment-facts-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 620px) {
   .app-shell {
-    width: min(100%, 390px);
-    padding: 20px 16px 42px;
-    margin: 0;
+    padding: 0 16px 42px;
   }
 
-  .main-tabs {
-    width: 100%;
+  .app-header {
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  .apartment-chip-row {
     flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 16px;
     overflow-x: auto;
-    padding-bottom: 8px;
+    padding-bottom: 6px;
   }
 
-  .top-nav-item {
+  .apartment-chip {
     flex: 0 0 auto;
   }
 
-  .hero h1 {
-    max-width: 100%;
-    font-size: 2.18rem;
-    line-height: 1.08;
-  }
-
-  .hero,
-  .hero p,
-  .result-panel,
-  .readout {
-    max-width: 100%;
-  }
-
-  .hero {
-    width: calc(100vw - 32px);
-  }
-
-  .hero p {
-    font-size: 1.05rem;
-    overflow-wrap: break-word;
-    word-break: break-word;
-  }
-
-  .hero h1 {
-    width: 100%;
-    overflow-wrap: break-word;
-    word-break: break-word;
-  }
-
   .compromise-door {
-    padding: 22px;
+    padding: 18px;
   }
 
   .door-verdict {

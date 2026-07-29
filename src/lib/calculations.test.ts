@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   buildScenario,
   buildScenarios,
+  buildWaitScenario,
+  buildWaitScenarios,
   calculateCashNeeded,
+  compareApartmentCases,
+  compareEkScenarios,
+  compareExternal,
   evaluateDecision,
+  interestForPlan,
   monthlyAnnuity,
+  requiredSpecialToMatch,
   simulateMortgage,
 } from "./calculations";
-import { CASE_PRESETS, EK_SCENARIOS } from "./defaults";
+import { CASE_PRESETS, DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
 
 describe("calculation engine", () => {
   it("calculates the monthly annuity", () => {
@@ -20,7 +27,7 @@ describe("calculation engine", () => {
       interestRatePct: 3,
       repaymentRatePct: 3,
       fixedRateYears: 10,
-      annualSpecialRepayment: 0,
+      specialPlan: { kind: "none" },
       specialRepaymentLimitRate: 5,
     });
 
@@ -34,7 +41,7 @@ describe("calculation engine", () => {
       interestRatePct: 3,
       repaymentRatePct: 3,
       fixedRateYears: 10,
-      annualSpecialRepayment: 20000,
+      specialPlan: { kind: "flat", annual: 20000 },
       specialRepaymentLimitRate: 5,
     });
 
@@ -47,8 +54,7 @@ describe("calculation engine", () => {
       interestRatePct: 3,
       repaymentRatePct: 3,
       fixedRateYears: 10,
-      annualSpecialRepayment: 0,
-      annualSpecialRepayments: [1000, 20000, 3000],
+      specialPlan: { kind: "path", years: [1000, 20000, 3000] },
       specialRepaymentLimitRate: 5,
     });
 
@@ -84,5 +90,213 @@ describe("calculation engine", () => {
 
     expect(decision.noSafeScenario).toBe(false);
     expect(decision.feasibleScenarios.length).toBeGreaterThan(0);
+  });
+
+  it("compares apartment cases with independent prices and Sondertilgung paths", () => {
+    const results = compareApartmentCases(
+      [
+        {
+          id: "apartment-a",
+          label: "Apartment A",
+          purchasePrice: 600000,
+          renovation: 0,
+          monthlyOwnershipCosts: 700,
+          selectedScenarioId: "ek10",
+          annualSpecialRepayments: [0, 0, 0],
+        },
+        {
+          id: "apartment-b",
+          label: "Apartment B",
+          purchasePrice: 700000,
+          renovation: 10000,
+          monthlyOwnershipCosts: 900,
+          selectedScenarioId: "ek10",
+          annualSpecialRepayments: [10000, 10000, 10000],
+        },
+      ],
+      EK_SCENARIOS,
+      DEFAULT_INPUTS,
+      CASE_PRESETS.case720.rates,
+    );
+
+    expect(results[0].inputs.purchasePrice).toBe(600000);
+    expect(results[1].inputs.purchasePrice).toBe(700000);
+    expect(results[0].selectedScenario.loan).toBeLessThan(results[1].selectedScenario.loan);
+    expect(results[0].selectedScenario.mortgage.usedAnnualSpecialRepayments[0]).toBe(0);
+    expect(results[1].selectedScenario.mortgage.usedAnnualSpecialRepayments[0]).toBe(10000);
+  });
+
+  // --- Phase 1 regressions -------------------------------------------------
+
+  it("does not subtract rent from capital while waiting (D4)", () => {
+    const inputs = { ...DEFAULT_INPUTS, waitMonths: 12, waitSavingsMonthly: 1500 };
+    const now = buildScenario(EK_SCENARIOS[1], inputs, DEFAULT_RATES);
+    const wait = buildWaitScenario(EK_SCENARIOS[1], now, inputs, DEFAULT_RATES);
+
+    expect(wait.saved).toBe(18000);
+    expect(wait.adjustedAvailableCapital).toBe(inputs.availableCapital + 18000);
+    // Rent is still reported, just never deducted.
+    expect(wait.rentPaid).toBe(23640);
+  });
+
+  it("stops special repayments after the entered path ends (K2)", () => {
+    const shared = {
+      principal: 400000,
+      interestRatePct: 3,
+      repaymentRatePct: 2,
+      fixedRateYears: 10,
+      specialRepaymentLimitRate: 5,
+    };
+    const path = simulateMortgage({
+      ...shared,
+      specialPlan: { kind: "path", years: Array.from({ length: 10 }, () => 6000) },
+    });
+    const flat = simulateMortgage({ ...shared, specialPlan: { kind: "flat", annual: 6000 } });
+
+    expect(path.usedAnnualSpecialRepayments[10] ?? 0).toBe(0);
+    // A plan that stops must cost more interest than one that runs forever.
+    expect(path.interestTotal).toBeGreaterThan(flat.interestTotal);
+  });
+
+  it("returns no winners and does not throw for an empty scenario list", () => {
+    const decision = evaluateDecision([]);
+
+    expect(decision.noSafeScenario).toBe(true);
+    expect(decision.recommendation).toBeNull();
+    expect(decision.costMinimum).toBeNull();
+    expect(decision.liquidityMaximum).toBeNull();
+    expect(decision.monthlyMinimum).toBeNull();
+  });
+
+  it("names no winner when no scenario is clean (spec 5.3)", () => {
+    const preset = CASE_PRESETS.case850;
+    const decision = evaluateDecision(
+      buildScenarios(EK_SCENARIOS, preset.inputs, preset.rates),
+    );
+
+    expect(decision.noSafeScenario).toBe(true);
+    expect(decision.costMinimum).toBeNull();
+    expect(decision.liquidityMaximum).toBeNull();
+    expect(decision.monthlyMinimum).toBeNull();
+    expect(decision.diagnosis.narrowestMiss).not.toBeNull();
+  });
+
+  it("honours a configurable burden threshold", () => {
+    const preset = CASE_PRESETS.case600;
+    const relaxed = evaluateDecision(
+      buildScenarios(EK_SCENARIOS, preset.inputs, preset.rates),
+    );
+    const strict = evaluateDecision(
+      buildScenarios(EK_SCENARIOS, { ...preset.inputs, maxBurdenRate: 15 }, preset.rates),
+    );
+
+    expect(relaxed.noSafeScenario).toBe(false);
+    expect(strict.noSafeScenario).toBe(true);
+    expect(strict.diagnosis.failedInAll).toContain("burden");
+  });
+
+  it("distinguishes an unaffordable purchase from a thin reserve", () => {
+    const roomy = { ...DEFAULT_INPUTS, purchasePrice: 600000, householdNetIncome: 20000 };
+
+    const reserveOnly = buildScenario(
+      EK_SCENARIOS[1],
+      { ...roomy, availableCapital: 120000, reserveTarget: 20000 },
+      DEFAULT_RATES,
+    );
+    const cannotAfford = buildScenario(
+      EK_SCENARIOS[1],
+      { ...roomy, availableCapital: 100000, reserveTarget: 20000 },
+      DEFAULT_RATES,
+    );
+
+    expect(reserveOnly.cashLeft).toBeGreaterThan(0);
+    expect(reserveOnly.diagnosis.failed).toContain("reserve");
+    expect(reserveOnly.diagnosis.failed).not.toContain("cash");
+
+    expect(cannotAfford.cashLeft).toBeLessThan(0);
+    expect(cannotAfford.diagnosis.failed).toContain("cash");
+  });
+
+  it("measures the break-even against 15% EK without Sondertilgung (D1)", () => {
+    const withoutSpecial = interestForPlan(EK_SCENARIOS[2], DEFAULT_INPUTS, DEFAULT_RATES, {
+      kind: "none",
+    });
+    const withPath = interestForPlan(
+      EK_SCENARIOS[2],
+      DEFAULT_INPUTS,
+      DEFAULT_RATES,
+      { kind: "path", years: DEFAULT_INPUTS.annualSpecialRepayments },
+    );
+
+    // A 15% EK that also makes special repayments pays less interest, which would set a
+    // harder bar. The chosen baseline is the one without.
+    expect(withoutSpecial).toBeGreaterThan(withPath);
+
+    const againstBaseline = requiredSpecialToMatch(
+      EK_SCENARIOS[0],
+      withoutSpecial,
+      DEFAULT_INPUTS,
+      DEFAULT_RATES,
+    );
+    const againstPath = requiredSpecialToMatch(
+      EK_SCENARIOS[0],
+      withPath,
+      DEFAULT_INPUTS,
+      DEFAULT_RATES,
+    );
+
+    expect(againstBaseline.amount).not.toBeNull();
+    expect(againstBaseline.amount!).toBeLessThan(againstPath.amount ?? Infinity);
+  });
+
+  it("nets mortgage interest saved against foregone ETF growth over one horizon", () => {
+    const scenarios = buildScenarios(EK_SCENARIOS, DEFAULT_INPUTS, DEFAULT_RATES);
+    const tradeoff = compareEkScenarios(scenarios[0], scenarios[2], DEFAULT_INPUTS);
+
+    expect(tradeoff.horizonYears).toBe(DEFAULT_INPUTS.fixedRateYears);
+    expect(tradeoff.extraCashRequired).toBeGreaterThan(0);
+    expect(tradeoff.interestSavedFixed).toBeGreaterThan(0);
+    expect(tradeoff.netAdvantageFixed).toBeCloseTo(
+      tradeoff.interestSavedFixed - tradeoff.etfForegone,
+      6,
+    );
+
+    // A high enough assumed ETF return must be able to flip the conclusion.
+    const optimistic = compareEkScenarios(scenarios[0], scenarios[2], {
+      ...DEFAULT_INPUTS,
+      etfReturnRate: 14,
+    });
+    expect(optimistic.netAdvantageFixed).toBeLessThan(tradeoff.netAdvantageFixed);
+  });
+
+  it("builds buy-now and waiting periods side by side", () => {
+    const now = buildScenario(EK_SCENARIOS[1], DEFAULT_INPUTS, DEFAULT_RATES);
+    const columns = buildWaitScenarios(
+      EK_SCENARIOS[1],
+      now,
+      DEFAULT_INPUTS,
+      DEFAULT_RATES,
+      [0, 12, 24],
+    );
+
+    expect(columns).toHaveLength(3);
+    expect(columns[0].waitMonths).toBe(0);
+    expect(columns[0].saved).toBe(0);
+    expect(columns[0].rentPaid).toBe(0);
+    expect(columns[0].deltaInterest).toBeCloseTo(0, 6);
+    expect(columns[2].adjustedAvailableCapital).toBeGreaterThan(
+      columns[1].adjustedAvailableCapital,
+    );
+  });
+
+  it("flags external figures outside the tolerance band", () => {
+    const scenario = buildScenario(EK_SCENARIOS[1], DEFAULT_INPUTS, DEFAULT_RATES);
+    const monthly = scenario.mortgage.regularMonthlyPayment;
+    const diffs = compareExternal(scenario, { monthlyPayment: monthly * 1.005 }, 1);
+
+    expect(diffs).toHaveLength(1);
+    expect(diffs[0].withinTolerance).toBe(true);
+    expect(compareExternal(scenario, { monthlyPayment: monthly * 1.03 }, 1)[0].withinTolerance)
+      .toBe(false);
   });
 });

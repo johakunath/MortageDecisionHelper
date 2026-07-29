@@ -1,64 +1,76 @@
-import type { DecisionResult, MortgageInputs, ScenarioResult } from "../lib/calculations";
+import type {
+  ConstraintId,
+  DecisionResult,
+  MortgageInputs,
+  ScenarioResult,
+} from "../lib/calculations";
 import { formatEur, formatPct } from "../lib/format";
-import { Readout } from "./ui";
 
 type ExecutiveSummaryProps = {
   decision: DecisionResult;
   inputs: MortgageInputs;
   selected: ScenarioResult;
-  onSelectScenario: (id: ScenarioResult["id"]) => void;
 };
 
-export default function ExecutiveSummary({
-  decision,
-  inputs,
-  selected,
-  onSelectScenario,
-}: ExecutiveSummaryProps) {
-  return (
-    <div className="summary-grid">
-      <button type="button" onClick={() => onSelectScenario(decision.costMinimum.id)}>
-        <Readout
-          label="Kosten-Minimum"
-          value={decision.costMinimum.label}
-          sub={`${formatEur(decision.costMinimum.mortgage.interestTotal)} Zinsen gesamt`}
-          tone="green"
-        />
-      </button>
-      <button type="button" onClick={() => onSelectScenario(decision.liquidityMaximum.id)}>
-        <Readout
-          label="Liquiditäts-Maximum"
-          value={decision.liquidityMaximum.label}
-          sub={`${formatEur(decision.liquidityMaximum.cashLeft)} Cash nach Kauf`}
-          tone="blue"
-        />
-      </button>
-      <button
-        type="button"
-        onClick={() => decision.recommendation && onSelectScenario(decision.recommendation.id)}
-      >
-        <Readout
-          label="Kompromiss"
-          value={decision.noSafeScenario ? "Kein sauberes Szenario" : decision.recommendation?.label}
-          sub={
-            decision.noSafeScenario
-              ? "Reserve oder Monatslast verletzt"
-              : `${formatEur(decision.recommendation?.allInMonthly ?? 0)} all-in mtl.`
-          }
-          tone={decision.noSafeScenario ? "red" : "amber"}
-        />
-      </button>
-      <Readout
-        label="Aktuelle Auswahl"
-        value={selected.label}
-        sub={`${formatPct(selected.burdenRatio * 100)} Haushaltsbelastung · Ziel max. 40%`}
-        tone={selected.feasible ? "slate" : selected.reserveGap < 0 ? "red" : "amber"}
-      />
-      <div className="decision-note">
-        <strong>Regel:</strong> Sauber ist ein Szenario nur, wenn nach dem Kauf mindestens{" "}
-        {formatEur(inputs.reserveTarget)} Reserve bleibt und die Monatsbelastung höchstens 40% vom
-        Haushaltsnetto beträgt.
+const CONSTRAINT_LABELS: Record<ConstraintId, string> = {
+  cash: "das Geld reicht nicht für den Kauf",
+  reserve: "die Sicherheitsreserve wird unterschritten",
+  burden: "die Monatsbelastung ist zu hoch",
+};
+
+function describeBlockers(failed: ConstraintId[]): string {
+  const parts = failed.map((id) => CONSTRAINT_LABELS[id]);
+  if (parts.length === 0) return "die Annahmen passen nicht zusammen";
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")} und ${parts[parts.length - 1]}`;
+}
+
+/**
+ * The verdict, and nothing else.
+ *
+ * The four winner tiles this used to render (Kosten-Minimum, Liquiditäts-Maximum,
+ * niedrigste Monatslast, Kompromiss) were removed: three of them are structurally
+ * fixed — the cost minimum is always 15% EK, the liquidity maximum always 5% — so
+ * they restated the axis rather than informing the choice. The doors below already
+ * carry the same selection. See docs/DECISIONS.md D6.
+ */
+export default function ExecutiveSummary({ decision, inputs, selected }: ExecutiveSummaryProps) {
+  const { diagnosis } = decision;
+
+  // PRODUCT_SPEC §5.3: when nothing is clean, say so plainly and name the reason.
+  if (decision.noSafeScenario) {
+    const miss = diagnosis.narrowestMiss;
+
+    return (
+      <div className="verdict verdict-blocked">
+        <h2>Kein sauberes Szenario</h2>
+        <p>
+          Kein Weg hält gleichzeitig die Reserve von{" "}
+          <strong>{formatEur(inputs.reserveTarget)}</strong> und die Grenze von{" "}
+          <strong>{formatPct(inputs.maxBurdenRate)}</strong> Haushaltsbelastung.
+          {diagnosis.failedInAll.length > 0 ? <> Überall gilt: {describeBlockers(diagnosis.failedInAll)}.</> : null}
+          {miss ? (
+            <>
+              {" "}Am nächsten dran: <strong>{miss.scenarioId.replace("ek", "")}% EK</strong>
+              {miss.constraint === "burden"
+                ? `, ${formatPct(Math.abs(miss.gap) * 100)} über der Grenze.`
+                : `, ${formatEur(Math.abs(miss.gap))} zu wenig.`}
+            </>
+          ) : null}
+        </p>
       </div>
+    );
+  }
+
+  return (
+    <div className="verdict verdict-ok">
+      <h2>{decision.recommendation?.label} als Kompromiss</h2>
+      <p>
+        Sauber heißt: mindestens <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve nach dem
+        Kauf und höchstens <strong>{formatPct(inputs.maxBurdenRate)}</strong> Haushaltsbelastung.
+        Gewählt ist <strong>{selected.label}</strong> mit{" "}
+        {formatPct(selected.burdenRatio * 100)} Belastung.
+      </p>
     </div>
   );
 }

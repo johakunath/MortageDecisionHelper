@@ -1,40 +1,54 @@
-import type { ScenarioResult } from "../lib/calculations";
-import { formatEur } from "../lib/format";
+import { BETTER_WHEN, type ScenarioResult } from "../lib/calculations";
+import { formatEur, formatSignedEur } from "../lib/format";
+import { SignedValue } from "./ui";
 
 type TradeoffMatrixProps = {
   scenarios: ScenarioResult[];
 };
 
+/**
+ * Plain-language interpretation, derived from the actual signs rather than a fixed
+ * string per row — so it stays correct if the underlying inputs change and a
+ * comparison flips direction, which three hardcoded sentences could not do.
+ */
+function interpret(cashDelta: number, interestDelta: number): string {
+  if (Math.abs(cashDelta) < 1 && Math.abs(interestDelta) < 1) {
+    return "Praktisch kein Unterschied.";
+  }
+
+  const cashPart =
+    cashDelta > 0
+      ? `${formatEur(cashDelta)} mehr Cash`
+      : cashDelta < 0
+        ? `${formatEur(Math.abs(cashDelta))} weniger Cash`
+        : "gleich viel Cash";
+  const interestPart =
+    interestDelta < 0
+      ? `${formatEur(Math.abs(interestDelta))} weniger Zinsen`
+      : interestDelta > 0
+        ? `${formatEur(interestDelta)} mehr Zinsen`
+        : "gleich viele Zinsen";
+
+  return `${interestPart}, ${cashPart}.`;
+}
+
 export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
   const s5 = scenarios.find((scenario) => scenario.id === "ek5") ?? scenarios[0];
   const s10 = scenarios.find((scenario) => scenario.id === "ek10") ?? scenarios[1];
   const s15 = scenarios.find((scenario) => scenario.id === "ek15") ?? scenarios[2];
+
   const rows = [
-    {
-      label: "5% statt 10% EK",
-      cash: s5.cashLeft - s10.cashLeft,
-      interest: s5.mortgage.interestTotal - s10.mortgage.interestTotal,
-      monthly: s5.allInMonthly - s10.allInMonthly,
-      netWorth: s5.netWorthAtPayoff - s10.netWorthAtPayoff,
-      meaning: "Mehr Liquidität, aber teurer.",
-    },
-    {
-      label: "15% statt 10% EK",
-      cash: s15.cashLeft - s10.cashLeft,
-      interest: s15.mortgage.interestTotal - s10.mortgage.interestTotal,
-      monthly: s15.allInMonthly - s10.allInMonthly,
-      netWorth: s15.netWorthAtPayoff - s10.netWorthAtPayoff,
-      meaning: "Weniger Zinsen, weniger Puffer.",
-    },
-    {
-      label: "15% statt 5% EK",
-      cash: s15.cashLeft - s5.cashLeft,
-      interest: s15.mortgage.interestTotal - s5.mortgage.interestTotal,
-      monthly: s15.allInMonthly - s5.allInMonthly,
-      netWorth: s15.netWorthAtPayoff - s5.netWorthAtPayoff,
-      meaning: "Maximaler Zinsvorteil gegen maximale Liquiditätsbindung.",
-    },
-  ];
+    { label: "5% statt 10% EK", from: s10, to: s5 },
+    { label: "15% statt 10% EK", from: s10, to: s15 },
+    { label: "15% statt 5% EK", from: s5, to: s15 },
+  ].map(({ label, from, to }) => {
+    const cash = to.cashLeft - from.cashLeft;
+    const interest = to.mortgage.interestTotal - from.mortgage.interestTotal;
+    const monthly = to.allInMonthly - from.allInMonthly;
+    const remainingDebt = to.mortgage.remainingAfterFixed - from.mortgage.remainingAfterFixed;
+
+    return { label, cash, interest, monthly, remainingDebt, meaning: interpret(cash, interest) };
+  });
 
   return (
     <div className="table-wrap">
@@ -43,9 +57,9 @@ export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
           <tr>
             <th>Vergleich</th>
             <th>Cash</th>
-            <th>Zinsen</th>
+            <th>Zinsen (gesamt, illustrativ)</th>
             <th>Monat</th>
-            <th>Nettovermögen</th>
+            <th>Restschuld nach Zinsbindung</th>
             <th>Interpretation</th>
           </tr>
         </thead>
@@ -53,15 +67,21 @@ export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
           {rows.map((row) => (
             <tr key={row.label}>
               <td>{row.label}</td>
-              <td className={row.cash >= 0 ? "positive" : "negative"}>{formatEur(row.cash)}</td>
-              <td className={row.interest <= 0 ? "positive" : "negative"}>
-                {formatEur(row.interest)}
+              <td>
+                <SignedValue value={row.cash} betterWhen={BETTER_WHEN.cashLeft} />
               </td>
-              <td className={row.monthly <= 0 ? "positive" : "negative"}>
-                {formatEur(row.monthly)}
+              <td>
+                <SignedValue value={row.interest} betterWhen={BETTER_WHEN.interestTotal} />
               </td>
-              <td className={row.netWorth >= 0 ? "positive" : "negative"}>
-                {formatEur(row.netWorth)}
+              <td>
+                <SignedValue value={row.monthly} betterWhen={BETTER_WHEN.allInMonthly} />
+              </td>
+              <td>
+                <SignedValue
+                  value={row.remainingDebt}
+                  betterWhen={BETTER_WHEN.remainingAfterFixed}
+                  format={formatSignedEur}
+                />
               </td>
               <td>{row.meaning}</td>
             </tr>

@@ -1,4 +1,10 @@
-import type { InterestRates, MortgageInputs, ScenarioBase, ScenarioId } from "./calculations";
+import type {
+  ApartmentCase,
+  InterestRates,
+  MortgageInputs,
+  ScenarioBase,
+  ScenarioId,
+} from "./calculations";
 
 export const DEFAULT_INPUTS: MortgageInputs = {
   purchasePrice: 720000,
@@ -10,6 +16,7 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   monthlyOwnershipCosts: 830,
   currentWarmRent: 1970,
   householdNetIncome: 8500,
+  maxBurdenRate: 40,
   repaymentRate: 2.4,
   fixedRateYears: 10,
   annualSpecialRepayment: 6000,
@@ -34,6 +41,36 @@ export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek5", ekRate: 5, label: "5% EK", short: "Liquidität schützen", accent: "blue" },
   { id: "ek10", ekRate: 10, label: "10% EK", short: "Kompromiss", accent: "green" },
   { id: "ek15", ekRate: 15, label: "15% EK", short: "Zinsen senken", accent: "orange" },
+];
+
+export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
+  {
+    id: "flat-a",
+    label: "Wohnung A",
+    purchasePrice: 600000,
+    renovation: 5000,
+    monthlyOwnershipCosts: 760,
+    selectedScenarioId: "ek10",
+    annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
+  },
+  {
+    id: "flat-b",
+    label: "Wohnung B",
+    purchasePrice: 500000,
+    renovation: 10000,
+    monthlyOwnershipCosts: 690,
+    selectedScenarioId: "ek10",
+    annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
+  },
+  {
+    id: "flat-c",
+    label: "Wohnung C",
+    purchasePrice: 450000,
+    renovation: 15000,
+    monthlyOwnershipCosts: 640,
+    selectedScenarioId: "ek10",
+    annualSpecialRepayments: [6000, 6000, 6000, 5000, 5000, 5000, 4000, 4000, 4000, 4000],
+  },
 ];
 
 export type PresetId = "case600" | "case720" | "case850";
@@ -79,21 +116,31 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
   },
 };
 
-export const MAIN_TABS = [
-  { id: "decision", label: "Entscheidung" },
-  { id: "inputs", label: "Eingaben" },
-  { id: "compare", label: "EK-Vergleich" },
-  { id: "sonder", label: "Sondertilgung" },
-  { id: "wait", label: "Warten" },
-  { id: "qa", label: "QA / Formelprüfung" },
+/**
+ * The numbered sections of the single scrolling page (docs/DECISIONS.md D2, D6).
+ * Deliberately short: every section that merely re-displayed the same EK comparison
+ * was removed rather than restyled. Labels are always visible in the rail — a bare
+ * number tells two people reading together nothing about where they are.
+ */
+export const SECTIONS = [
+  { id: "decision", number: 1, label: "Entscheidung" },
+  { id: "assumptions", number: 2, label: "Annahmen" },
+  { id: "tradeoff", number: 3, label: "Was kostet EK?" },
+  { id: "special", number: 4, label: "Sondertilgung" },
+  { id: "wait", number: 5, label: "Warten" },
 ] as const;
 
-export type MainTabId = (typeof MAIN_TABS)[number]["id"];
+export type SectionId = (typeof SECTIONS)[number]["id"];
 
+/**
+ * Purchase price, renovation and ownership costs are NOT here — they belong to the
+ * active apartment (ApartmentSwitcher). "Warten" is not here either — its inputs live
+ * inline in the Warten section rather than duplicated as a group, which used to leave
+ * "Warten" addressable from two different places at once.
+ */
 export const INPUT_GROUPS = [
-  { id: "purchase", label: "Kauf" },
+  { id: "household", label: "Haushalt" },
   { id: "finance", label: "Finanzierung" },
-  { id: "wait", label: "Warten" },
   { id: "advanced", label: "Erweitert" },
 ] as const;
 
