@@ -109,6 +109,8 @@ export default function ProgressSection({
         markers={view === "equity" ? [] : specialYears}
         markerLabel="Sondertilgung"
         formatValue={formatCompactEur}
+        // The axis has to round to "450k"; the hover panel has room for the real figure.
+        formatDetail={(value) => formatEur(value)}
         caption={`${activeView.label} über die Laufzeit, für ${scenarios.map((scenario) => `${scenario.ekRate}%`).join(", ")} Eigenkapital`}
       />
 

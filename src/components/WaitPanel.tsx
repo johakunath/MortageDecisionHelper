@@ -19,13 +19,17 @@ function columnLabel(waitMonths: number): string {
  * hunting for the same label three times at three different heights. Reading across a
  * row is the entire job here, so the layout is a row.
  *
- * Rent is always shown as an outflow but never subtracted from the adjusted capital —
- * see docs/DECISIONS.md D4.
+ * Rent is never subtracted from the adjusted capital (docs/DECISIONS.md D4) but it IS
+ * part of what waiting costs, so it carries the bottom row: "Δ gesamt zu jetzt kaufen"
+ * = Zinsdifferenz + Miete. The interest-only delta stays visible directly above it,
+ * because a single combined figure would hide which half moved (D27).
  */
 export default function WaitPanel({ scenarios }: WaitPanelProps) {
   const rows: {
     label: string;
     note?: string;
+    /** The bottom line of the section — the row the couple actually argues over. */
+    emphasis?: boolean;
     render: (wait: WaitScenario) => React.ReactNode;
   }[] = [
     { label: "Kaufpreis dann", render: (w) => formatEur(w.futurePrice) },
@@ -50,7 +54,8 @@ export default function WaitPanel({ scenarios }: WaitPanelProps) {
       render: (w) => formatEur(w.scenario.mortgage.interestTotal),
     },
     {
-      label: "Δ zu jetzt kaufen",
+      label: "Δ Zinsen zu jetzt kaufen",
+      note: "nur die Zinsen — ohne die Miete aus der Zeile darunter",
       render: (w) =>
         w.waitMonths === 0 ? (
           <span className="muted">—</span>
@@ -63,6 +68,17 @@ export default function WaitPanel({ scenarios }: WaitPanelProps) {
       note: "Kosten des Wartens — bewusst nicht vom Kapital abgezogen",
       render: (w) =>
         w.waitMonths === 0 ? <span className="muted">—</span> : formatEur(w.rentPaid),
+    },
+    {
+      label: "Δ gesamt zu jetzt kaufen",
+      note: "Zinsdifferenz + Miete in der Zwischenzeit",
+      emphasis: true,
+      render: (w) =>
+        w.waitMonths === 0 ? (
+          <span className="muted">—</span>
+        ) : (
+          <SignedValue value={w.deltaTotalCost} betterWhen={BETTER_WHEN.interestTotal} />
+        ),
     },
   ];
 
@@ -85,7 +101,7 @@ export default function WaitPanel({ scenarios }: WaitPanelProps) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.label}>
+              <tr key={row.label} className={row.emphasis ? "is-total-row" : ""}>
                 <td>
                   <strong>{row.label}</strong>
                   {row.note ? <small>{row.note}</small> : null}
@@ -100,6 +116,15 @@ export default function WaitPanel({ scenarios }: WaitPanelProps) {
           </tbody>
         </table>
       </div>
+      {/*
+        Says out loud why rent appears in one row and not in the other — otherwise the
+        two look like they contradict each other.
+      */}
+      <p className="wait-footnote">
+        Die Miete zählt bei den Kosten mit, beim Kapital nicht: „Netto-Sparrate“ ist
+        bereits der Betrag, der <em>nach</em> der Miete übrig bleibt. Sie ein zweites Mal
+        vom Kapital abzuziehen würde sie doppelt zählen.
+      </p>
     </Section>
   );
 }

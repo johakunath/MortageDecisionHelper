@@ -153,6 +153,21 @@ describe("calculation engine", () => {
     expect(wait.adjustedAvailableCapital).toBe(inputs.availableCapital + 18000);
     // Rent is still reported, just never deducted.
     expect(wait.rentPaid).toBe(23640);
+    // …but it IS part of what waiting costs. Capital and cost are separate questions:
+    // D4 governs the first, and only the first.
+    expect(wait.deltaTotalCost).toBeCloseTo(wait.deltaInterest + 23640, 6);
+  });
+
+  it("counts the rent paid while waiting as part of the delta to buying now", () => {
+    const inputs = { ...DEFAULT_INPUTS, waitMonths: 24, currentWarmRent: 2000 };
+    const now = buildScenario(MIDDLE, inputs, DEFAULT_RATES);
+    const wait = buildWaitScenario(MIDDLE, now, inputs, DEFAULT_RATES);
+
+    // Whatever the interest delta does, 48.000 € of rent is 48.000 € more of it. The
+    // whole point of the field is that the two are never read as the same number.
+    expect(wait.rentPaid).toBe(48000);
+    expect(wait.deltaTotalCost - wait.deltaInterest).toBeCloseTo(48000, 6);
+    expect(wait.deltaTotalCost).toBeGreaterThan(wait.deltaInterest);
   });
 
   it("stops special repayments after the entered path ends (K2)", () => {
@@ -337,6 +352,9 @@ describe("calculation engine", () => {
     expect(columns[0].saved).toBe(0);
     expect(columns[0].rentPaid).toBe(0);
     expect(columns[0].deltaInterest).toBeCloseTo(0, 6);
+    // The baseline column must read as a true zero in both delta rows, not as the
+    // rent of a wait that never happens.
+    expect(columns[0].deltaTotalCost).toBeCloseTo(0, 6);
     expect(columns[2].adjustedAvailableCapital).toBeGreaterThan(
       columns[1].adjustedAvailableCapital,
     );

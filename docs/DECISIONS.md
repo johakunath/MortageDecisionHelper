@@ -379,3 +379,59 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **Rationale.** Free entry earns its place — Grunderwerbsteuer runs 3,5%–6,5% by Bundesland, and the 11,57% default is specific to one deal. What had to go was the *second control*, not the capability. The app already had the right pattern one box below: Monatsrate / Tilgungssatz / Laufzeit is one value with three ways in.
 
 **Consequence.** `SegmentedChoice` now has exactly one caller (Zinsbindung), where the options really are the only permitted values.
+
+---
+
+## D25 — The sticky header carries exactly one control: the EK choice
+
+**Date:** 2026-08-08 · **Status:** accepted · **Amends** [D8](#d8--the-sticky-header-is-a-fixed-height-and-holds-nothing-collapsible) and [D21](#d21--the-sticky-header-carries-context-not-controls) — their *fixed height* rule is unchanged and load-bearing; their *nothing interactive* clause is not
+
+**Context.** D21 moved the apartment chips out of the header on the grounds that permanent screen space should go to something read continuously, not to a control used once at the start of a session. That reasoning was right about the apartment and wrong by generalisation about controls as such. The EK level is the opposite case: it is the question the whole app exists to answer, and it is re-asked constantly — the trade-off matrix, the Verlauf chart, the Sondertilgung comparison and the right panel all re-render around it. Answering "and at 20%?" while reading section 5 meant scrolling back to §1, which loses the place *both* readers are holding, and then scrolling back down to find the number again.
+
+**Decision.** Three buttons — 10 / 15 / 20% — centred in the sticky header, between the brand and the apartment context. They set the same `selectedId` as the doors in §1.
+
+**Rationale.** The rule worth keeping from D8 is the *fixed height*, not the ban on interactivity: the failure D8 actually fixed was a header whose measured height disagreed with `--header-height`, so a band of scrolling content showed through the seam. A row of 26px buttons inside a 50px band cannot cause that. Nothing here is collapsible and nothing grows with its content, so the constant holds — which is verified at 1280, 1000, 820 and 560px, where the header measures exactly 50px in all four.
+
+**Two controls for one value is not [D6](#d6--one-comparison-one-place) accretion here**, and the distinction matters: D6 is about the same *comparison* being rendered repeatedly. The switch renders no comparison. It carries the rate and nothing else — no status, no interest, no cash — precisely so it stays a way in rather than becoming a fourth view of the EK question. The doors keep the verdicts, where there is room to say them in words.
+
+**Consequence.**
+- `--header-height` stays 50px. Anything added to the header from here needs the same fixed-height test at all four widths.
+- The topbar no longer stacks at ≤880px (it used to become a grid, which was harmless for text and is not for a control inside a fixed-height band). It drops content instead, in order of cost: the brand wordmark, then the "+ X € Nebenkosten" note, then the price. The apartment's **name** and the switch survive every width — [D3](#d3--apartments-are-a-context-switcher-plus-a-read-only-comparison-table) exists because two apartments' numbers once appeared side by side.
+- The status is out of the visible chip but not out of its accessible name (`aria-label="20% Eigenkapital — Tragbar"`), so it is not lost to a screen-reader user who cannot scroll to §1 to hear it.
+
+---
+
+## D26 — The charts answer on hover, and by keyboard
+
+**Date:** 2026-08-08 · **Status:** accepted · **Extends** [D9](#d9--capabilities-restored-from-the-original-prototype)
+
+**Context.** Both charts were read-only pictures. The Verlauf chart labels each line at its right-hand end, which answers "which line is which" and not the question actually asked of it — *"what is the Restschuld in year 12, in all three?"*. The axis has to round to "250k", so even reading one line off the grid gives a number nobody would put in a decision. The Sondertilgung bars print their own values but never the gap between them, which is the one number the row exists to show.
+
+**Decision.** Hovering the Verlauf plot reads **every series at one year at once**; hovering a Sondertilgung row reads **both its bars plus their difference**. Both panels use the exact format (`formatEur`) rather than the axis's compact one.
+
+**Rationale.** The interaction adds no new view — it exposes numbers the charts already draw, at the precision the axes had to give up. That is the opposite of the accretion [D6](#d6--one-comparison-one-place) warns about: it makes an existing surface answer its own question instead of adding a surface that repeats it.
+
+**A hovered value is read off the line, not looked up by exact x.** Every scenario's last point is its exact payoff moment — 19,17 / 21,67 / 24,08 years on the defaults — so several hoverable positions are fractional. At 19,17 the 20% line ends while 10% and 15% are still running and visibly cross that x, but their own points sit at 19 and 20. An `=== x` lookup dropped them, and the panel showed **one** series where the reader could see three, on the very chart whose purpose is reading all of them at once. `valueAt` interpolates linearly between the surrounding points, which invents nothing: the chart draws straight segments, so the figure reported is exactly the one on screen. Anything smoother would claim more than the picture does.
+
+**Consequence.**
+- Both charts are focusable and walk by keyboard: the Verlauf chart with ←/→ along its time axis, the Sondertilgung bars with ↑/↓ along their stacked rows (Home/End/Esc on both). Two people at one screen do not always share a mouse, and the repo already treats hover-only affordances as a defect — `InfoTip` opens on hover *and* focus for the same reason. The bar chart was pointer-only in the first draft, which left the exact figures and the derived difference unreachable in the section next door to a chart that was not.
+- Each chart carries a persistent `aria-live` line rather than announcing the panel itself: a node that mounts and unmounts with the cursor is announced unreliably.
+- `LineChart` gains `formatDetail` / `formatX`, `BarChart` gains `formatDetail` / `formatDelta`. All four default to existing behaviour, so a caller that wants no hover detail keeps the old output.
+- The hover panel is HTML in a `position: relative` wrapper, positioned in **percentages** of the figure box. The SVGs are declared at a fixed `viewBox` and stretched to the column, so pixel offsets would drift on every resize.
+- Still no charting dependency. The interaction cost ~120 lines; a library would be inlined whole into `dist/mortgage-helper-standalone.html`.
+
+---
+
+## D27 — "Δ zu jetzt kaufen" splits into interest, rent, and the sum
+
+**Date:** 2026-08-08 · **Status:** accepted · **Refines** [D4](#d4--waitsavingsmonthly-is-net-of-rent)
+
+**Context.** The Warten table's "Δ zu jetzt kaufen" row showed `deltaInterest` alone, with the rent paid while waiting sitting two rows below as a separate figure nobody was adding up. On the defaults that reads **−16.978 € besser** for waiting twelve months — while 23.640 € of rent is paid for a home the couple does not own. The row that looks like the bottom line said waiting is cheaper; including the rent, it is 6.662 € more expensive. The sign was wrong, not just the magnitude.
+
+**Decision.** Three rows, in this order: **Δ Zinsen** (interest only) · **Miete in der Zwischenzeit** · **Δ gesamt** = the sum, ruled off and weighted as the section's bottom line. New engine field `WaitScenario.deltaTotalCost`.
+
+**Rationale on the arithmetic.** Adding rent to an interest delta is a comparison of like with like, not a double count: over the same months the buy-now column is paying interest, and that interest is already inside its `interestTotal`. Rent is the waiting side's counterpart to it. Principal is left out of both — it becomes equity rather than cost — and the different purchase prices show up in "Kaufpreis dann" and "Darlehen dann".
+
+**This does not reopen [D4](#d4--waitsavingsmonthly-is-net-of-rent).** D4 governs *capital*: `waitSavingsMonthly` is already net of rent, so subtracting `rentPaid` from `adjustedAvailableCapital` would count it twice. What waiting **costs** and what capital it **leaves** are different questions, and rent belongs to exactly one of them. The two rows looked contradictory side by side, so the table now says why in a footnote rather than leaving the reader to reconcile them.
+
+**Consequence.** Both deltas stay on screen — a single combined figure would hide which half moved, and the split is what makes the reversal legible. `deltaTotalCost` collapses to the interest delta in the buy-now column, where `rentPaid` is zero; a test pins that, and another pins that the difference between the two rows is exactly the rent.
