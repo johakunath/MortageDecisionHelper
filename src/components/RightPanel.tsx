@@ -67,18 +67,18 @@ export default function RightPanel({ selected, inputs, decision }: RightPanelPro
       </div>
 
       {/*
-        Named, not hidden. The Tilgungssatz has a floor, so a Monatsrate too low to
-        cover the interest is silently simulated as a higher one — and Laufzeit, Zinsen
-        and Restschuld above then answer a question nobody asked. The status pill says
-        "Rate zu niedrig"; this says which rate the numbers beside it belong to.
+        Named, not hidden. The Tilgungssatz has a 0,01% floor, so a Monatsrate below
+        that model boundary is silently simulated as a higher one — and Laufzeit,
+        Zinsen and Restschuld above then answer a question nobody asked. The status pill
+        says "Rate zu niedrig"; this says which rate the numbers beside it belong to.
       */}
       {selected.paymentSubstituted ? (
         <div className="logic-panel logic-danger">
           <p>
             Gerechnet mit {formatEur(selected.mortgage.regularMonthlyPayment)}/Monat —{" "}
-            {formatEur(inputs.monthlyPayment)} decken die Zinsen nicht, damit würde das
-            Darlehen nie kleiner. Laufzeit, Zinsen und Restschuld oben gehören zur
-            höheren Rate.
+            statt der eingegebenen {formatEur(inputs.monthlyPayment)}. Die Rate ist für
+            die kleinste modellierbare Tilgung zu niedrig. Laufzeit, Zinsen und
+            Restschuld oben gehören zur höheren Rate.
           </p>
         </div>
       ) : null}
