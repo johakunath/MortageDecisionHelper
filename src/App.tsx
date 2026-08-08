@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ApartmentSwitcher, { ApartmentFacts } from "./components/ApartmentSwitcher";
 import CashBlock from "./components/CashBlock";
 import CompromiseFinder from "./components/CompromiseFinder";
+import EkSwitch from "./components/EkSwitch";
 import ExecutiveSummary from "./components/ExecutiveSummary";
 import InputsPanel from "./components/InputsPanel";
 import ProgressSection from "./components/ProgressSection";
@@ -284,11 +285,15 @@ export default function App() {
         real header height disagreed.
       */}
       {/*
-        Brand plus the active apartment as TEXT, not as a control. The switcher itself
-        moved into the page body: it is used once at the start of a session, so it does
-        not earn permanent screen space (docs/DECISIONS.md D21). What does earn it is
-        knowing which flat and which price every number below refers to — that context
-        is exactly what must never be ambiguous (D3).
+        Brand · EK-Wahl · active apartment. The apartment stays TEXT, not a control: it
+        is picked once at the start of a session, so it does not earn permanent screen
+        space (docs/DECISIONS.md D21), while knowing which flat and which price every
+        number refers to is exactly what must never be ambiguous (D3).
+
+        The EK switch in the middle is the one control up here, and the exception is
+        deliberate: it is the question the whole app is about, it is re-asked constantly
+        while reading sections 3–6, and it is fixed-height so `--header-height` stays a
+        constant (D25 refines D8/D21).
       */}
       <header className="app-header">
         <div className="topbar">
@@ -296,12 +301,17 @@ export default function App() {
             <span className="brand-dot" />
             <span className="brand-text">haus · ein ruhiger rechner</span>
           </div>
+          <EkSwitch scenarios={scenarios} selectedId={selected.id} onSelect={setSelectedId} />
           <div className="topbar-context">
             <span className="topbar-context-label">{activeApartment.label}</span>
             <i />
             <span>{formatEur(activeApartment.purchasePrice)}</span>
-            <i />
-            <span>+ {formatEur(selected.closingCosts)} Nebenkosten</span>
+            {/* First to go when the header runs out of room: the apartment's identity
+                and price must survive, the Nebenkosten breakdown is in §1 anyway. */}
+            <i className="topbar-context-extra" />
+            <span className="topbar-context-extra">
+              + {formatEur(selected.closingCosts)} Nebenkosten
+            </span>
           </div>
         </div>
       </header>

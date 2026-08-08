@@ -203,6 +203,13 @@ export default function SondertilgungPanel({
       <BarChart
         groups={groups}
         formatValue={(value) => formatCompactEur(value, true)}
+        formatDetail={(value) => formatEur(value)}
+        // The number the row is for and the only one no bar shows: the gap between them.
+        // Named in words, never left to the sign alone (PRODUCT_SPEC §14).
+        formatDelta={(delta) => ({
+          label: delta <= 0 ? "Ersparnis durch den Plan" : "Mehrkosten durch den Plan",
+          value: formatEur(Math.abs(delta)),
+        })}
         seriesLabels={["Zinsen ohne Sondertilgung", "Zinsen mit eurem Plan"]}
         caption="Gesamtzinsen je EK-Stufe über die volle Laufzeit — illustrativ, bei konstantem Zins"
       />

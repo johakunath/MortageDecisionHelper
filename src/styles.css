@@ -50,11 +50,12 @@
   --blue: #526d8f;
   /*
    * Height of the sticky header, which everything sticky below clears.
-   * This is a constant on purpose: the header holds one row of fixed-height text —
-   * the brand and the active apartment's name and price. Nothing collapsible and
-   * nothing interactive lives up here, precisely so this number can never drift out
-   * of sync (D8). The apartment chips moved into the page body (D21), which is what
-   * shrank it from 142px.
+   * This is a constant on purpose: the header holds ONE row of fixed-height content —
+   * the brand, the EK switch, and the active apartment's name and price. Nothing
+   * collapsible and nothing that grows with its content lives up here, precisely so
+   * this number can never drift out of sync (D8). The apartment chips moved into the
+   * page body (D21), which is what shrank it from 142px; the EK switch (D25) is sized
+   * to fit inside what was left rather than being allowed to reopen the gap.
    */
   --header-height: 50px;
 }
@@ -147,6 +148,7 @@ button {
   font-family: "Fraunces Local", Georgia, serif;
   font-size: 0.96rem;
   font-style: italic;
+  white-space: nowrap;
 }
 
 .app-grid {
@@ -226,8 +228,12 @@ button {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  overflow: hidden;
   color: var(--soft);
   font-size: 0.88rem;
+  /* Wrapping here would push the header past --header-height, and everything sticky
+     below clears that constant — see the note on the custom property. */
+  white-space: nowrap;
 }
 
 .topbar-context-label {
@@ -241,6 +247,73 @@ button {
   flex: 0 0 auto;
   border-radius: 999px;
   background: var(--rule);
+}
+
+/* ==========================================================================
+   EK switch — the one control in the sticky header (D25)
+
+   Sized to fit inside --header-height with room to spare: 26px of button in a
+   50px band. Nothing here may be given padding that grows with its content, or
+   the constant the rail and the right panel clear stops being true.
+   ========================================================================== */
+
+.ek-switch {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.ek-switch-label {
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.ek-switch-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 26px;
+  min-width: 52px;
+  padding: 0 10px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  color: var(--soft);
+  background: var(--paper);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.82rem;
+  line-height: 1;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+
+.ek-switch-button span {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+.ek-switch-button:hover {
+  border-color: var(--soft);
+  color: var(--ink);
+}
+
+/*
+ * Selected state carries weight, border and background — never colour alone
+ * (PRODUCT_SPEC §14), and `aria-pressed` carries it for anyone not seeing any of them.
+ */
+.ek-switch-button.is-active {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: #fffdf8;
+  font-weight: 700;
+}
+
+.ek-switch-button:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
 }
 
 /* ==========================================================================
@@ -1070,6 +1143,27 @@ button {
   width: 30%;
 }
 
+/*
+ * The bottom line of the Warten section — Zinsdifferenz plus the rent paid meanwhile.
+ * Ruled off and weighted so it reads as a sum of the rows above it rather than as one
+ * more metric among them.
+ */
+.wait-table .is-total-row td {
+  border-top: 2px solid var(--rule);
+  background: rgba(94, 120, 97, 0.05);
+}
+
+.wait-table .is-total-row td strong {
+  font-weight: 700;
+}
+
+.wait-footnote {
+  margin: 12px 0 0;
+  color: var(--soft);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .wait-ok {
   color: var(--sage);
   font-weight: 600;
@@ -1316,11 +1410,127 @@ button {
   margin: 0;
 }
 
+/* The positioning context for the hover panel. Must not clip it — the panel is
+   allowed to reach past the plot, which is why there is no overflow rule here. */
+.chart-plot {
+  position: relative;
+}
+
 .chart-svg {
   display: block;
   width: 100%;
   height: auto;
   overflow: visible;
+}
+
+/* Focusable so the hover readout is reachable with ←/→ and not mouse-only. */
+.chart-svg:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 3px;
+}
+
+.chart-hover-surface {
+  cursor: crosshair;
+}
+
+.chart-hover-line {
+  stroke: var(--soft);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+
+.chart-hover-dot {
+  stroke: var(--paper);
+  stroke-width: 1.5;
+}
+
+/*
+ * Never between the cursor and the plot it describes: the panel sits under the
+ * pointer's own position, so catching pointer events here would make the hover
+ * flicker at its edges.
+ */
+.chart-tooltip {
+  position: absolute;
+  z-index: 5;
+  min-width: 168px;
+  max-width: 260px;
+  padding: 9px 11px;
+  transform: translate(10px, 0);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: #fffdf8;
+  box-shadow: 0 6px 20px rgba(37, 35, 32, 0.12);
+  pointer-events: none;
+}
+
+.chart-tooltip.is-flipped {
+  transform: translate(calc(-100% - 10px), 0);
+}
+
+.chart-tooltip-title {
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.chart-tooltip-rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chart-tooltip-rows li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+}
+
+/* A derived line (a difference, a saving) is not one of the plotted values, so it is
+   ruled off rather than given a swatch that would imply a mark on the chart. */
+.chart-tooltip-rows li.is-derived {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid var(--rule);
+}
+
+.chart-tooltip-swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--sage);
+}
+
+.chart-tooltip-swatch.is-muted {
+  background: rgba(94, 120, 97, 0.3);
+}
+
+.chart-tooltip-swatch.is-blank {
+  background: transparent;
+}
+
+.chart-tooltip-label {
+  color: var(--soft);
+  overflow-wrap: anywhere;
+}
+
+.chart-tooltip-value {
+  color: var(--ink);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chart-tooltip-note {
+  margin-top: 6px;
+  color: var(--amber);
+  font-size: 0.74rem;
 }
 
 .chart-grid {
@@ -1391,6 +1601,12 @@ button {
     transparent 4px 7px
   ) !important;
   height: 2px;
+}
+
+/* Says the interaction exists. A hover that nobody discovers is not a feature. */
+.chart-legend-hint {
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .chart-legend-marker::before {
@@ -1773,6 +1989,24 @@ button {
 
 .bar {
   fill: var(--sage);
+  transition: opacity 120ms ease;
+}
+
+/* The hovered row keeps full strength while the rest step back, so the panel and the
+   row it describes are unmistakably paired. Opacity, not a colour change — the muted
+   and solid bars must stay told apart from each other. */
+.bar-group {
+  opacity: 1;
+  transition: opacity 120ms ease;
+}
+
+.chart-svg:hover .bar-group:not(.is-hovered) {
+  opacity: 0.45;
+}
+
+.bar-group.is-hovered .bar-value {
+  fill: var(--ink);
+  font-weight: 600;
 }
 
 .bar-muted {
@@ -1870,10 +2104,29 @@ button {
 }
 
 @media (max-width: 880px) {
-  .topbar,
   .compromise-copy,
   .section-header {
     display: grid;
+  }
+
+  /*
+   * The topbar stays a single row at every width. It used to stack here, which was
+   * harmless while it held only text but cannot survive a fixed --header-height now
+   * that it holds a control (D25). Things are dropped from it in order of how little
+   * they cost: first the brand wordmark, then the Nebenkosten note. The EK switch and
+   * the apartment's identity are never dropped.
+   */
+  .topbar {
+    gap: 14px;
+  }
+
+  .brand-text,
+  .topbar-context-extra {
+    display: none;
+  }
+
+  .ek-switch-label {
+    display: none;
   }
 
   .apartment-chip-row {
@@ -1911,6 +2164,18 @@ button {
   .app-header {
     margin: 0 -16px;
     padding: 0 16px;
+  }
+
+  /* Last thing to go: the price. The apartment's NAME stays at every width — two
+     apartments' numbers must never be confusable (D3). */
+  .topbar-context span:not(.topbar-context-label),
+  .topbar-context i {
+    display: none;
+  }
+
+  .ek-switch-button {
+    min-width: 44px;
+    padding: 0 7px;
   }
 
   .apartment-chip-row {
