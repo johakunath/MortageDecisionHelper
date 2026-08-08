@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatSignedEur, formatSignedPct } from "./format";
+import {
+  formatCompactEur,
+  formatSignedEur,
+  formatSignedPct,
+  formatSignedYears,
+  formatYears,
+} from "./format";
 
 describe("signed formatting", () => {
   it("never emits a misleading sign for zero", () => {
@@ -19,5 +25,38 @@ describe("signed formatting", () => {
     expect(eur.startsWith("−")).toBe(true);
     expect(eur.startsWith("-")).toBe(false);
     expect(pct.startsWith("−")).toBe(true);
+  });
+});
+
+/**
+ * The UI is German throughout, so a decimal point in a rendered number is a defect,
+ * not a nitpick — several components had grown their own `toFixed()` and were printing
+ * "1.5 Jahre" next to "1.234 €".
+ */
+describe("year and compact formatting", () => {
+  it("uses a German decimal comma, never a point", () => {
+    expect(formatYears(30.09)).toBe("30,1 Jahre");
+    expect(formatSignedYears(-1.45)).toBe("−1,5 J.");
+    expect(formatSignedYears(1.45)).toBe("+1,5 J.");
+    expect(formatCompactEur(1_250_000)).toBe("1,3 Mio");
+  });
+
+  it("emits a typographic minus for negative years, not a hyphen", () => {
+    expect(formatSignedYears(-2).startsWith("−")).toBe(true);
+    expect(formatSignedYears(-2).startsWith("-")).toBe(false);
+    expect(formatSignedYears(0)).toBe("0,0 J.");
+  });
+
+  it("guards non-finite values like every other formatter", () => {
+    expect(formatYears(Infinity)).toBe("—");
+    expect(formatYears(NaN)).toBe("—");
+    expect(formatSignedYears(Infinity)).toBe("—");
+    expect(formatCompactEur(NaN)).toBe("—");
+  });
+
+  it("keeps the euro sign optional so both charts can share one helper", () => {
+    expect(formatCompactEur(6000)).toBe("6k");
+    expect(formatCompactEur(6000, true)).toBe("6k €");
+    expect(formatCompactEur(820, true)).toBe(formatSignedEur(820).replace("+", ""));
   });
 });

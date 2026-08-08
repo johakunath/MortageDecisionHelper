@@ -1,5 +1,5 @@
 import type { EkTradeoff, MortgageInputs } from "../lib/calculations";
-import { formatEur, formatSignedEur } from "../lib/format";
+import { formatEur, formatSignedEur, formatYears } from "../lib/format";
 
 type TradeoffStatementProps = {
   tradeoff: EkTradeoff;
@@ -19,17 +19,25 @@ export default function TradeoffStatement({
   etfReturnRate,
   onEtfReturnChange,
 }: TradeoffStatementProps) {
-  const { from, to, extraCashRequired, monthlyDelta, interestSavedFixed, etfForegone, netAdvantageFixed, horizonYears } =
+  const { from, to, extraCashRequired, runtimeDelta, interestSavedFixed, etfForegone, netAdvantageFixed, horizonYears } =
     tradeoff;
   const favoursMore = netAdvantageFixed >= 0;
 
   return (
     <div className="tradeoff-statement">
       <p>
-        <strong>{to.label} statt {from.label}:</strong> ihr spart{" "}
-        <strong>{formatEur(Math.abs(interestSavedFixed))}</strong> Zinsen in den ersten{" "}
-        {horizonYears} Jahren und zahlt <strong>{formatEur(Math.abs(monthlyDelta))}</strong>{" "}
-        {monthlyDelta < 0 ? "weniger" : "mehr"} im Monat. Dafür bindet ihr{" "}
+        {/*
+          The sign is read, never assumed. The Sollzinsen are hand-entered and the offer
+          itself is not monotone in Eigenkapital, so "ihr spart |x|" could state the exact
+          opposite of what the numbers say.
+        */}
+        <strong>{to.label} statt {from.label}:</strong>{" "}
+        {interestSavedFixed >= 0 ? "ihr spart" : "ihr zahlt"}{" "}
+        <strong>{formatEur(Math.abs(interestSavedFixed))}</strong> Zinsen
+        {interestSavedFixed >= 0 ? "" : " mehr"} in den ersten {horizonYears} Jahren und
+        seid bei gleicher Monatsrate{" "}
+        <strong>{formatYears(Math.abs(runtimeDelta))}</strong>{" "}
+        {runtimeDelta < 0 ? "früher" : "später"} schuldenfrei. Dafür bindet ihr{" "}
         <strong>{formatEur(Math.abs(extraCashRequired))}</strong> mehr Kapital, das im ETF
         rechnerisch <strong>{formatEur(etfForegone)}</strong> gebracht hätte.
       </p>

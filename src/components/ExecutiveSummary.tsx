@@ -15,10 +15,28 @@ type ExecutiveSummaryProps = {
 };
 
 const CONSTRAINT_LABELS: Record<ConstraintId, string> = {
+  payment: "die Monatsrate tilgt das Darlehen nicht ab",
   cash: "das Geld reicht nicht für den Kauf",
   reserve: "die Sicherheitsreserve wird unterschritten",
   burden: "die Monatsbelastung ist zu hoch",
 };
+
+/**
+ * `gap` carries a different unit per constraint — a ratio for `burden`, €/Monat for
+ * `payment`, € for `cash` and `reserve` — so the unit is chosen here rather than
+ * assumed. Printing the payment gap as a plain "es fehlen X €" read as a one-off
+ * shortfall when it is a monthly one.
+ */
+function describeMiss(constraint: ConstraintId, gap: number): string {
+  const missing = Math.abs(gap);
+  if (constraint === "burden") {
+    return `die Rate liegt ${formatPct(missing * 100)} über eurer Grenze.`;
+  }
+  if (constraint === "payment") {
+    return `der Monatsrate fehlen ${formatEur(missing)} pro Monat, um überhaupt zu tilgen.`;
+  }
+  return `es fehlen ${formatEur(missing)}.`;
+}
 
 function describeBlockers(failed: ConstraintId[]): string {
   const parts = failed.map((id) => CONSTRAINT_LABELS[id]);
@@ -32,9 +50,9 @@ function describeBlockers(failed: ConstraintId[]): string {
  *
  * The four winner tiles this used to render (Kosten-Minimum, Liquiditäts-Maximum,
  * niedrigste Monatslast, Kompromiss) were removed: three of them are structurally
- * fixed — the cost minimum is always 15% EK, the liquidity maximum always 5% — so
- * they restated the axis rather than informing the choice. The doors below already
- * carry the same selection. See docs/DECISIONS.md D6.
+ * fixed — the cost minimum is always the highest EK level, the liquidity maximum
+ * always the lowest — so they restated the axis rather than informing the choice. The
+ * doors below already carry the same selection. See docs/DECISIONS.md D6.
  */
 export default function ExecutiveSummary({ decision, inputs, selected }: ExecutiveSummaryProps) {
   const { diagnosis } = decision;
@@ -61,9 +79,7 @@ export default function ExecutiveSummary({ decision, inputs, selected }: Executi
         {miss ? (
           <p className="verdict-miss">
             Am nächsten dran ist <strong>{miss.scenarioId.replace("ek", "")}% EK</strong> —{" "}
-            {miss.constraint === "burden"
-              ? `die Rate liegt ${formatPct(Math.abs(miss.gap) * 100)} über eurer Grenze.`
-              : `es fehlen ${formatEur(Math.abs(miss.gap))}.`}
+            {describeMiss(miss.constraint, miss.gap)}
           </p>
         ) : null}
       </div>

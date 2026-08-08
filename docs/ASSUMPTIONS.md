@@ -31,6 +31,25 @@ regularMonthlyPayment = loan × (interestRate% + repaymentRate%) ÷ 12
 ```
 German convention: the payment is derived from the *initial* repayment rate, not from a target term.
 
+**But the direction of entry is reversed.** `monthlyPayment` is the stored input and the
+Tilgungssatz is derived per EK level:
+```
+repaymentRate(scenario) = monthlyPayment × 1200 ÷ loan(scenario) − interestRate(scenario)
+```
+The monthly rate is therefore identical in every EK scenario, and more Eigenkapital
+shows up as a higher Tilgungssatz and a shorter term rather than as a smaller payment.
+This mirrors the broker's own offers and corrects a real distortion — see
+[DECISIONS.md D14](DECISIONS.md).
+
+### Sollzins
+```
+interestRate = rates[nearest(10 | 15) of fixedRateYears][scenarioId]
+```
+Two axes, not one: EK level **and** Sollzinsbindung. Both are entered by hand and both
+are always visible. **The rates do not fall monotonically with Eigenkapital** — in the
+offer below, 10% and 15% EK carry the identical rate at a 15-year binding. Nothing in
+the model may assume otherwise.
+
 ### Monthly simulation
 Per month, in order:
 1. `interest = balance × (interestRate ÷ 100 ÷ 12)`
@@ -105,13 +124,25 @@ The reference loan for the Monatsrate view is 10% EK on the active apartment —
 | Max household burden | 40% | Adjustable heuristic. **Not** a universal bank rule |
 | Max annual Sondertilgung | 5% of original loan | Contract-dependent — verify against a real offer |
 
-**Feasible ("sauber") requires both:** `cashLeft ≥ reserveTarget` **and** `burdenRatio ≤ threshold`.
+**Feasible ("sauber") requires all three:** the monthly rate amortises the loan (covers
+the interest and clears it inside 60 years), `cashLeft ≥ reserveTarget`, **and**
+`burdenRatio ≤ threshold`.
+
+**The burden check no longer separates the EK levels.** With one monthly rate for all
+of them, `allInMonthly` is identical across scenarios, so `burden` passes or fails for
+all three at once and only `cash`/`reserve` discriminate. That is a consequence of
+D14, and it is the honest reading: the rate is the couple's decision, not a result of
+the EK choice.
 
 **Recommendation precedence:** prefer 10% EK when feasible → otherwise the feasible scenario with the lowest total interest → otherwise none, and say so.
 
 **Kaufnebenkosten are never financed.** The loan is always `Kaufpreis − Anzahlung`; closing costs, renovation and moving are paid from cash and appear in `cashNeeded`. Every scenario is therefore "X% EK **+ Nebenkosten**", and the UI labels it that way — "10% EK" alone is ambiguous about precisely the point German first-time buyers most often misjudge.
 
-**Sondertilgung break-even baseline** is chosen by the user, not fixed: any EK level, either without Sondertilgung or running the configured yearly plan. Default: 10% EK + Nebenkosten, without Sondertilgung. See [DECISIONS.md D10](DECISIONS.md).
+**Sondertilgung reference** is the EK level selected at the top of the page, running its
+current yearly plan. Every other level is measured against it **without** Sondertilgung
+of its own, and the app always names which side would have to pay to close the gap.
+The required figure is a **flat annual amount**, not an increment on top of the existing
+plan. See [DECISIONS.md D17](DECISIONS.md).
 
 Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only ever drawn from **feasible** scenarios. When nothing is feasible there is no winner — see [PRODUCT_SPEC §5.3](PRODUCT_SPEC.md#5-core-principles).
 
@@ -125,37 +156,74 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 4. **Monthly ownership costs are flat** — no escalation, no inflation, no maintenance-reserve growth.
 5. **Property growth is a flat compound rate.** No cycles, no regional variation, no bear/base/bull triple (spec §16 allows one but it is not implemented).
 6. **`rentDelta` is a cash-flow comparison only.** It is not a rent-vs-buy analysis — no imputed rent, no equity build, no transaction costs on exit. Use the Gerd Kommer calculator for that.
-7. **Closing costs are a single percentage.** No split into Grunderwerbsteuer / Notar / Makler.
-8. **The three EK interest rates are user assumptions**, entered by hand. Nothing is fetched.
+7. **Closing costs are a single percentage.** No split into Grunderwerbsteuer / Notar / Makler. The 11,57% default is the offer's own split (2% Notar/Grundbuch + 6% Grunderwerbsteuer + 3,57% Maklercourtage) collapsed into one number.
+8. **The six Sollzinsen are user assumptions**, entered by hand. Nothing is fetched.
+9. **The model uses the Sollzins, not the Effektivzins.** Nominal rate, compounded monthly: 3,87% nominal is 3,94% effective, while the offer states 3,97% under PAngV (which also carries fees and disbursement timing). The app therefore understates the true cost very slightly. It never displays an Effektivzins, so it never claims otherwise.
+10. **Bereitstellungszinsen are not modelled.** The offer allows 6 free months, then 0,20%/month. For a Bestandsimmobilie disbursed on the completion date this is zero; for a Neubau drawn in stages it would not be.
+11. **Loan amounts are exact percentages of the purchase price.** Banks round: the offer quotes 382.000 € and 359.000 € where 85% and 80% of 450.000 € would be 382.500 € and 360.000 €. A difference of up to ~1.000 €, not modelled.
+12. **The runtime is reported in fractional months.** A bank's Tilgungsplan counts the final part-payment as a whole month, so "30,09 Jahre" here and "30 Jahre 2 Monate" on the offer are the same result.
 
 ---
 
-## 5. Known defects
+## 5. Defect log
 
-Tracked, not yet fixed. Update this section as they are resolved.
+All resolved. Kept as history — each of these skewed a number the couple was arguing
+over, and four of them happened to favour the same side.
 
-| # | Defect | Effect |
-|---|---|---|
-| K1 | `buildWaitScenario` subtracts `rentPaid` from future capital | Double-counts rent. With defaults an 18.000 € gain reads as a 5.640 € loss — makes waiting look worse than it is |
-| K2 | Sondertilgung path falls back to the scalar for years beyond the entered array | A 10-year plan keeps paying into years 11+. **Inflates the Sondertilgung strategy** — one side of the couple's disagreement |
-| K3 | `requiredSpecialToMatch` compares flat-scalar candidates against a target that runs the full path | The headline break-even answers the wrong question. See [D1](DECISIONS.md#d1--sondertilgung-break-even-compares-against-15-ek-without-sondertilgung) |
-| K4 | `costMinimum` / `liquidityMaximum` reduce over all scenarios, not feasible ones | Can name a winner while `noSafeScenario` is true — violates [§5.3](PRODUCT_SPEC.md#5-core-principles) |
-| K5 | Several `reduce` calls have no seed value | Throw on an empty array |
-| K6 | ETF opportunity cost computes foregone growth only | The interest-saved comparison — [spec §15](PRODUCT_SPEC.md#15-etf-opportunity-cost), the numerical core of the disagreement — is absent |
-| K7 | 40% burden threshold hardcoded in logic and duplicated in four display strings | Spec calls it adjustable; it isn't |
-| K8 | `annualSpecialRepayment` is both an editable input and a value overwritten with the path average | A field the user types into gets silently replaced |
+| # | Defect | Effect | Resolved by |
+|---|---|---|---|
+| K1 | `buildWaitScenario` subtracts `rentPaid` from future capital | Double-counts rent. An 18.000 € gain read as a 5.640 € loss — made waiting look worse than it is | [D4](DECISIONS.md) |
+| K2 | Sondertilgung path falls back to the scalar for years beyond the entered array | A 10-year plan kept paying into years 11+. **Inflated the Sondertilgung strategy** | `SpecialPlan` union; `plan.years[i] ?? 0` |
+| K3 | `requiredSpecialToMatch` compares flat-scalar candidates against a target that runs the full path | The headline break-even answered the wrong question | Explicit target argument; [D1](DECISIONS.md) |
+| K4 | `costMinimum` / `liquidityMaximum` reduce over all scenarios, not feasible ones | Could name a winner while `noSafeScenario` is true — violates [§5.3](PRODUCT_SPEC.md#5-core-principles) | `pickBest(feasibleScenarios, …)` |
+| K5 | Several `reduce` calls have no seed value | Threw on an empty array | Seeded reducers |
+| K6 | ETF opportunity cost computes foregone growth only | The interest-saved comparison — [spec §15](PRODUCT_SPEC.md#15-etf-opportunity-cost) — was absent | `netAdvantageFixed` |
+| K7 | 40% burden threshold hardcoded in logic and duplicated in four display strings | Spec calls it adjustable; it wasn't | `maxBurdenRate` input |
+| K8 | `annualSpecialRepayment` is both an editable input and a value overwritten with the path average | A field the user typed into got silently replaced | Readout only; the Jahresplan is the single source |
+| K9 | EK levels compared at a constant Tilgungssatz while the bank compares at a constant Monatsrate | Understated what more Eigenkapital buys by **35.494 €** of remaining debt after 10 years, systematically against the "more EK" side | [D14](DECISIONS.md) |
+| K10 | `SondertilgungPanel` calls a plan "vom Plan gedeckt" by comparing the yearly path's **average** against the required **flat, whole-runtime** amount | Claimed the defaults' ten-year 6.000 €/Jahr plan had caught 20% EK while it was 15.519 € of interest short. **Favoured the low-EK side** | [D22](DECISIONS.md) |
+| K11 | The Warten table is hardcoded to `[0, 12, 24]` while "Wartezeit" sits above it as a highlighted input | The field was stored, persisted and read by nothing — editing it changed no number on screen | `waitPeriodsFor()` |
+| K12 | `narrowestMiss.gap` printed as "es fehlen X €" for every constraint | The `payment` gap is €/**Monat**; a monthly shortfall read as a one-off amount | `describeMiss()` |
+| K13 | "ihr spart \|interestSavedFixed\| Zinsen" in the trade-off statement | The Sollzinsen are hand-entered and not monotone in EK, so the sentence could state the exact opposite of its own number | Sign read, not assumed |
+| K14 | A Monatsrate below the interest-only floor is silently simulated as a higher one (the Tilgungssatz is clamped to 0,01%) | Laufzeit, Zinsen and Restschuld described a payment nobody entered, with only a red status pill to hint at it | `paymentSubstituted` + a named note |
 
 ---
 
 ## 6. Validation status
 
-**Not yet validated against any external source.** [PRODUCT_SPEC §19](PRODUCT_SPEC.md#19-validation-before-real-use) requires, before this tool informs a real purchase:
+**There is no in-app comparison panel.** [Spec §7.6](PRODUCT_SPEC.md#76-qa-and-assumptions) once
+asked for fields to type another calculator's figures into. It was built, tested and
+never given a screen, and `offer.test.ts` supersedes it: the same check, against the
+real offer, run automatically on every commit rather than by hand. See
+[D23](DECISIONS.md).
 
-1. the owner's existing Google Sheet
-2. at least one independent German mortgage calculator
-3. ideally a real bank or broker offer
+**Validated against a real broker offer.** Source: Finanzierungsangebot vom 07.08.2026,
+Varianten 1A–3B — 90% / 85% / 80% Finanzierung × 10 / 15 Jahre Sollzinsbindung on a
+450.000 € Eigentumswohnung. (Only the financial parameters are recorded here and in the
+tests; no personal data from that document is in this repository.)
 
-Compare: loan amount · monthly payment · remaining debt after 10 years · fixed-period interest · total interest under the same constant-rate assumption · Sondertilgung effect.
+Pinned as a regression test in `src/lib/offer.test.ts`. Result:
+
+| Variante | Darlehen | Sollzins | Bindung | Zinsen (Modell / Angebot) | Restschuld (Modell / Angebot) |
+|---|---|---|---|---|---|
+| 1A | 405.000 € | 3,87% | 10 J | 141.148,81 / 141.148,78 | 318.148,81 / 318.148,78 |
+| 1B | 405.000 € | 4,06% | 15 J | 210.992,10 / 210.992,07 | 273.992,10 / 273.992,07 |
+| 2A | 382.000 € | 3,86% | 10 J | 130.791,81 / 130.791,89 | 288.940,21 / 288.940,29 |
+| 2B | 382.000 € | 4,06% | 15 J | 191.747,93 / 191.747,95 | 231.747,93 / 231.747,95 |
+| 3A | 359.000 € | 3,76% | 10 J | 115.294,48 / 115.294,48 | 246.294,48 / 246.294,48 |
+| 3B | 359.000 € | 3,96% | 15 J | 166.545,93 / 166.545,94 | 183.545,93 / 183.545,94 |
+
+Largest deviation: **8 cents** over fifteen years. The month-by-month Tilgungsplan also
+matches (first month 1.306,12 vs 1.306,13 € interest; balance after 16 months
+395.264,67 vs 395.264,68 €), as does the term (362 months = 30 Jahre 2 Monate) and the
+cost structure (Nebenkosten 52.065 € = 11,57%; Eigenkapital = Anzahlung + Nebenkosten;
+Sondertilgung 5% = 20.250 €/Jahr).
+
+Still outstanding from [PRODUCT_SPEC §19](PRODUCT_SPEC.md#19-validation-before-real-use):
+the owner's Google Sheet and an independent German mortgage calculator. Neither is
+load-bearing now that a real offer agrees to the cent, but a second offer with a
+different structure (Neubau with Bereitstellungszinsen, or a split Teildarlehen) would
+test parts of the model this one does not touch.
 
 Automated coverage lives in `src/lib/calculations.test.ts`. Run with:
 

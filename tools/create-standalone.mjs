@@ -24,7 +24,19 @@ css = css.replace(/url\("\.\/([^"]+\.woff2)"\)/g, (_match, fileName) => {
   return `url("data:font/woff2;base64,${font.toString("base64")}")`;
 });
 
-const js = readFileSync(fileURLToPath(scriptPath), "utf8");
+// The whole point of this file is that it opens from disk with no network. A Vite
+// change to how asset URLs are emitted would slip past the regex above and produce a
+// build that *succeeds* and then silently loads no fonts, so assert it instead.
+const external = css.match(/url\((?!["']?data:)[^)]*\)/g);
+if (external) {
+  throw new Error(
+    `Standalone build would still fetch external assets: ${external.join(", ")}`,
+  );
+}
+
+// `</script>` anywhere in the bundle — inside a string literal, a comment, a regex —
+// would close the tag early and truncate the app. The escape is invisible to JS.
+const js = readFileSync(fileURLToPath(scriptPath), "utf8").replace(/<\/script/gi, "<\\/script");
 
 const standalone = `<!doctype html>
 <html lang="de">

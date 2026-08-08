@@ -218,3 +218,164 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **Rationale.** It already renders almost exactly what [PRODUCT_SPEC §7.1](PRODUCT_SPEC.md#71-entscheidung) demands: Kosten-Minimum, Liquiditäts-Maximum, Kompromiss, selected scenario, and the no-clean-scenario state. It was orphaned, not obsolete. This is a direct illustration of why the spec now lives in the repo: without it, a reasonable reviewer read the product's mandated first screen as dead code.
 
 **Consequence.** Needs `.summary-grid` and `.decision-note` styles (neither exists). Its `<div>`-inside-`<button>` nesting is an invalid content model and must be fixed. All winner tiles are gated behind `noSafeScenario` per [§5.3](PRODUCT_SPEC.md#5-core-principles).
+
+---
+
+## D14 — EK levels are compared at a constant *Monatsrate*, not a constant Tilgungssatz
+
+**Date:** 2026-08-08 · **Status:** accepted
+
+**Context.** The model held `repaymentRate` fixed across all EK levels, so more Eigenkapital produced a *smaller monthly payment* at an unchanged term. The broker's offers do the opposite: the Monatsrate stays at 1.900 € in every variant and the Tilgungssatz rises with the Eigenkapital. Checked against the real offer at 20% EK:
+
+| | Monatsrate | Zinsen 10 J. | Restschuld nach 10 J. |
+|---|---|---|---|
+| Model (Tilgung 1,76% for all) | 1.656 € | 121.951 € | 283.244 € |
+| Offer (Rate 1.900 € for all) | 1.900 € | 115.750 € | **247.750 €** |
+
+**Decision.** `MortgageInputs.monthlyPayment` replaces `repaymentRate`. The Tilgungssatz is derived per scenario via the existing `repaymentRateFromMonthlyPayment`.
+
+**Rationale.** 35.494 € of remaining debt is not a rounding difference, and the error ran in one direction: it understated what more Eigenkapital buys, i.e. it systematically favoured one spouse's position — the exact failure mode `CLAUDE.md` warns about. It is also the more honest model of the constraint: what the couple can pay per month does not change when they put more capital down. The freed-up capacity has to go somewhere, and in the bank's framing it goes into faster repayment.
+
+**Consequence.**
+- `allInMonthly` and therefore `burdenRatio` are now identical in all three scenarios, so the `burden` check no longer separates them. Only `cash`/`reserve` discriminate. Recorded in [ASSUMPTIONS §3](ASSUMPTIONS.md).
+- The trade-off matrix loses its "Monat" column (it would read zero everywhere) and gains **Laufzeit**, which is what actually moves.
+- The doors show "X Jahre schuldenfrei" instead of the monthly rate, for the same reason.
+- A new `payment` constraint catches a rate that does not cover the interest, rather than reporting an 80-year runtime as if it were an answer.
+- `TradeoffStatement` says "X Jahre früher schuldenfrei" where it used to say "Y € weniger im Monat".
+
+---
+
+## D15 — The EK levels are 10 / 15 / 20%
+
+**Date:** 2026-08-08 · **Status:** accepted · **Supersedes** the "fixed at 5/10/15% EK" clause of D9
+
+**Context.** The broker quoted 90% / 85% / 80% Finanzierung. 5% EK was never on the table.
+
+**Decision.** `ScenarioId` becomes `ek10 | ek15 | ek20`.
+
+**Rationale.** The app exists to decide between the options that actually exist.
+
+**Consequence.** Everything that looked scenarios up by id or by array position now derives from the list (first, middle, last), so the next change is a change in `defaults.ts` alone. The copy "Keine der drei Varianten ist tragbar" and "Drei Wege" survives unchanged — there are still exactly three. `CompromiseFinder`'s middle door is now strictly the middle *scenario*: binding it to `decision.recommendation`, which prefers 10% EK, rendered the same door twice once 10% became the lowest level.
+
+---
+
+## D16 — The Sollzins is a matrix over EK level × Zinsbindung; 20 Jahre is dropped
+
+**Date:** 2026-08-08 · **Status:** accepted · **Supersedes** D13
+
+**Context.** The offer prices six combinations, and they do not move together: at a 15-year binding 10% and 15% EK carry the *identical* rate (4,06%), and the real drop only arrives at 80% Beleihung. A single rate per EK level cannot express that. 20 years was never quoted.
+
+**Decision.** `InterestRates = Record<FixedPeriod, Record<ScenarioId, number>>` with `FixedPeriod = 10 | 15`. Both columns are always visible and independently editable; the active one is marked. The free-text "Zinsbindung frei" field is removed.
+
+**Rationale.** A freely typed binding would have no rate behind it and would only pretend to compute something. Showing both columns at once is what makes the non-monotonic pricing visible instead of surprising.
+
+**Consequence.** `rateFor(rates, fixedRateYears, id)` is the only way to read a rate, and `normaliseFixedPeriod` clamps stray values (a v1 save holding 20 years) onto a real column. Persistence goes to `version: 2`; v1 rates are **dropped rather than mapped**, because a flat v1 rate carries no record of which binding it belonged to.
+
+---
+
+## D17 — Sondertilgung is measured against the selected scenario, full stop
+
+**Date:** 2026-08-08 · **Status:** accepted · **Supersedes** D10
+
+**Context.** D10 gave the user two controls: a free "Vergleichsziel" (any EK level) and a "dabei" mode (ohne Sondertilgung / mit aktuellem Plan). That is four readings of one table, and in testing the owner could not tell which question was on screen — the section's own labels did not distinguish "10% EK needs 7.400 €/Jahr" from "we need 7.400 €/Jahr".
+
+**Decision.** Both pickers are removed. The reference is always the EK level selected at the top of the page, running its current yearly plan. Every other level is shown *without* Sondertilgung of its own.
+
+**Rationale.** There is one question worth asking here — what does our Sondertilgung buy, and does it close the gap to the other EK levels? Freedom to re-aim the comparison bought expressiveness nobody used at the cost of the section being unreadable.
+
+**Consequence.** `compareSpecialScenarios(bases, selectedId, inputs, rates)`. Each non-selected row carries a `catchUp` that **names the payer**: whichever side is behind is the one that would have to pay, and the UI prints that name. Two tests pin both directions. The section now leads with three numbers (ohne ST / mit Plan / Ersparnis) and a grouped bar chart, and the "Rechnerisches Ergebnis, keine Verhaltensgarantie" disclaimer is gone — it stated the obvious; the contractual cap it also carried moved to the Jahresplan editor, where it is actionable. The editor itself has a single "Jahr hinzufügen" button that fills the first empty year, so deleting year 4 and adding again returns year 4.
+
+---
+
+## D18 — Assumptions live on one page, in boxes, not behind tabs
+
+**Date:** 2026-08-08 · **Status:** accepted · **Extends** D2
+
+**Context.** D2 removed the app's tabs but left three inside the Annahmen panel (Haushalt / Finanzierung / Erweitert). Two people reading together could see a third of their assumptions at a time and had to hold the rest in memory.
+
+**Decision.** Five labelled boxes on one page, ordered along the decision: Eigenkapital & Kaufkosten · Haushalt · Darlehen · Sollzinsen laut Angebot · Markt.
+
+**Consequence.** `INPUT_GROUPS` becomes `INPUT_BOXES` and the `inputGroup` state leaves `App`. The Tilgung field keeps its own three-way mode switch — that is one value seen three ways, not three groups of fields, and it stores `monthlyPayment` now.
+
+---
+
+## D19 — The right panel holds as many readouts as fit without scrolling; today that is five
+
+**Date:** 2026-08-08 · **Status:** accepted · **Refines** D7
+
+**Context.** D7's rule was written as "capped at four readouts". Four was the number that happened to fit; the guarantee was always "nothing hides below an inner fold". A fifth readout — the Darlehenssumme, the one figure a bank offer leads with — was worth the space.
+
+**Decision.** The rule is the no-internal-scroll guarantee. The count follows from it. Adding a readout means re-checking at 1280×800, not consulting a number in a document.
+
+**Consequence.** Readout padding and value size shrink slightly. The "x seit letzter Änderung" line is removed entirely: it replaced each readout's explanation with a delta nobody asked for, and it fired on apartment switches too, so it could report a change the user had not made.
+
+---
+
+## D20 — Warten is a table with metrics as rows
+
+**Date:** 2026-08-08 · **Status:** accepted
+
+**Context.** Three cards of up to eight readouts each — twenty-odd numbers with no shared baseline. Comparing "Cash nach Kauf" across the three options meant finding the same label three times at three different heights.
+
+**Decision.** Metrics become rows, waiting periods become columns, in the existing dense table style.
+
+**Rationale.** Reading across is the entire job of this section, so the layout is a row. It also drops `.wait-columns` / `.wait-column` / `.wait-column-head` and reuses a component that already exists.
+
+---
+
+## D21 — The sticky header carries context, not controls
+
+**Date:** 2026-08-08 · **Status:** accepted · **Refines** [D8](#d8--the-sticky-header-is-a-fixed-height-and-holds-nothing-collapsible)
+
+**Context.** The apartment switcher sat in the sticky header and took 92px of every screen, permanently. It is used once at the start of a session: you pick the flat you are looking at and then spend an hour on the EK question.
+
+**Decision.** The chips move to the top of §1. The header keeps the brand row plus the active apartment's **name and price as read-only text**.
+
+**Rationale.** Permanent screen space should go to something read continuously, not to a control used once. But the apartment must never be ambiguous — [D3](#d3--apartments-are-a-context-switcher-plus-a-read-only-comparison-table) exists because two apartments' numbers once appeared side by side — so the *identity* of the active flat stays visible while the *means of changing it* does not. Text also cannot be clicked by accident while scrolling.
+
+**Consequence.**
+- `--header-height` drops from 142px to 50px; roughly 92px of viewport goes back to content on every screen.
+- `.app-header` now sets `height: var(--header-height)` explicitly with the topbar flexed inside it. Previously the header's height came from its text metrics and happened to be 43,85px against a declared constant of 50px — a 6px band in which scrolling content showed through beneath the header and above the step rail. Asserting the height makes the constant and the rendered box incapable of disagreeing, which is what D8 was actually after.
+- The rule from D8 is unchanged and now easier to keep: nothing collapsible, nothing variable-height, nothing interactive in the header.
+
+---
+
+## D22 — "Vom Plan gedeckt" is decided on modelled interest, never on the plan's average
+
+**Date:** 2026-08-08 · **Status:** accepted · **Refines** [D17](#d17--the-sondertilgung-comparison-has-exactly-one-reference-the-selected-ek-level-running-its-plan)
+
+**Context.** The catch-up cell asked "does our Sondertilgung close the gap?" by comparing two numbers that are not comparable: `catchUp.amount` is a flat payment made **every year of the runtime**, while `inputs.annualSpecialRepayment` is the **average of a finite path** — ten years at 6.000 €, then nothing. On the defaults with 10% EK selected, that plan leaves 202.498 € of interest against 186.979 € for 20% EK without any Sondertilgung, yet its 6.000 € average exceeds the required 5.712 €, so the cell printed *"vom Plan gedeckt"* for a plan that is 15.519 € short. The defect favoured the low-EK side of the couple's disagreement — the same failure mode as [D14](#d14--ek-levels-are-compared-at-a-constant-monatsrate-not-a-constant-tilgungssatz).
+
+**Decision.** `compareSpecialScenarios` publishes the answer instead of leaving the UI to infer it: `catchUp.planCovers` compares the payer's **modelled** total interest under the configured yearly path against `targetInterest`, and `catchUp.planShortfall` carries the € gap. The panel reads those fields and never touches the average.
+
+**Rationale.** The comparison is only sound in interest space. Any € figure the UI sets against `amount` re-introduces the same class of bug, because a path and a flat payment of equal size buy different amounts of interest.
+
+**Consequence.** With the selection behind, `planCovers` is false by construction — the row is only shown as a catch-up target *because* the selection running its plan is still more expensive — so the cell now states the shortfall (*"euer Jahresplan bleibt 15.519 € Zinsen darüber"*) instead of a false all-clear, and labels the amount *"jedes Jahr der Laufzeit"* so it cannot be read as a plan average. `CatchUpCell` no longer receives `configured`. Two tests pin both directions: the defaults must not report covered, and a plan that genuinely reaches the target must.
+
+---
+
+## D23 — Validation against other calculators is a test, not a screen
+
+**Date:** 2026-08-08 · **Status:** accepted · **Amends** [PRODUCT_SPEC §7.6](PRODUCT_SPEC.md#76-qa-and-assumptions)
+
+**Context.** `compareExternal` let the user type a second calculator's Monatsrate, fixed-period interest and Restschuld and see the differences with a tolerance band. It was complete, tested — and had no UI, so nobody could reach it. Meanwhile `offer.test.ts` pins all six variants of the real broker offer to within 8 cents on every commit.
+
+**Decision.** The function, its types and its test are removed. §19's validation requirement is met by `offer.test.ts`.
+
+**Rationale.** A test does this job strictly better than a panel: it runs automatically, it cannot be skipped, and it compares against the actual offer rather than whatever the user retypes. Keeping an unreachable feature alive costs render surface, engine surface and reader attention, which is the failure mode [D6](#d6--one-comparison-one-place) names.
+
+**Consequence.** If a *new* offer needs checking, the move is to extend `offer.test.ts` with its variants — not to rebuild the panel. Recoverable from git history if that judgement turns out wrong.
+
+---
+
+## D24 — One number, one control: Kaufnebenkosten
+
+**Date:** 2026-08-08 · **Status:** accepted · **Refines** [D6](#d6--one-comparison-one-place)
+
+**Context.** "Eigenkapital & Kaufkosten" held a SegmentedChoice (8% / 11,57%) and, immediately below it, a free "Kaufnebenkosten frei" field. Both wrote `closingCostRate`, so moving one made the other jump — two controls presenting themselves as two settings while being one.
+
+**Decision.** One `ClosingCostField`: the two presets as buttons above a single editable percentage, laid out exactly like `PaymentField`.
+
+**Rationale.** Free entry earns its place — Grunderwerbsteuer runs 3,5%–6,5% by Bundesland, and the 11,57% default is specific to one deal. What had to go was the *second control*, not the capability. The app already had the right pattern one box below: Monatsrate / Tilgungssatz / Laufzeit is one value with three ways in.
+
+**Consequence.** `SegmentedChoice` now has exactly one caller (Zinsbindung), where the options really are the only permitted values.

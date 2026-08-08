@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type ChangeEvent, type ReactNode } from "react";
 import { formatSignedEur } from "../lib/format";
 import type { Tone } from "../lib/calculations";
 
@@ -137,7 +137,40 @@ type InputFieldProps = {
   highlight?: boolean;
   hint?: string;
   info?: string;
+  /**
+   * Hides the label visually but keeps it for screen readers. Only for grids where a
+   * row and column header already name the field — never to save space on a lone input.
+   */
+  labelHidden?: boolean;
 };
+
+/**
+ * Binds a number-backed `<input type="number">` without destroying what is being typed.
+ *
+ * `Number(text) || 0` committed a hard 0 for every unparseable entry, so clearing a
+ * field to retype it was impossible — and in the Sondertilgung Jahresplan a 0 means
+ * "no repayment that year", so clearing a year deleted its row out from under the
+ * cursor. An entry that does not parse is now simply not committed; the last good
+ * value stays in the model and the typed text stays on screen until blur.
+ *
+ * Rules of hooks: one call per input, so a list of these needs a component per row.
+ */
+export function useNumericDraft(value: number, onChange: (value: number) => void) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  return {
+    value: draft ?? value,
+    onChange: (event: ChangeEvent<HTMLInputElement>) => {
+      const text = event.target.value;
+      setDraft(text);
+      const parsed = Number(text);
+      if (text.trim().length > 0 && Number.isFinite(parsed)) {
+        onChange(parsed);
+      }
+    },
+    onBlur: () => setDraft(null),
+  };
+}
 
 export function InputField({
   label,
@@ -149,21 +182,20 @@ export function InputField({
   highlight = false,
   hint,
   info,
+  labelHidden = false,
 }: InputFieldProps) {
+  const draft = useNumericDraft(value, onChange);
+
   return (
-    <label className={`input-field ${highlight ? "input-field-highlight" : ""}`}>
-      <span>
+    <label
+      className={`input-field ${highlight ? "input-field-highlight" : ""} ${labelHidden ? "input-field-bare" : ""}`}
+    >
+      <span className={labelHidden ? "visually-hidden" : undefined}>
         {label}
-        {info ? <InfoTip text={info} term={label} /> : null}
+        {info && !labelHidden ? <InfoTip text={info} term={label} /> : null}
       </span>
       <div className="input-row">
-        <input
-          type="number"
-          value={value}
-          step={step}
-          min={min}
-          onChange={(event) => onChange(Number(event.target.value) || 0)}
-        />
+        <input type="number" step={step} min={min} {...draft} />
         <em>{suffix}</em>
       </div>
       {hint ? <small>{hint}</small> : null}

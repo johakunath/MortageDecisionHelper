@@ -21,18 +21,18 @@ import {
   compareEkScenarios,
   compareSpecialScenarios,
   evaluateDecision,
+  normaliseFixedPeriod,
+  waitPeriodsFor,
   type ApartmentCase,
   type InterestRates,
   type MortgageInputs,
   type ScenarioId,
-  type SpecialPlanMode,
 } from "./lib/calculations";
 import {
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
   EK_SCENARIOS,
   SECTIONS,
-  type InputGroupId,
   type SectionId,
 } from "./lib/defaults";
 import { formatEur } from "./lib/format";
@@ -42,6 +42,7 @@ import {
   listSaves,
   loadAutosave,
   loadNamed,
+  saveExists,
   saveNamed,
   storageAvailable,
   writeAutosave,
@@ -64,15 +65,15 @@ export default function App() {
   const [apartmentCases, setApartmentCases] = useState<ApartmentCase[]>(INITIAL_STATE.apartmentCases);
   const [activeApartmentId, setActiveApartmentId] = useState<string>(INITIAL_STATE.activeApartmentId);
   const [selectedId, setSelectedId] = useState<ScenarioId>(INITIAL_STATE.selectedId);
-  const [inputGroup, setInputGroup] = useState<InputGroupId>("household");
   const [activeSection, setActiveSection] = useState<SectionId>("decision");
-  const [baselineId, setBaselineId] = useState<ScenarioId>("ek10");
-  const [baselineMode, setBaselineMode] = useState<SpecialPlanMode>("none");
   const [saves, setSaves] = useState<string[]>(() => listSaves());
+  // Which named save the screen currently shows, so it can be updated in place
+  // rather than only ever re-saved under a new name.
+  const [activeSaveName, setActiveSaveName] = useState<string | null>(null);
   const storageWorks = useMemo(() => storageAvailable(), []);
 
   const snapshot = useMemo<PersistedState>(
-    () => ({ version: 1, inputs, rates, apartmentCases, activeApartmentId, selectedId }),
+    () => ({ version: 2, inputs, rates, apartmentCases, activeApartmentId, selectedId }),
     [inputs, rates, apartmentCases, activeApartmentId, selectedId],
   );
 
@@ -110,26 +111,31 @@ export default function App() {
   const decision = useMemo(() => evaluateDecision(scenarios), [scenarios]);
 
   const apartmentResults = useMemo(
-    () => compareApartmentCases(apartmentCases, EK_SCENARIOS, inputs, rates),
-    [apartmentCases, inputs, rates],
+    () => compareApartmentCases(apartmentCases, EK_SCENARIOS, inputs, rates, selected.id),
+    [apartmentCases, inputs, rates, selected.id],
   );
 
-  // Sondertilgung comparison against a freely chosen baseline (docs/DECISIONS.md D10).
-  // Default is 10% EK + Nebenkosten without Sondertilgung — the standard German
-  // financing case, and the one the couple actually starts from.
+  // Sondertilgung is always measured against the EK level chosen above, running its
+  // current yearly plan (docs/DECISIONS.md D17). Nothing is picked twice.
   const specialComparison = useMemo(
-    () => compareSpecialScenarios(EK_SCENARIOS, baselineId, baselineMode, activeInputs, rates),
-    [baselineId, baselineMode, activeInputs, rates],
+    () => compareSpecialScenarios(EK_SCENARIOS, selected.id, activeInputs, rates),
+    [selected.id, activeInputs, rates],
+  );
+
+  const waitPeriods = useMemo(
+    () => waitPeriodsFor(activeInputs.waitMonths),
+    [activeInputs.waitMonths],
   );
 
   const waitScenarios = useMemo(
-    () => buildWaitScenarios(selected, selected, activeInputs, rates, [0, 12, 24]),
-    [selected, activeInputs, rates],
+    () => buildWaitScenarios(selected, selected, activeInputs, rates, waitPeriods),
+    [selected, activeInputs, rates, waitPeriods],
   );
 
-  // Headline trade-off: maximum contrast, 5% vs 15% EK, over one shared horizon.
+  // Headline trade-off: maximum contrast — least against most Eigenkapital, over one
+  // shared horizon. Derived from the ends of the list, not from hardcoded ids.
   const headlineTradeoff = useMemo(
-    () => compareEkScenarios(scenarios[0], scenarios[2], activeInputs),
+    () => compareEkScenarios(scenarios[0], scenarios[scenarios.length - 1], activeInputs),
     [scenarios, activeInputs],
   );
 
@@ -144,8 +150,11 @@ export default function App() {
     setInputs((current) => ({ ...current, [key]: value }));
   }
 
-  function updateRate(key: ScenarioId, value: number) {
-    setRates((current) => ({ ...current, [key]: value }));
+  // Both Zinsbindung columns are editable independently, so the period is part of the
+  // address of a rate — not implied by whatever binding happens to be active.
+  function updateRate(period: number, key: ScenarioId, value: number) {
+    const column = normaliseFixedPeriod(period);
+    setRates((current) => ({ ...current, [column]: { ...current[column], [key]: value } }));
   }
 
   function updateApartmentCase(apartmentId: string, patch: Partial<Pick<ApartmentCase, ApartmentNumericKey>>) {
@@ -170,6 +179,22 @@ export default function App() {
     );
   }
 
+  /** Levels every year that already has an amount. Years at zero stay at zero. */
+  function levelApartmentSpecialRepayments(apartmentId: string, value: number) {
+    setApartmentCases((current) =>
+      current.map((apartment) =>
+        apartment.id === apartmentId
+          ? {
+              ...apartment,
+              annualSpecialRepayments: apartment.annualSpecialRepayments.map((amount) =>
+                amount > 0 ? value : 0,
+              ),
+            }
+          : apartment,
+      ),
+    );
+  }
+
   function addApartment() {
     const id = `flat-${Date.now()}`;
     setApartmentCases((current) => [
@@ -180,7 +205,6 @@ export default function App() {
         purchasePrice: DEFAULT_APARTMENT_CASES[0].purchasePrice,
         renovation: 0,
         monthlyOwnershipCosts: DEFAULT_APARTMENT_CASES[0].monthlyOwnershipCosts,
-        selectedScenarioId: "ek10",
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);
@@ -190,14 +214,16 @@ export default function App() {
   function applyPreset(preset: "reset" | "safety" | "special") {
     if (preset === "reset") {
       applyState(defaultState());
-      setInputGroup("household");
+      setActiveSaveName(null);
       return;
     }
 
     const yearlyAmount = preset === "safety" ? 3000 : 12000;
     setInputs((current) => ({
       ...current,
-      ...(preset === "safety" ? { reserveTarget: 35000, repaymentRate: 2.2 } : { repaymentRate: 2.8 }),
+      ...(preset === "safety"
+        ? { reserveTarget: 35000, monthlyPayment: 1700 }
+        : { monthlyPayment: 2100 }),
     }));
     setApartmentCases((current) =>
       current.map((apartment) =>
@@ -206,7 +232,11 @@ export default function App() {
           : apartment,
       ),
     );
-    setSelectedId(preset === "safety" ? "ek5" : "ek10");
+    // Both presets land on the lowest EK level: Sicherheitsfokus because it keeps the
+    // most cash back, Mehr Sondertilgung because that is the side of the argument
+    // Sondertilgung is meant to answer. The ternary that used to stand here chose
+    // between two spellings of the same id.
+    setSelectedId(EK_SCENARIOS[0].id);
   }
 
   // Drives the step rail. The page is one scroll surface so two people reading
@@ -253,19 +283,27 @@ export default function App() {
         sliver of scrolling content visible in the seam whenever the offset and the
         real header height disagreed.
       */}
+      {/*
+        Brand plus the active apartment as TEXT, not as a control. The switcher itself
+        moved into the page body: it is used once at the start of a session, so it does
+        not earn permanent screen space (docs/DECISIONS.md D21). What does earn it is
+        knowing which flat and which price every number below refers to — that context
+        is exactly what must never be ambiguous (D3).
+      */}
       <header className="app-header">
         <div className="topbar">
           <div className="brand-row">
             <span className="brand-dot" />
             <span className="brand-text">haus · ein ruhiger rechner</span>
           </div>
+          <div className="topbar-context">
+            <span className="topbar-context-label">{activeApartment.label}</span>
+            <i />
+            <span>{formatEur(activeApartment.purchasePrice)}</span>
+            <i />
+            <span>+ {formatEur(selected.closingCosts)} Nebenkosten</span>
+          </div>
         </div>
-        <ApartmentSwitcher
-          results={apartmentResults}
-          activeApartmentId={activeApartmentId}
-          onSelect={setActiveApartmentId}
-          onAdd={addApartment}
-        />
       </header>
 
       <div className="app-grid">
@@ -286,6 +324,12 @@ export default function App() {
 
         <main>
           <section id="section-decision" ref={registerSection("decision")} className="page-section">
+            <ApartmentSwitcher
+              results={apartmentResults}
+              activeApartmentId={activeApartmentId}
+              onSelect={setActiveApartmentId}
+              onAdd={addApartment}
+            />
             <ApartmentFacts
               apartment={activeApartment}
               onChange={(patch) => updateApartmentCase(activeApartmentId, patch)}
@@ -310,8 +354,8 @@ export default function App() {
             <InputsPanel
               inputs={activeInputs}
               rates={rates}
-              activeGroup={inputGroup}
-              onGroupChange={setInputGroup}
+              scenarios={EK_SCENARIOS}
+              selectedId={selected.id}
               onInputChange={updateInput}
               onRateChange={updateRate}
               onReset={() => applyPreset("reset")}
@@ -321,16 +365,25 @@ export default function App() {
             <SavePanel
               saves={saves}
               storageWorks={storageWorks}
+              activeSaveName={activeSaveName}
+              nameExists={saveExists}
               onSave={(name) => {
-                if (saveNamed(name, snapshot)) setSaves(listSaves());
+                if (saveNamed(name, snapshot)) {
+                  setSaves(listSaves());
+                  setActiveSaveName(name.trim());
+                }
               }}
               onLoad={(name) => {
                 const loaded = loadNamed(name);
-                if (loaded) applyState(loaded);
+                if (loaded) {
+                  applyState(loaded);
+                  setActiveSaveName(name);
+                }
               }}
               onDelete={(name) => {
                 deleteNamed(name);
                 setSaves(listSaves());
+                if (activeSaveName === name) setActiveSaveName(null);
               }}
             />
           </section>
@@ -361,14 +414,12 @@ export default function App() {
             <SondertilgungPanel
               inputs={activeInputs}
               selected={selected}
-              bases={EK_SCENARIOS}
               comparison={specialComparison}
-              baselineId={baselineId}
-              baselineMode={baselineMode}
-              onBaselineChange={setBaselineId}
-              onBaselineModeChange={setBaselineMode}
               onSpecialRepaymentChange={(yearIndex, value) =>
                 updateApartmentSpecialRepayment(activeApartmentId, yearIndex, value)
+              }
+              onLevelSpecialRepayments={(value) =>
+                levelApartmentSpecialRepayments(activeApartmentId, value)
               }
             />
           </section>
@@ -389,6 +440,7 @@ export default function App() {
                     step={1}
                     min={0}
                     onChange={(value) => updateInput("waitMonths", value)}
+                    hint="Bekommt unten eine eigene Spalte neben 12 und 24 Monaten"
                     highlight
                   />
                   <InputField

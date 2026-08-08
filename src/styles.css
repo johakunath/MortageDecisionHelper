@@ -50,11 +50,13 @@
   --blue: #526d8f;
   /*
    * Height of the sticky header, which everything sticky below clears.
-   * This is a constant on purpose: the header holds only the brand row and the
-   * apartment chips, both fixed-height. The collapsible apartment facts live in the
-   * page body precisely so this number can never drift out of sync.
+   * This is a constant on purpose: the header holds one row of fixed-height text —
+   * the brand and the active apartment's name and price. Nothing collapsible and
+   * nothing interactive lives up here, precisely so this number can never drift out
+   * of sync (D8). The apartment chips moved into the page body (D21), which is what
+   * shrank it from 142px.
    */
-  --header-height: 142px;
+  --header-height: 50px;
 }
 
 * {
@@ -83,9 +85,11 @@ button {
    ========================================================================== */
 
 .app-shell {
-  width: min(1480px, 100%);
+  /* Two people read this side by side on one large screen; the old 1480px left
+     wide empty gutters and forced the trade-off table to scroll horizontally. */
+  width: min(1780px, 100%);
   margin: 0 auto;
-  padding: 0 72px 64px;
+  padding: 0 56px 64px;
 }
 
 /*
@@ -97,18 +101,30 @@ button {
   position: sticky;
   top: 0;
   z-index: 20;
-  margin: 0 -72px;
-  padding: 0 72px;
+  /* Must track .app-shell's padding exactly, or the sticky header tears open at
+     the sides as content scrolls under it. */
+  margin: 0 -56px;
+  padding: 0 56px;
   background: var(--cream);
   border-bottom: 1px solid var(--rule);
+  /*
+   * Height is asserted, not inherited from the text. Everything sticky below clears
+   * it with `top: var(--header-height)`, so a header that measured even a few pixels
+   * shorter than the constant would leave a band of scrolling content visible in the
+   * seam. Setting it here makes the two impossible to disagree.
+   */
+  display: flex;
+  align-items: center;
+  height: var(--header-height);
 }
 
 .topbar {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: space-between;
   gap: 28px;
-  padding: 14px 0 10px;
+  min-width: 0;
 }
 
 .brand-row {
@@ -135,8 +151,8 @@ button {
 
 .app-grid {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr) 340px;
-  gap: 28px 40px;
+  grid-template-columns: 152px minmax(0, 1fr) 312px;
+  gap: 28px 32px;
   align-items: start;
   margin-top: 24px;
 }
@@ -204,12 +220,35 @@ button {
   font-weight: 600;
 }
 
+/* The active apartment as read-only context, never as a control. */
+.topbar-context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--soft);
+  font-size: 0.88rem;
+}
+
+.topbar-context-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.topbar-context i {
+  width: 3px;
+  height: 3px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--rule);
+}
+
 /* ==========================================================================
    Apartment switcher — the context the EK decision is made in
    ========================================================================== */
 
 .apartment-switcher {
-  padding-bottom: 12px;
+  padding-bottom: 18px;
 }
 
 .apartment-chip-row {
@@ -636,8 +675,7 @@ button {
    ========================================================================== */
 
 .readout,
-.logic-panel,
-.interpretation {
+.logic-panel {
   position: relative;
   border: 1px solid var(--rule);
   border-radius: 8px;
@@ -705,6 +743,11 @@ button {
 
 .readout-grid.one {
   grid-template-columns: 1fr;
+}
+
+/* Was missing entirely, so every `readout-grid three` silently stacked. */
+.readout-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 /* ==========================================================================
@@ -782,20 +825,33 @@ button {
   font-weight: 600;
 }
 
+/*
+ * Flex, not a fixed three-column grid. The grid was hardcoded to `repeat(3, 1fr)`
+ * from when Zinsbindung had three options; with two options in a half-width box each
+ * track collapsed to 33px while "11,57% mit Makler" needs 57px, so the label wrapped
+ * to three lines inside a button barely wider than a character.
+ * Now each button takes the width its own label needs and wraps to the next line
+ * rather than crushing the text.
+ */
 .segmented-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
 }
 
 .segmented-row button {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 42px;
+  padding: 8px 12px;
   border: 1px solid var(--rule);
   border-radius: 8px;
   color: var(--soft);
   background: #fffdf8;
+  font-size: 0.88rem;
   font-weight: 700;
+  line-height: 1.25;
 }
 
 .segmented-row button.is-active {
@@ -965,6 +1021,65 @@ button {
   line-height: 1.45;
 }
 
+/*
+ * Dense variant. The widest column used to be a full sentence of interpretation;
+ * moving it under the row label as a caption is what removes the horizontal scroll,
+ * not shrinking the type.
+ */
+.tradeoff-table.is-dense {
+  min-width: 560px;
+  font-size: 0.9rem;
+}
+
+.tradeoff-table.is-dense th,
+.tradeoff-table.is-dense td {
+  padding: 9px 10px;
+}
+
+/*
+ * .signed-value is an inline-flex row, so glyph + number + verdict is one unbreakable
+ * unit — enough of them side by side pushed the table past the content column even on
+ * a 1280px laptop. Letting the verdict wrap keeps the table inside its column.
+ */
+.tradeoff-table.is-dense .signed-value {
+  flex-wrap: wrap;
+}
+
+.tradeoff-table td small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.tradeoff-table th small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+/* Marks the column the reader is comparing against, without relying on colour. */
+.tradeoff-table .is-active-col {
+  background: rgba(94, 120, 97, 0.07);
+}
+
+.wait-table th:first-child,
+.wait-table td:first-child {
+  width: 30%;
+}
+
+.wait-ok {
+  color: var(--sage);
+  font-weight: 600;
+}
+
+.wait-bad {
+  color: var(--alert);
+  font-weight: 600;
+}
+
 /* ==========================================================================
    Right panel — full viewport height, never scrolls internally.
    "Always visible" only means something if nothing hides below an inner fold.
@@ -1018,11 +1133,22 @@ button {
   grid-auto-rows: 1fr;
 }
 
+/* Five readouts now share the column height, so each one is tighter (D19). */
 .right-panel .readout {
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-height: 0;
+  padding: 10px 12px;
+}
+
+.right-panel .readout .readout-value {
+  font-size: 1.32rem;
+}
+
+.right-panel .readout::after {
+  top: 7px;
+  right: 10px;
 }
 
 .logic-panel {
@@ -1044,43 +1170,51 @@ button {
    Sondertilgung
    ========================================================================== */
 
-.interpretation {
-  padding: 16px 18px;
-  color: var(--soft);
-  line-height: 1.6;
+/* "Deine Wahl" — the reference every row below is measured against. */
+.special-headline {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--sage);
+  border-radius: 10px;
+  background: #ffffff;
 }
 
-.interpretation p {
-  margin: 0 0 8px;
+.special-headline-title {
+  margin-bottom: 12px;
 }
 
-.interpretation p:last-child {
-  margin-bottom: 0;
+.special-headline-title h3 {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-family: "Fraunces Local", Georgia, serif;
+  font-size: 1.3rem;
+  font-weight: 350;
 }
 
-.interpretation-caveat {
-  margin-top: 10px !important;
-  color: var(--muted) !important;
+.special-editor {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.special-editor-head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.special-editor-head p {
+  margin: 2px 0 12px;
+  color: var(--muted);
   font-size: 0.84rem;
-  font-style: italic;
 }
 
-.special-editor-details {
-  margin-top: 14px;
-}
-
-.special-editor-details summary {
-  color: var(--soft);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.special-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+.special-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .special-row {
@@ -1245,6 +1379,8 @@ button {
   width: 14px;
   height: 3px;
   border-radius: 2px;
+  /* Bar chart legends carry no inline colour, so the swatch needs a default. */
+  background: var(--sage);
 }
 
 /* Dash pattern repeats the line style, so series stay distinguishable in greyscale. */
@@ -1294,6 +1430,24 @@ button {
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.5;
+}
+
+/* Which set is on screen right now — the thing "Aktualisieren" writes back to. */
+.save-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--soft);
+  font-size: 0.9rem;
+}
+
+.save-chip.is-active {
+  border-color: var(--sage);
+  background: rgba(94, 120, 97, 0.1);
 }
 
 .save-row {
@@ -1395,36 +1549,6 @@ button {
    Sondertilgung plan — sparse {year, amount} rows, so one-offs are possible
    ========================================================================== */
 
-/* Freely chosen comparison target, rather than a hardwired 15% EK (D10). */
-.baseline-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  padding: 14px 16px;
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--sage);
-  border-radius: 10px;
-  background: #ffffff;
-}
-
-.baseline-group {
-  display: grid;
-  gap: 6px;
-}
-
-.baseline-label {
-  color: var(--muted);
-  font-family: "JetBrains Mono Local", ui-monospace, monospace;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-}
-
-.baseline-summary {
-  margin: 14px 0 18px;
-  color: var(--soft);
-  line-height: 1.55;
-}
-
 .special-covered,
 .special-short,
 .special-unreachable {
@@ -1490,18 +1614,17 @@ button {
   color: var(--alert);
 }
 
-.special-add {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
+/* Above the contractual cap the amount is not simply "high", it is not allowed. */
+.special-entry.is-over-cap .special-row {
+  border-color: rgba(183, 92, 77, 0.5);
 }
 
-.special-add .save-field {
-  max-width: 180px;
-  min-width: 0;
+.special-over-cap {
+  display: block;
+  color: var(--alert);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 700;
 }
 
 /* Linked Tilgung / Laufzeit / Monatsrate — one value, three ways to enter it */
@@ -1535,22 +1658,159 @@ button {
   cursor: pointer;
 }
 
-.wait-columns {
+/* ==========================================================================
+   Assumption boxes — everything on one page, grouped, never behind a tab
+   ========================================================================== */
+
+/*
+ * auto-fit rather than a fixed two columns: the content column is ~1140px on the
+ * owner's wide screen but only ~625px on a 1280px laptop, where two boxes side by
+ * side leave each field narrower than its own label.
+ */
+.input-boxes {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  margin-top: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+  margin-top: 6px;
 }
 
-.wait-column {
+.input-box {
   min-width: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.7);
 }
 
-.wait-column-head {
-  margin-bottom: 12px;
+.input-box h3 {
+  margin: 0 0 12px;
   color: var(--ink);
   font-family: "Fraunces Local", Georgia, serif;
-  font-size: 1.1rem;
+  font-size: 1.08rem;
+  font-weight: 350;
+}
+
+/* The box is at most half the content column, so four across would be unreadable. */
+.input-box .input-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+/*
+ * Two tracks for the controls that carry words rather than a number: their labels
+ * ("11,57% mit Makler", "Tilgungssatz") are several times wider than "8.500" and
+ * would otherwise wrap inside a track sized for a numeric field.
+ */
+.input-grid .segmented-field,
+.input-grid .tilgung-field {
+  grid-column: span 2;
+}
+
+.input-box-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+/* Sollzins per EK level × Zinsbindung. Both columns visible, one of them live. */
+.rate-matrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rate-matrix th {
+  padding: 4px 8px 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.rate-matrix thead th small {
+  display: block;
+  color: var(--sage);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rate-matrix tbody th {
+  white-space: nowrap;
+}
+
+.rate-matrix td {
+  padding: 3px 4px;
+}
+
+.rate-matrix .is-active-col {
+  background: rgba(94, 120, 97, 0.08);
+}
+
+.input-field-bare {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.input-field-bare .input-row {
+  margin-top: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Bar chart — grouped horizontal bars (Sondertilgung)
+   ========================================================================== */
+
+.bar {
+  fill: var(--sage);
+}
+
+.bar-muted {
+  fill: rgba(94, 120, 97, 0.3);
+}
+
+.bar-highlighted.bar-solid {
+  fill: var(--ink);
+}
+
+.bar-group-label {
+  fill: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-anchor: end;
+}
+
+.bar-group-tag {
+  fill: var(--sage);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-anchor: end;
+  text-transform: uppercase;
+}
+
+.bar-value {
+  fill: var(--soft);
+  font-family: "JetBrains Mono Local", ui-monospace, monospace;
+  font-size: 0.74rem;
+}
+
+.chart-swatch-muted {
+  background: rgba(94, 120, 97, 0.3);
+}
+
+.chart-legend-note {
+  color: var(--muted);
+  font-style: italic;
 }
 
 /* ==========================================================================
@@ -1598,9 +1858,14 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .input-grid,
-  .special-grid {
+  .input-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* One box per row: side by side they would be narrower than their own fields. */
+  .input-boxes,
+  .input-box .input-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1617,10 +1882,10 @@ button {
 
   .compromise-grid,
   .readout-grid,
+  .readout-grid.three,
   .result-list,
   .input-grid,
-  .special-grid,
-  .wait-columns,
+  .input-boxes,
   .apartment-facts-grid {
     grid-template-columns: 1fr;
   }

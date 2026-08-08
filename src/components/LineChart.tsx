@@ -145,6 +145,9 @@ export default function LineChart({
         {markers.length > 0 && markerLabel ? (
           <span className="chart-legend-item chart-legend-marker">{markerLabel}</span>
         ) : null}
+        {/* Shown, not only announced — this used to reach screen readers via the
+            svg's aria-label and nobody else, while BarChart printed its own. */}
+        <span className="chart-legend-item chart-legend-note">{caption}</span>
       </figcaption>
     </figure>
   );

@@ -1,5 +1,13 @@
-export type ScenarioId = "ek5" | "ek10" | "ek15";
+export type ScenarioId = "ek10" | "ek15" | "ek20";
 export type Tone = "green" | "amber" | "red" | "blue" | "slate" | "orange";
+
+/**
+ * The two Sollzinsbindungen the bank actually quoted. There is no third column, so
+ * there is no third option: a freely typed binding would have no rate behind it and
+ * would only pretend to compute something.
+ */
+export const FIXED_PERIODS = [10, 15] as const;
+export type FixedPeriod = (typeof FIXED_PERIODS)[number];
 
 /**
  * Which direction is favourable for a given metric — the sign convention is inverted
@@ -36,7 +44,14 @@ export type MortgageInputs = {
   householdNetIncome: number;
   /** Max share of household net income the all-in monthly cost may take, in percent. Heuristic, not a bank rule. */
   maxBurdenRate: number;
-  repaymentRate: number;
+  /**
+   * The monthly annuity, identical across every EK level. THIS is the contract input;
+   * the Tilgungssatz is derived per scenario from it. The bank's offers hold the rate
+   * constant and let Tilgung rise with Eigenkapital, and so does this model — holding
+   * Tilgung constant instead understated what more Eigenkapital buys by 35.494 € of
+   * remaining debt after ten years. See docs/DECISIONS.md D14.
+   */
+  monthlyPayment: number;
   fixedRateYears: number;
   annualSpecialRepayment: number;
   annualSpecialRepayments: number[];
@@ -50,14 +65,31 @@ export type MortgageInputs = {
   etfReturnRate: number;
 };
 
-export type InterestRates = Record<ScenarioId, number>;
+/**
+ * The Sollzins depends on two axes, not one: how much Eigenkapital goes in AND how
+ * long the rate is fixed. The bank quoted both, and they do not move together — at a
+ * 15-year binding 10% and 15% EK carry the identical rate, and the real drop only
+ * arrives at 80% Beleihung. Nothing here may assume monotonicity across EK levels.
+ */
+export type InterestRates = Record<FixedPeriod, Record<ScenarioId, number>>;
+
+/** Nearest supported binding. Guards old saved states that still hold 20 years. */
+export function normaliseFixedPeriod(fixedRateYears: number): FixedPeriod {
+  return fixedRateYears <= 12.5 ? 10 : 15;
+}
+
+export function rateFor(
+  rates: InterestRates,
+  fixedRateYears: number,
+  id: ScenarioId,
+): number {
+  return rates[normaliseFixedPeriod(fixedRateYears)]?.[id] ?? 0;
+}
 
 export type ScenarioBase = {
   id: ScenarioId;
   ekRate: number;
   label: string;
-  short: string;
-  accent: Tone;
 };
 
 /**
@@ -109,8 +141,12 @@ export type MortgageSimulation = {
  * `cash` and `reserve` are deliberately separate: "you cannot complete the purchase"
  * and "you can complete it but your safety buffer is too thin" mean very different
  * things to a couple, and the old code collapsed both into one status.
+ *
+ * `payment` exists because the monthly rate became a free input: one that does not
+ * cover the monthly interest produces a loan that never amortises, and reporting that
+ * as "80 years" would be a number pretending to be an answer.
  */
-export type ConstraintId = "cash" | "reserve" | "burden";
+export type ConstraintId = "payment" | "cash" | "reserve" | "burden";
 
 export type ConstraintCheck = {
   id: ConstraintId;
@@ -128,6 +164,8 @@ export type ScenarioDiagnosis = {
 
 export type ScenarioResult = ScenarioBase & {
   interestRate: number;
+  /** Derived from the monthly payment, not entered — differs per EK level. */
+  repaymentRate: number;
   downPayment: number;
   loan: number;
   closingCosts: number;
@@ -141,6 +179,13 @@ export type ScenarioResult = ScenarioBase & {
   realPropertyReturnRate: number;
   netWorthAtPayoff: number;
   mortgage: MortgageSimulation;
+  /**
+   * True when the entered Monatsrate cannot amortise the loan and the model simulated
+   * a higher one instead. Every derived figure — Laufzeit, Zinsen, Restschuld — then
+   * belongs to `mortgage.regularMonthlyPayment`, not to what the couple typed, and the
+   * UI has to say so. See docs/ASSUMPTIONS.md K14.
+   */
+  paymentSubstituted: boolean;
   feasible: boolean;
   diagnosis: ScenarioDiagnosis;
   status: string;
@@ -206,33 +251,19 @@ export type EkTradeoff = {
   from: ScenarioResult;
   to: ScenarioResult;
   extraCashRequired: number;
-  cashLeftDelta: number;
+  /**
+   * Near zero by construction — the monthly rate is held constant across EK levels.
+   * Kept because it is still a true figure, but `runtimeDelta` is what actually moves.
+   */
   monthlyDelta: number;
-  remainingDebtDelta: number;
+  /** Negative = debt-free this many years sooner. What more Eigenkapital really buys. */
+  runtimeDelta: number;
   horizonYears: number;
   /** Reliable: both sides are inside the fixed-rate period. */
   interestSavedFixed: number;
-  /** Illustrative only: assumes today's rate holds for the whole term. */
-  interestSavedTotal: number;
   etfForegone: number;
   /** interestSavedFixed − etfForegone. Positive favours more Eigenkapital. */
   netAdvantageFixed: number;
-};
-
-export type ExternalCheck = {
-  monthlyPayment?: number;
-  interestFixed?: number;
-  remainingAfterFixed?: number;
-};
-
-export type ExternalDiff = {
-  field: string;
-  label: string;
-  ours: number;
-  theirs: number;
-  abs: number;
-  pct: number;
-  withinTolerance: boolean;
 };
 
 export type ApartmentCase = {
@@ -241,7 +272,6 @@ export type ApartmentCase = {
   purchasePrice: number;
   renovation: number;
   monthlyOwnershipCosts: number;
-  selectedScenarioId: ScenarioId;
   annualSpecialRepayments: number[];
 };
 
@@ -250,9 +280,8 @@ export type ApartmentComparisonResult = {
   inputs: MortgageInputs;
   scenarios: ScenarioResult[];
   decision: DecisionResult;
+  /** This apartment at the EK level the couple has selected on screen. */
   selectedScenario: ScenarioResult;
-  averageSpecialRepayment: number;
-  specialRepaymentTotal: number;
 };
 
 export function monthlyAnnuity(
@@ -472,11 +501,22 @@ export function buildScenario(
   const downPayment = inputs.purchasePrice * (base.ekRate / 100);
   const loan = Math.max(0, inputs.purchasePrice - downPayment);
   const closingCosts = inputs.purchasePrice * (inputs.closingCostRate / 100);
-  const cashNeeded = downPayment + closingCosts + inputs.renovation + inputs.moving;
+  const cashNeeded = calculateCashNeeded(
+    inputs.purchasePrice,
+    base.ekRate,
+    inputs.closingCostRate,
+    inputs.renovation,
+    inputs.moving,
+  );
+  const interestRate = rateFor(rates, inputs.fixedRateYears, base.id);
+  // Same € every month at every EK level; the Tilgungssatz is what moves. Verified
+  // against the broker's Tilgungsplan: 405.000 € at 3,87 % and 1.900 €/month yields
+  // 1,759630 % and reproduces their 10-year figures to the cent.
+  const repaymentRate = repaymentRateFromMonthlyPayment(loan, interestRate, inputs.monthlyPayment);
   const mortgage = simulateMortgage({
     principal: loan,
-    interestRatePct: rates[base.id],
-    repaymentRatePct: inputs.repaymentRate,
+    interestRatePct: interestRate,
+    repaymentRatePct: repaymentRate,
     fixedRateYears: inputs.fixedRateYears,
     specialPlan,
     specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
@@ -492,7 +532,22 @@ export function buildScenario(
   const realPropertyReturnRate = inputs.propertyGrowthRate - inputs.inflationRate;
   const netWorthAtPayoff = propertyValueAtPayoff - cashNeeded - mortgage.interestTotal;
   const maxBurdenRatio = inputs.maxBurdenRate / 100;
+  // Interest-only floor: below this the balance never falls, whatever the plan says.
+  const interestOnlyPayment = (loan * interestRate) / 1200;
+  const amortises = inputs.monthlyPayment > interestOnlyPayment && mortgage.runtimeYears <= 60;
+  // `repaymentRateFromMonthlyPayment` floors the Tilgungssatz at 0,01%, so the simulated
+  // annuity equals the entered one exactly unless that floor bit. When it did, the whole
+  // scenario describes a payment nobody asked for and must be labelled, not just failed.
+  const paymentSubstituted = mortgage.regularMonthlyPayment > inputs.monthlyPayment + 0.5;
   const checks: ConstraintCheck[] = [
+    // Does the rate repay the loan at all, within a lifetime?
+    {
+      id: "payment",
+      passed: amortises,
+      actual: inputs.monthlyPayment,
+      required: interestOnlyPayment,
+      gap: inputs.monthlyPayment - interestOnlyPayment,
+    },
     // Can the purchase be completed at all?
     { id: "cash", passed: cashLeft >= 0, actual: cashLeft, required: 0, gap: cashLeft },
     // Is the safety buffer intact afterwards?
@@ -515,15 +570,19 @@ export function buildScenario(
   const failed = checks.filter((check) => !check.passed).map((check) => check.id);
   const diagnosis: ScenarioDiagnosis = { checks, failed };
 
-  // Feasibility keys off the reserve and burden checks; `cash` is a strictly worse
-  // subset of `reserve` and exists to tell the two failures apart in the UI.
-  const feasible = cashLeft >= inputs.reserveTarget && burdenRatio <= maxBurdenRatio;
+  // Feasibility keys off the payment, reserve and burden checks; `cash` is a strictly
+  // worse subset of `reserve` and exists to tell the two failures apart in the UI.
+  const feasible =
+    amortises && cashLeft >= inputs.reserveTarget && burdenRatio <= maxBurdenRatio;
 
   // Plain-language labels: these are read aloud between two non-experts, so they say
   // what is wrong rather than naming an internal constraint.
   let status = "Tragbar";
   let statusTone: Tone = "green";
-  if (failed.includes("cash")) {
+  if (failed.includes("payment")) {
+    status = "Rate zu niedrig";
+    statusTone = "red";
+  } else if (failed.includes("cash")) {
     status = "Geld reicht nicht";
     statusTone = "red";
   } else if (failed.includes("reserve")) {
@@ -539,7 +598,8 @@ export function buildScenario(
 
   return {
     ...base,
-    interestRate: rates[base.id],
+    interestRate,
+    repaymentRate,
     downPayment,
     loan,
     closingCosts,
@@ -553,6 +613,7 @@ export function buildScenario(
     realPropertyReturnRate,
     netWorthAtPayoff,
     mortgage,
+    paymentSubstituted,
     feasible,
     diagnosis,
     status,
@@ -602,36 +663,29 @@ export function buildApartmentInputs(
   };
 }
 
+/**
+ * Every apartment at one EK level — the one selected on screen.
+ *
+ * `selectedId` is a parameter rather than a property of the apartment: `ApartmentCase`
+ * used to carry a `selectedScenarioId` that no control ever wrote, so it sat frozen at
+ * its default while the page showed whatever the doors had selected. An apartment is
+ * the context a decision is made in, not a place to keep a second copy of it (D3).
+ */
 export function compareApartmentCases(
   apartments: ApartmentCase[],
   scenarioBases: ScenarioBase[],
   baseInputs: MortgageInputs,
   rates: InterestRates,
+  selectedId: ScenarioId,
 ): ApartmentComparisonResult[] {
   return apartments.map((apartment) => {
     const apartmentInputs = buildApartmentInputs(baseInputs, apartment);
     const scenarios = buildScenarios(scenarioBases, apartmentInputs, rates);
     const decision = evaluateDecision(scenarios);
     const selectedScenario =
-      scenarios.find((scenario) => scenario.id === apartment.selectedScenarioId) ??
-      decision.recommendation ??
-      scenarios[0];
+      scenarios.find((scenario) => scenario.id === selectedId) ?? scenarios[0];
 
-    return {
-      apartment,
-      inputs: apartmentInputs,
-      scenarios,
-      decision,
-      selectedScenario,
-      averageSpecialRepayment: averageAnnualSpecialRepayment(
-        apartment.annualSpecialRepayments,
-        baseInputs.annualSpecialRepayment,
-      ),
-      specialRepaymentTotal: apartment.annualSpecialRepayments.reduce(
-        (sum, amount) => sum + Math.max(0, amount),
-        0,
-      ),
-    };
+    return { apartment, inputs: apartmentInputs, scenarios, decision, selectedScenario };
   });
 }
 
@@ -652,7 +706,7 @@ function constraintsFailedInAll(scenarios: ScenarioResult[]): ConstraintId[] {
     return [];
   }
 
-  const candidates: ConstraintId[] = ["cash", "reserve", "burden"];
+  const candidates: ConstraintId[] = ["payment", "cash", "reserve", "burden"];
   return candidates.filter((id) =>
     scenarios.every((scenario) => scenario.diagnosis.failed.includes(id)),
   );
@@ -662,8 +716,9 @@ function constraintsFailedInAll(scenarios: ScenarioResult[]): ConstraintId[] {
  * The infeasible scenario that came closest, and its primary blocker.
  *
  * Ranked by how many constraints failed; ties keep the given scenario order.
- * NOTE: `gap` is in € for `cash`/`reserve` and a ratio for `burden` — the consumer
- * must format according to `constraint`.
+ * NOTE: `gap` carries a different unit per constraint — € for `cash`/`reserve`,
+ * €/Monat for `payment`, a ratio for `burden`. The consumer must format according to
+ * `constraint`; this list omitted `payment` and the UI printed it as a one-off €.
  */
 function findNarrowestMiss(scenarios: ScenarioResult[]): DecisionDiagnosis["narrowestMiss"] {
   const infeasible = scenarios.filter((scenario) => !scenario.feasible);
@@ -674,7 +729,7 @@ function findNarrowestMiss(scenarios: ScenarioResult[]): DecisionDiagnosis["narr
   const closest = infeasible.reduce((best, scenario) =>
     scenario.diagnosis.failed.length < best.diagnosis.failed.length ? scenario : best,
   );
-  const priority: ConstraintId[] = ["cash", "reserve", "burden"];
+  const priority: ConstraintId[] = ["payment", "cash", "reserve", "burden"];
   const blocker = priority.find((id) => closest.diagnosis.failed.includes(id));
   if (!blocker) {
     return null;
@@ -731,54 +786,19 @@ export function compareEkScenarios(
     from,
     to,
     extraCashRequired,
-    cashLeftDelta: to.cashLeft - from.cashLeft,
     monthlyDelta: to.allInMonthly - from.allInMonthly,
-    remainingDebtDelta:
-      to.mortgage.remainingAfterFixed - from.mortgage.remainingAfterFixed,
+    runtimeDelta: to.mortgage.runtimeYears - from.mortgage.runtimeYears,
     horizonYears,
     interestSavedFixed,
-    interestSavedTotal: from.mortgage.interestTotal - to.mortgage.interestTotal,
     etfForegone,
     netAdvantageFixed: interestSavedFixed - etfForegone,
   };
 }
 
-/** Compare our numbers against an external calculator or a bank offer. PRODUCT_SPEC §19. */
-export function compareExternal(
-  scenario: ScenarioResult,
-  external: ExternalCheck,
-  tolerancePct = 1,
-): ExternalDiff[] {
-  const fields: { field: keyof ExternalCheck; label: string; ours: number }[] = [
-    { field: "monthlyPayment", label: "Monatsrate", ours: scenario.mortgage.regularMonthlyPayment },
-    { field: "interestFixed", label: "Zinsen in der Zinsbindung", ours: scenario.mortgage.interestFixed },
-    { field: "remainingAfterFixed", label: "Restschuld nach Zinsbindung", ours: scenario.mortgage.remainingAfterFixed },
-  ];
-
-  return fields.flatMap(({ field, label, ours }) => {
-    const theirs = external[field];
-    if (theirs == null || !Number.isFinite(theirs)) {
-      return [];
-    }
-
-    const abs = ours - theirs;
-    const pct = theirs === 0 ? 0 : (abs / theirs) * 100;
-    return [{
-      field,
-      label,
-      ours,
-      theirs,
-      abs,
-      pct,
-      withinTolerance: Math.abs(pct) <= tolerancePct,
-    }];
-  });
-}
-
 /**
  * Total interest for a scenario running a given Sondertilgung plan.
- * Use with `{ kind: "none" }` to get the break-even target: 15% EK making no special
- * repayments at all. See docs/DECISIONS.md D1.
+ * Use with `{ kind: "none" }` for the break-even target — an EK level making no
+ * special repayments at all. See docs/DECISIONS.md D1, D17.
  */
 export function interestForPlan(
   scenarioBase: ScenarioBase,
@@ -793,9 +813,9 @@ export function interestForPlan(
  * How much flat annual Sondertilgung this scenario needs to reach `targetInterest`.
  *
  * `targetInterest` must be produced under a stated baseline — pass it in from
- * `interestForPlan(ek15, ..., { kind: "none" })` for the default question. Comparing a
- * flat-repaying candidate against a target that itself runs a full yearly path
- * understates the answer, which is what the code used to do implicitly.
+ * `interestForPlan(other, ..., { kind: "none" })`. Comparing a flat-repaying candidate
+ * against a target that itself runs a full yearly path understates the answer, which
+ * is what the code used to do implicitly.
  */
 export function requiredSpecialToMatch(
   scenarioBase: ScenarioBase,
@@ -831,65 +851,133 @@ export function requiredSpecialToMatch(
   return { amount: high, feasible: true, maxSpecial };
 }
 
-/** Which Sondertilgung variant a row is being measured under. */
-export type SpecialPlanMode = "none" | "plan";
+/**
+ * Who would have to pay extra to close the gap between two EK levels.
+ *
+ * The direction is the whole point. "Your choice needs 7.400 €/year" and "20% EK
+ * needs 7.400 €/year" are different statements about different people's money, and
+ * the old freely-chosen-baseline UI let them be confused for one another.
+ */
+export type SpecialCatchUp = {
+  payer: "selection" | "row";
+  /**
+   * Flat annual amount, paid **every year for the whole runtime**. Null = unreachable
+   * under the cap. It is not comparable to the yearly plan's average: the plan is a
+   * finite path (ten years, then nothing), so the same € figure buys less interest.
+   * Use `planCovers` for "does our plan get there", never a comparison against the average.
+   */
+  amount: number | null;
+  maxSpecial: number;
+  /** The payer is already at least as cheap, so nothing is required. */
+  alreadyAhead: boolean;
+  /** Total interest the payer has to reach. */
+  targetInterest: number;
+  /** The payer's modelled total interest running the configured yearly path. */
+  payerInterestWithPlan: number;
+  /**
+   * Whether that modelled path — not its average — already reaches the target.
+   * The UI once answered this by comparing `annualSpecialRepayment` against `amount`,
+   * which claimed a ten-year 6.000 €/Jahr plan covered a 5.712 €/Jahr indefinite
+   * requirement while it was in fact 15.519 € of interest short. See docs/DECISIONS.md D22.
+   */
+  planCovers: boolean;
+  /** Interest the payer is still short. ≤ 0 once the path reaches the target. */
+  planShortfall: number;
+};
 
 export type SpecialMatchRow = {
   base: ScenarioBase;
-  isBaseline: boolean;
+  isSelected: boolean;
   /** Total interest for this EK level with no special repayments at all. */
   interestNoSpecial: number;
   /** Total interest for this EK level running the configured yearly plan. */
   interestWithPlan: number;
-  /** Interest minus the baseline's, under the row's own plan mode. Negative = cheaper. */
-  deltaToBaseline: number;
-  /** Flat annual Sondertilgung this EK level needs to reach the baseline. */
-  required: SpecialBreakEven;
+  /** This row without Sondertilgung minus the selection with its plan. Negative = row is cheaper. */
+  deltaToSelection: number;
+  /** Null on the selected row — a scenario does not catch up with itself. */
+  catchUp: SpecialCatchUp | null;
 };
 
 export type SpecialComparison = {
-  baselineInterest: number;
+  selectionInterestNoSpecial: number;
+  selectionInterestWithPlan: number;
+  /** Negative = the plan saves this much interest. */
+  planSaving: number;
   rows: SpecialMatchRow[];
 };
 
 /**
- * Compares every EK level against a freely chosen baseline — any EK level, with or
- * without its own Sondertilgung.
+ * Measures every EK level against the one the couple has actually selected, running
+ * its current yearly plan.
  *
- * The baseline used to be hardwired to "15% EK without Sondertilgung". That answered
- * exactly one question well and every other one not at all: the couple's real
- * comparisons are things like "10% EK plus our plan vs 5% EK paying more", which the
- * fixed target could not express.
+ * The reference point used to be freely choosable, with a second control for "with or
+ * without Sondertilgung". Two pickers meant four readings of the same table and the
+ * owner could not tell which question was on screen. There is only one question worth
+ * asking here — "what does our Sondertilgung buy us, and does it close the gap to the
+ * other EK levels?" — so the selection above is the reference and nothing is chosen
+ * twice. See docs/DECISIONS.md D17.
  */
 export function compareSpecialScenarios(
   bases: ScenarioBase[],
-  baselineId: ScenarioId,
-  baselineMode: SpecialPlanMode,
+  selectedId: ScenarioId,
   inputs: MortgageInputs,
   rates: InterestRates,
 ): SpecialComparison {
-  const planFor = (mode: SpecialPlanMode): SpecialPlan =>
-    mode === "none" ? { kind: "none" } : planFromInputs(inputs);
-
-  const baselineBase = bases.find((base) => base.id === baselineId) ?? bases[0];
-  const baselineInterest = interestForPlan(baselineBase, inputs, rates, planFor(baselineMode));
+  const selectedBase = bases.find((base) => base.id === selectedId) ?? bases[0];
+  const selectionInterestNoSpecial = interestForPlan(selectedBase, inputs, rates, { kind: "none" });
+  const selectionInterestWithPlan = interestForPlan(
+    selectedBase,
+    inputs,
+    rates,
+    planFromInputs(inputs),
+  );
 
   const rows = bases.map((base) => {
     const interestNoSpecial = interestForPlan(base, inputs, rates, { kind: "none" });
     const interestWithPlan = interestForPlan(base, inputs, rates, planFromInputs(inputs));
-    const own = baselineMode === "none" ? interestNoSpecial : interestWithPlan;
+
+    let catchUp: SpecialCatchUp | null = null;
+    if (base.id !== selectedBase.id) {
+      // Whoever is behind is the one who has to pay. Measured against the other side
+      // running no Sondertilgung, because that is the honest comparison: the other EK
+      // level is not obliged to adopt our plan.
+      const rowIsCheaper = interestNoSpecial < selectionInterestWithPlan;
+      const payer = rowIsCheaper ? "selection" : "row";
+      const target = rowIsCheaper ? interestNoSpecial : selectionInterestWithPlan;
+      const chaser = rowIsCheaper ? selectedBase : base;
+      const required = requiredSpecialToMatch(chaser, target, inputs, rates);
+      // What the payer's configured yearly path actually achieves, so "covered" is
+      // decided on modelled interest instead of on the path's average € figure.
+      const payerInterestWithPlan = rowIsCheaper ? selectionInterestWithPlan : interestWithPlan;
+
+      catchUp = {
+        payer,
+        amount: required.amount,
+        maxSpecial: required.maxSpecial,
+        alreadyAhead: required.amount === 0,
+        targetInterest: target,
+        payerInterestWithPlan,
+        planCovers: payerInterestWithPlan <= target,
+        planShortfall: payerInterestWithPlan - target,
+      };
+    }
 
     return {
       base,
-      isBaseline: base.id === baselineId,
+      isSelected: base.id === selectedBase.id,
       interestNoSpecial,
       interestWithPlan,
-      deltaToBaseline: own - baselineInterest,
-      required: requiredSpecialToMatch(base, baselineInterest, inputs, rates),
+      deltaToSelection: interestNoSpecial - selectionInterestWithPlan,
+      catchUp,
     };
   });
 
-  return { baselineInterest, rows };
+  return {
+    selectionInterestNoSpecial,
+    selectionInterestWithPlan,
+    planSaving: selectionInterestWithPlan - selectionInterestNoSpecial,
+    rows,
+  };
 }
 
 export function buildWaitScenario(
@@ -910,16 +998,20 @@ export function buildWaitScenario(
   const adjustedAvailableCapital = inputs.availableCapital + saved;
   const adjustedInterestRate = Math.max(
     0.1,
-    rates[selectedBase.id] + (waitMonths > 0 ? inputs.waitRateShift : 0),
+    rateFor(rates, inputs.fixedRateYears, selectedBase.id) +
+      (waitMonths > 0 ? inputs.waitRateShift : 0),
   );
   const futureInputs: MortgageInputs = {
     ...inputs,
     purchasePrice: futurePrice,
     availableCapital: adjustedAvailableCapital,
   };
+  // Only the column actually in use is shifted — the other binding's rates are not
+  // a forecast this function has any basis to move.
+  const period = normaliseFixedPeriod(inputs.fixedRateYears);
   const futureRates: InterestRates = {
     ...rates,
-    [selectedBase.id]: adjustedInterestRate,
+    [period]: { ...rates[period], [selectedBase.id]: adjustedInterestRate },
   };
   const scenario = buildScenario(selectedBase, futureInputs, futureRates);
 
@@ -936,6 +1028,19 @@ export function buildWaitScenario(
     deltaInterest: scenario.mortgage.interestTotal - selectedNow.mortgage.interestTotal,
     years,
   };
+}
+
+/**
+ * The columns the Warten table shows: the buy-now baseline, the spec's two reference
+ * periods (PRODUCT_SPEC §7.5), and whatever the couple typed into "Wartezeit".
+ *
+ * That last one is the point. The table used to be hardcoded to `[0, 12, 24]` while
+ * "Wartezeit" sat above it as a highlighted input — stored, persisted, and read by
+ * nothing. Deduplicated, so the default of 12 does not produce two identical columns.
+ */
+export function waitPeriodsFor(waitMonths: number): number[] {
+  const requested = Number.isFinite(waitMonths) ? Math.max(0, Math.round(waitMonths)) : 0;
+  return [...new Set([0, 12, 24, requested])].sort((a, b) => a - b);
 }
 
 /**

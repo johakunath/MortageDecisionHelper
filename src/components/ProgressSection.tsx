@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { MortgageInputs, ScenarioResult } from "../lib/calculations";
 import { GLOSSARY } from "../lib/glossary";
-import { formatEur, formatPct, formatYears } from "../lib/format";
+import { formatCompactEur, formatEur, formatPct, formatYears } from "../lib/format";
 import LineChart, { type ChartSeries } from "./LineChart";
 import { Button, Readout, Section } from "./ui";
 
@@ -22,17 +22,10 @@ const VIEWS: { id: ViewId; label: string }[] = [
 ];
 
 const SERIES_COLORS: Record<string, string> = {
-  ek5: "var(--blue)",
-  ek10: "var(--sage)",
-  ek15: "var(--amber)",
+  ek10: "var(--blue)",
+  ek15: "var(--sage)",
+  ek20: "var(--amber)",
 };
-
-function shortEur(value: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} Mio`;
-  if (abs >= 1000) return `${Math.round(value / 1000)}k`;
-  return String(Math.round(value));
-}
 
 /**
  * The time dimension the app otherwise lacks: every number elsewhere is a single
@@ -59,7 +52,7 @@ export default function ProgressSection({
   );
 
   const series = useMemo<ChartSeries[]>(() => {
-    const valueAt = (scenario: ScenarioResult, point: { year: number; balance: number; interestTotal: number }) => {
+    const valueAt = (point: { year: number; balance: number; interestTotal: number }) => {
       if (view === "balance") return point.balance;
       if (view === "interest") return point.interestTotal;
       const propertyValue =
@@ -73,7 +66,7 @@ export default function ProgressSection({
       color: SERIES_COLORS[scenario.id] ?? "var(--ink)",
       points: scenario.mortgage.yearly.map((point) => ({
         x: point.year,
-        y: valueAt(scenario, point),
+        y: valueAt(point),
       })),
     }));
 
@@ -87,7 +80,7 @@ export default function ProgressSection({
         dashed: true,
         points: selectedWithoutSpecial.mortgage.yearly.map((point) => ({
           x: point.year,
-          y: valueAt(selectedWithoutSpecial, point),
+          y: valueAt(point),
         })),
       });
     }
@@ -115,8 +108,8 @@ export default function ProgressSection({
         series={series}
         markers={view === "equity" ? [] : specialYears}
         markerLabel="Sondertilgung"
-        formatValue={shortEur}
-        caption={`${activeView.label} über die Laufzeit, für 5%, 10% und 15% Eigenkapital`}
+        formatValue={formatCompactEur}
+        caption={`${activeView.label} über die Laufzeit, für ${scenarios.map((scenario) => `${scenario.ekRate}%`).join(", ")} Eigenkapital`}
       />
 
       <div className="readout-grid three progress-readouts">
@@ -124,6 +117,7 @@ export default function ProgressSection({
           label="Laufzeit"
           value={formatYears(selected.mortgage.runtimeYears)}
           sub={`bis zur vollständigen Abzahlung · ${selected.label}`}
+          info={GLOSSARY.runtimeYears}
         />
         <Readout
           label="Immobilienwert bei Abzahlung"

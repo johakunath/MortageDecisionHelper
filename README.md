@@ -6,7 +6,7 @@ A private decision-support tool for one German couple buying their first owner-o
 
 > **What do we gain, and what do we give up, when we use more Eigenkapital?**
 
-It compares three down-payment strategies — **5%, 10% and 15%** — and makes the trade-off between *cheaper financing* and *keeping cash* explicit enough to discuss.
+It compares three down-payment strategies — **10%, 15% and 20%**, the variants the broker actually quoted — and makes the trade-off between *cheaper financing* and *keeping cash* explicit enough to discuss. All three are compared at the same monthly rate, so more Eigenkapital shows up as a shorter term rather than a smaller payment.
 
 It is not a bank tool, not a public calculator, and it deliberately gives no advice. It computes consequences; the couple decides.
 
@@ -70,7 +70,7 @@ Everything stays **in this browser** — there is no server and nothing is trans
 - **No refinancing model.** Interest during the fixed-rate period is reliable; the full-term total assumes today's rate holds forever and is **illustrative only**
 - **No tax** — not on ETF sales, not on the property
 - **No rent-vs-buy analysis.** The rent comparison is pure monthly cash flow
-- **No live rates.** The three interest rates are assumptions you type in
+- **No live rates.** The six Sollzinsen (three EK levels × two Zinsbindungen) are assumptions you type in
 - **No budgeting, no bank-offer comparison, no account connections, no portfolio management**
 
 Full list of simplifications and known defects: [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md).
