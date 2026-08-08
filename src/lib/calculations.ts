@@ -281,7 +281,6 @@ export type ApartmentCase = {
   purchasePrice: number;
   renovation: number;
   monthlyOwnershipCosts: number;
-  selectedScenarioId: ScenarioId;
   annualSpecialRepayments: number[];
 };
 
@@ -290,9 +289,8 @@ export type ApartmentComparisonResult = {
   inputs: MortgageInputs;
   scenarios: ScenarioResult[];
   decision: DecisionResult;
+  /** This apartment at the EK level the couple has selected on screen. */
   selectedScenario: ScenarioResult;
-  averageSpecialRepayment: number;
-  specialRepaymentTotal: number;
 };
 
 export function monthlyAnnuity(
@@ -669,36 +667,29 @@ export function buildApartmentInputs(
   };
 }
 
+/**
+ * Every apartment at one EK level — the one selected on screen.
+ *
+ * `selectedId` is a parameter rather than a property of the apartment: `ApartmentCase`
+ * used to carry a `selectedScenarioId` that no control ever wrote, so it sat frozen at
+ * its default while the page showed whatever the doors had selected. An apartment is
+ * the context a decision is made in, not a place to keep a second copy of it (D3).
+ */
 export function compareApartmentCases(
   apartments: ApartmentCase[],
   scenarioBases: ScenarioBase[],
   baseInputs: MortgageInputs,
   rates: InterestRates,
+  selectedId: ScenarioId,
 ): ApartmentComparisonResult[] {
   return apartments.map((apartment) => {
     const apartmentInputs = buildApartmentInputs(baseInputs, apartment);
     const scenarios = buildScenarios(scenarioBases, apartmentInputs, rates);
     const decision = evaluateDecision(scenarios);
     const selectedScenario =
-      scenarios.find((scenario) => scenario.id === apartment.selectedScenarioId) ??
-      decision.recommendation ??
-      scenarios[0];
+      scenarios.find((scenario) => scenario.id === selectedId) ?? scenarios[0];
 
-    return {
-      apartment,
-      inputs: apartmentInputs,
-      scenarios,
-      decision,
-      selectedScenario,
-      averageSpecialRepayment: averageAnnualSpecialRepayment(
-        apartment.annualSpecialRepayments,
-        baseInputs.annualSpecialRepayment,
-      ),
-      specialRepaymentTotal: apartment.annualSpecialRepayments.reduce(
-        (sum, amount) => sum + Math.max(0, amount),
-        0,
-      ),
-    };
+    return { apartment, inputs: apartmentInputs, scenarios, decision, selectedScenario };
   });
 }
 

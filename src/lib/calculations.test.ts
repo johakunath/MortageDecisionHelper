@@ -119,7 +119,6 @@ describe("calculation engine", () => {
           purchasePrice: 600000,
           renovation: 0,
           monthlyOwnershipCosts: 700,
-          selectedScenarioId: "ek10",
           annualSpecialRepayments: [0, 0, 0],
         },
         {
@@ -128,13 +127,13 @@ describe("calculation engine", () => {
           purchasePrice: 700000,
           renovation: 10000,
           monthlyOwnershipCosts: 900,
-          selectedScenarioId: "ek10",
           annualSpecialRepayments: [10000, 10000, 10000],
         },
       ],
       EK_SCENARIOS,
       DEFAULT_INPUTS,
       CASE_PRESETS.case720.rates,
+      "ek10",
     );
 
     expect(results[0].inputs.purchasePrice).toBe(600000);

@@ -111,8 +111,8 @@ export default function App() {
   const decision = useMemo(() => evaluateDecision(scenarios), [scenarios]);
 
   const apartmentResults = useMemo(
-    () => compareApartmentCases(apartmentCases, EK_SCENARIOS, inputs, rates),
-    [apartmentCases, inputs, rates],
+    () => compareApartmentCases(apartmentCases, EK_SCENARIOS, inputs, rates, selected.id),
+    [apartmentCases, inputs, rates, selected.id],
   );
 
   // Sondertilgung is always measured against the EK level chosen above, running its
@@ -205,7 +205,6 @@ export default function App() {
         purchasePrice: DEFAULT_APARTMENT_CASES[0].purchasePrice,
         renovation: 0,
         monthlyOwnershipCosts: DEFAULT_APARTMENT_CASES[0].monthlyOwnershipCosts,
-        selectedScenarioId: "ek10",
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);

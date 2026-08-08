@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { defaultState, loadNamed, saveExists, saveNamed, storageAvailable } from "./storage";
-import { DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
+import { DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -68,7 +68,10 @@ describe("persistence", () => {
     // "ek5" no longer exists and must not survive as a dangling id.
     const knownIds = EK_SCENARIOS.map((scenario) => scenario.id);
     expect(knownIds).toContain(loaded.selectedId);
-    expect(knownIds).toContain(loaded.apartmentCases[0].selectedScenarioId);
+
+    // The apartment is rebuilt field by field, so a key from an older shape cannot
+    // ride along into live state.
+    expect(loaded.apartmentCases[0]).not.toHaveProperty("selectedScenarioId");
 
     // 20 years is no longer an offered binding.
     expect([10, 15]).toContain(loaded.inputs.fixedRateYears);
@@ -79,6 +82,50 @@ describe("persistence", () => {
     expect(loaded.inputs.monthlyPayment).toBeGreaterThan(0);
     expect(loaded.rates[10].ek10).toBe(DEFAULT_RATES[10].ek10);
     expect(loaded.rates[15].ek20).toBe(DEFAULT_RATES[15].ek20);
+  });
+
+  it("falls back to defaults for stored values that are present but unusable", () => {
+    // A spread over the defaults only guards MISSING fields. These are all present,
+    // and every one of them used to reach the model and turn its output into NaN.
+    const corrupt = {
+      ...defaultState(),
+      inputs: {
+        ...defaultState().inputs,
+        purchasePrice: null,
+        monthlyPayment: "1.900,00",
+        reserveTarget: Number.NaN,
+        householdNetIncome: 9100,
+        annualSpecialRepayments: [6000, "nope", -500, null],
+      },
+      rates: { 10: { ek10: "drei", ek15: 3.86, ek20: 3.76 }, 15: DEFAULT_RATES[15] },
+      apartmentCases: [
+        { id: "flat-a", label: "Wohnung A", purchasePrice: undefined, renovation: "x" },
+      ],
+    };
+    window.localStorage.setItem("mdh:save:kaputt", JSON.stringify(corrupt));
+
+    const loaded = loadNamed("kaputt")!;
+    expect(loaded).not.toBeNull();
+
+    for (const value of Object.values(loaded.inputs)) {
+      if (typeof value === "number") expect(Number.isFinite(value)).toBe(true);
+    }
+    expect(loaded.inputs.purchasePrice).toBe(DEFAULT_INPUTS.purchasePrice);
+    expect(loaded.inputs.monthlyPayment).toBe(DEFAULT_INPUTS.monthlyPayment);
+    expect(loaded.inputs.reserveTarget).toBe(DEFAULT_INPUTS.reserveTarget);
+    // A usable stored value is still the user's, not the default.
+    expect(loaded.inputs.householdNetIncome).toBe(9100);
+    // Unusable amounts become 0; negative Sondertilgung is not a thing.
+    expect(loaded.inputs.annualSpecialRepayments).toEqual([6000, 0, 0, 0]);
+
+    expect(loaded.rates[10].ek10).toBe(DEFAULT_RATES[10].ek10);
+    expect(loaded.rates[10].ek15).toBe(3.86);
+
+    const apartment = loaded.apartmentCases[0];
+    expect(Number.isFinite(apartment.purchasePrice)).toBe(true);
+    expect(Number.isFinite(apartment.renovation)).toBe(true);
+    expect(Number.isFinite(apartment.monthlyOwnershipCosts)).toBe(true);
+    expect(apartment.annualSpecialRepayments).toEqual([]);
   });
 
   it("rejects a save from an unknown future version", () => {

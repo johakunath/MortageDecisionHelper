@@ -52,7 +52,7 @@ export default function ProgressSection({
   );
 
   const series = useMemo<ChartSeries[]>(() => {
-    const valueAt = (scenario: ScenarioResult, point: { year: number; balance: number; interestTotal: number }) => {
+    const valueAt = (point: { year: number; balance: number; interestTotal: number }) => {
       if (view === "balance") return point.balance;
       if (view === "interest") return point.interestTotal;
       const propertyValue =
@@ -66,7 +66,7 @@ export default function ProgressSection({
       color: SERIES_COLORS[scenario.id] ?? "var(--ink)",
       points: scenario.mortgage.yearly.map((point) => ({
         x: point.year,
-        y: valueAt(scenario, point),
+        y: valueAt(point),
       })),
     }));
 
@@ -80,7 +80,7 @@ export default function ProgressSection({
         dashed: true,
         points: selectedWithoutSpecial.mortgage.yearly.map((point) => ({
           x: point.year,
-          y: valueAt(selectedWithoutSpecial, point),
+          y: valueAt(point),
         })),
       });
     }

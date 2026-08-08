@@ -7,7 +7,7 @@ import {
 } from "../lib/calculations";
 import { formatCompactEur, formatEur } from "../lib/format";
 import BarChart, { type BarGroup } from "./BarChart";
-import { Button, Readout, Section, SignedValue } from "./ui";
+import { Button, Readout, Section, SignedValue, useNumericDraft } from "./ui";
 
 type SondertilgungPanelProps = {
   inputs: MortgageInputs;
@@ -67,6 +67,49 @@ function CatchUpCell({ row, selected }: { row: SpecialMatchRow; selected: Scenar
           : ""}
       </small>
     </span>
+  );
+}
+
+/**
+ * One year of the plan.
+ *
+ * Its own component so the year's input can hold a typing draft: 0 means "no
+ * repayment in this year", so clearing the field to retype it used to commit a 0 and
+ * drop the row out of the list mid-edit — the same click as the ✕ button beside it.
+ */
+function SpecialYearRow({
+  year,
+  amount,
+  cap,
+  onChange,
+}: {
+  year: number;
+  amount: number;
+  cap: number;
+  onChange: (value: number) => void;
+}) {
+  const draft = useNumericDraft(amount, onChange);
+
+  return (
+    <div className={`special-entry ${amount > cap ? "is-over-cap" : ""}`}>
+      <span className="special-entry-year">Jahr {year}</span>
+      <label className="special-row">
+        <input type="number" min={0} step={500} aria-label={`Sondertilgung Jahr ${year}`} {...draft} />
+        <em>€</em>
+      </label>
+      <span className="special-entry-monthly">
+        = {formatEur(amount / 12)}/Monat
+        {amount > cap ? <em className="special-over-cap">über dem Cap</em> : null}
+      </span>
+      <button
+        type="button"
+        className="special-entry-remove"
+        aria-label={`Jahr ${year} entfernen`}
+        onClick={() => onChange(0)}
+      >
+        ✕
+      </button>
+    </div>
   );
 }
 
@@ -219,37 +262,13 @@ export default function SondertilgungPanel({
             <p className="save-empty">Keine Sondertilgung geplant.</p>
           ) : (
             entries.map((entry) => (
-              <div
+              <SpecialYearRow
                 key={entry.year}
-                className={`special-entry ${entry.amount > cap ? "is-over-cap" : ""}`}
-              >
-                <span className="special-entry-year">Jahr {entry.year}</span>
-                <label className="special-row">
-                  <input
-                    type="number"
-                    min={0}
-                    step={500}
-                    value={entry.amount}
-                    aria-label={`Sondertilgung Jahr ${entry.year}`}
-                    onChange={(event) =>
-                      onSpecialRepaymentChange(entry.year - 1, Number(event.target.value) || 0)
-                    }
-                  />
-                  <em>€</em>
-                </label>
-                <span className="special-entry-monthly">
-                  = {formatEur(entry.amount / 12)}/Monat
-                  {entry.amount > cap ? <em className="special-over-cap">über dem Cap</em> : null}
-                </span>
-                <button
-                  type="button"
-                  className="special-entry-remove"
-                  aria-label={`Jahr ${entry.year} entfernen`}
-                  onClick={() => onSpecialRepaymentChange(entry.year - 1, 0)}
-                >
-                  ✕
-                </button>
-              </div>
+                year={entry.year}
+                amount={entry.amount}
+                cap={cap}
+                onChange={(value) => onSpecialRepaymentChange(entry.year - 1, value)}
+              />
             ))
           )}
         </div>

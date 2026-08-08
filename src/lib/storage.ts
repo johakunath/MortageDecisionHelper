@@ -62,15 +62,101 @@ export function storageAvailable(): boolean {
   }
 }
 
-/**
- * Merges over the current defaults rather than trusting the stored object.
- * A save written before a new input field existed would otherwise load that field
- * as `undefined` and produce NaN throughout the model.
- */
 /** A stored id is only usable if the scenario set still contains it. */
 function reviveScenarioId(value: unknown): ScenarioId {
   const known = EK_SCENARIOS.find((scenario) => scenario.id === value);
   return known ? known.id : EK_SCENARIOS[0].id;
+}
+
+/**
+ * Every number that comes back out of localStorage passes through here.
+ *
+ * Spreading the stored object over the defaults only guards fields that are *missing*.
+ * A key that is present but holds `null`, a string or `NaN` — a hand-edited save, a
+ * half-written autosave, a shape from a future build — survives the spread and turns
+ * every downstream figure into NaN, which the UI then renders as "—" across the board
+ * with no indication why.
+ */
+function reviveNumber(value: unknown, fallback: number): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  // Deliberately NOT `Number(value)`: it maps null, "", [] and false to 0, so the
+  // junk this function exists to catch would arrive as a plausible-looking zero —
+  // a stored `purchasePrice: null` becoming a 0 € flat rather than the default.
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+}
+
+function reviveAmounts(value: unknown, fallback: number[] = []): number[] {
+  if (!Array.isArray(value)) {
+    return [...fallback];
+  }
+  return value.map((amount) => Math.max(0, reviveNumber(amount, 0)));
+}
+
+/** Every `MortgageInputs` field is a number except the Sondertilgung path. */
+type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
+
+function reviveInputs(stored: unknown): MortgageInputs {
+  const raw = (stored ?? {}) as Record<string, unknown>;
+  const revived: MortgageInputs = {
+    ...DEFAULT_INPUTS,
+    annualSpecialRepayments: reviveAmounts(
+      raw.annualSpecialRepayments,
+      DEFAULT_INPUTS.annualSpecialRepayments,
+    ),
+  };
+
+  for (const key of Object.keys(DEFAULT_INPUTS) as (keyof MortgageInputs)[]) {
+    if (key === "annualSpecialRepayments") continue;
+    const numericKey = key as NumericInputKey;
+    revived[numericKey] = reviveNumber(raw[numericKey], DEFAULT_INPUTS[numericKey]);
+  }
+
+  return revived;
+}
+
+function reviveRateRow(
+  stored: unknown,
+  fallback: Record<ScenarioId, number>,
+): Record<ScenarioId, number> {
+  const raw = (stored ?? {}) as Record<string, unknown>;
+  return {
+    ek10: reviveNumber(raw.ek10, fallback.ek10),
+    ek15: reviveNumber(raw.ek15, fallback.ek15),
+    ek20: reviveNumber(raw.ek20, fallback.ek20),
+  };
+}
+
+/**
+ * Built field by field rather than spread, so a stored apartment can only contribute
+ * the four values it is allowed to own — and keys from older shapes (`selectedScenarioId`)
+ * do not ride along into the live state.
+ */
+function reviveApartment(stored: unknown, index: number): ApartmentCase {
+  const raw = (stored ?? {}) as Record<string, unknown>;
+  const fallback =
+    DEFAULT_APARTMENT_CASES[Math.min(index, DEFAULT_APARTMENT_CASES.length - 1)];
+
+  return {
+    id: typeof raw.id === "string" && raw.id.length > 0 ? raw.id : `flat-${index + 1}`,
+    label: typeof raw.label === "string" && raw.label.length > 0 ? raw.label : fallback.label,
+    purchasePrice: reviveNumber(raw.purchasePrice, fallback.purchasePrice),
+    renovation: reviveNumber(raw.renovation, fallback.renovation),
+    monthlyOwnershipCosts: reviveNumber(
+      raw.monthlyOwnershipCosts,
+      fallback.monthlyOwnershipCosts,
+    ),
+    annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
+  };
 }
 
 /**
@@ -101,9 +187,9 @@ function migrateV1(parsed: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
- * Merges over the current defaults rather than trusting the stored object.
- * A save written before a new input field existed would otherwise load that field
- * as `undefined` and produce NaN throughout the model.
+ * Rebuilds a usable state from stored text, or returns null.
+ * Nothing is trusted: missing fields fall back to the defaults, and present-but-unusable
+ * ones do too. See `reviveNumber`.
  */
 function reviveState(raw: string): PersistedState | null {
   try {
@@ -115,13 +201,7 @@ function reviveState(raw: string): PersistedState | null {
     const storedCases = parsed.apartmentCases;
     if (!Array.isArray(storedCases) || storedCases.length === 0) return null;
 
-    const apartmentCases: ApartmentCase[] = storedCases.map((apartment: ApartmentCase) => ({
-      ...apartment,
-      selectedScenarioId: reviveScenarioId(apartment.selectedScenarioId),
-      annualSpecialRepayments: Array.isArray(apartment.annualSpecialRepayments)
-        ? apartment.annualSpecialRepayments.map((amount) => (Number.isFinite(amount) ? amount : 0))
-        : [],
-    }));
+    const apartmentCases: ApartmentCase[] = storedCases.map(reviveApartment);
     const activeApartmentId = apartmentCases.some((a) => a.id === parsed.activeApartmentId)
       ? (parsed.activeApartmentId as string)
       : apartmentCases[0].id;
@@ -129,10 +209,10 @@ function reviveState(raw: string): PersistedState | null {
 
     return {
       version: CURRENT_VERSION,
-      inputs: { ...DEFAULT_INPUTS, ...(parsed.inputs as Partial<MortgageInputs>) },
+      inputs: reviveInputs(parsed.inputs),
       rates: {
-        10: { ...DEFAULT_RATES[10], ...storedRates?.[10] },
-        15: { ...DEFAULT_RATES[15], ...storedRates?.[15] },
+        10: reviveRateRow(storedRates?.[10], DEFAULT_RATES[10]),
+        15: reviveRateRow(storedRates?.[15], DEFAULT_RATES[15]),
       },
       apartmentCases,
       activeApartmentId,

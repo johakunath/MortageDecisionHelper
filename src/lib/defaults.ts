@@ -66,7 +66,6 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 450000,
     renovation: 0,
     monthlyOwnershipCosts: 640,
-    selectedScenarioId: "ek10",
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -75,7 +74,6 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 500000,
     renovation: 10000,
     monthlyOwnershipCosts: 690,
-    selectedScenarioId: "ek10",
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -84,7 +82,6 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 600000,
     renovation: 5000,
     monthlyOwnershipCosts: 760,
-    selectedScenarioId: "ek10",
     annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
   },
 ];
