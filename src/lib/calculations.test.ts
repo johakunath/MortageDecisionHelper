@@ -517,5 +517,18 @@ describe("calculation engine", () => {
     const honest = buildScenario(LOWEST, DEFAULT_INPUTS, DEFAULT_RATES);
     expect(honest.paymentSubstituted).toBe(false);
     expect(honest.mortgage.regularMonthlyPayment).toBeCloseTo(DEFAULT_INPUTS.monthlyPayment, 6);
+
+    // Do not hide a substitution merely because it is less than the 50-cent display
+    // rounding threshold. The model's 0,01% floor is 3,375 €/month above interest-only
+    // for this loan; a payment 25 cents below it still activates the floor.
+    const minimumModelledPayment =
+      (honest.loan * (honest.interestRate + 0.01)) / 1200;
+    const boundary = buildScenario(LOWEST, {
+      ...DEFAULT_INPUTS,
+      monthlyPayment: minimumModelledPayment - 0.25,
+    }, DEFAULT_RATES);
+    expect(boundary.mortgage.regularMonthlyPayment - boundary.diagnosis.checks[0].actual)
+      .toBeCloseTo(0.25, 6);
+    expect(boundary.paymentSubstituted).toBe(true);
   });
 });

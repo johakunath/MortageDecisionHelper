@@ -535,10 +535,12 @@ export function buildScenario(
   // Interest-only floor: below this the balance never falls, whatever the plan says.
   const interestOnlyPayment = (loan * interestRate) / 1200;
   const amortises = inputs.monthlyPayment > interestOnlyPayment && mortgage.runtimeYears <= 60;
-  // `repaymentRateFromMonthlyPayment` floors the Tilgungssatz at 0,01%, so the simulated
-  // annuity equals the entered one exactly unless that floor bit. When it did, the whole
-  // scenario describes a payment nobody asked for and must be labelled, not just failed.
-  const paymentSubstituted = mortgage.regularMonthlyPayment > inputs.monthlyPayment + 0.5;
+  // `repaymentRateFromMonthlyPayment` floors the Tilgungssatz at 0,01%. Detect that
+  // floor from the unrounded implied rate rather than from a euro tolerance: close to
+  // the boundary the substituted annuity can differ by only a few cents, but the
+  // derived Laufzeit, Zinsen and Restschuld still belong to a payment nobody entered.
+  const impliedRepaymentRate = (inputs.monthlyPayment * 1200) / loan - interestRate;
+  const paymentSubstituted = loan > 0 && impliedRepaymentRate < 0.01;
   const checks: ConstraintCheck[] = [
     // Does the rate repay the loan at all, within a lifetime?
     {
