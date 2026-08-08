@@ -551,6 +551,38 @@ describe("calculation engine", () => {
     expect(atTheBar.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(true);
   });
 
+  it("measures the payment bar under the Sondertilgung plan that is running (K17)", () => {
+    // The pass condition reads the simulated runtime, which the plan shortens. A bar
+    // computed without the plan therefore overstates what is missing.
+    const inputs = {
+      ...DEFAULT_INPUTS,
+      monthlyPayment: 1350,
+      annualSpecialRepayments: Array.from({ length: 10 }, () => 2000),
+    };
+    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const check = scenario.diagnosis.checks.find((entry) => entry.id === "payment")!;
+
+    expect(check.passed).toBe(false);
+    expect(scenario.mortgage.runtimeYears).toBeGreaterThan(60);
+
+    // Ignoring the plan reports roughly 99 €; the honest figure is about 41 €.
+    expect(Math.abs(check.gap)).toBeLessThan(60);
+
+    // The bar has to be tight in both directions, or it is not the requirement.
+    const atTheBar = buildScenario(
+      LOWEST,
+      { ...inputs, monthlyPayment: Math.ceil(check.required) },
+      DEFAULT_RATES,
+    );
+    const justUnder = buildScenario(
+      LOWEST,
+      { ...inputs, monthlyPayment: Math.floor(check.required) - 1 },
+      DEFAULT_RATES,
+    );
+    expect(atTheBar.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(true);
+    expect(justUnder.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(false);
+  });
+
   it("flags a Monatsrate the model had to raise to simulate at all (K14)", () => {
     const inputs = { ...DEFAULT_INPUTS, monthlyPayment: 1200 };
     const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
