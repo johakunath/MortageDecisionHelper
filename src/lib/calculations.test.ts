@@ -7,7 +7,6 @@ import {
   calculateCashNeeded,
   compareApartmentCases,
   compareEkScenarios,
-  compareExternal,
   compareSpecialScenarios,
   evaluateDecision,
   interestForPlan,
@@ -503,14 +502,20 @@ describe("calculation engine", () => {
     expect(runtimeYearsFromRepaymentRate(3, 0)).toBe(Infinity);
   });
 
-  it("flags external figures outside the tolerance band", () => {
-    const scenario = buildScenario(MIDDLE, DEFAULT_INPUTS, DEFAULT_RATES);
-    const monthly = scenario.mortgage.regularMonthlyPayment;
-    const diffs = compareExternal(scenario, { monthlyPayment: monthly * 1.005 }, 1);
+  it("flags a Monatsrate the model had to raise to simulate at all (K14)", () => {
+    const inputs = { ...DEFAULT_INPUTS, monthlyPayment: 1200 };
+    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
 
-    expect(diffs).toHaveLength(1);
-    expect(diffs[0].withinTolerance).toBe(true);
-    expect(compareExternal(scenario, { monthlyPayment: monthly * 1.03 }, 1)[0].withinTolerance)
-      .toBe(false);
+    // 405.000 € at 3,87% costs about 1.306 €/Monat in interest alone, so 1.200 € can
+    // never repay it. The Tilgungssatz floor means the model simulates a higher rate.
+    expect(scenario.diagnosis.failed).toContain("payment");
+    expect(scenario.paymentSubstituted).toBe(true);
+    expect(scenario.mortgage.regularMonthlyPayment).toBeGreaterThan(inputs.monthlyPayment);
+
+    // A rate that does amortise is simulated exactly as entered — no silent bump, and
+    // therefore nothing for the UI to warn about.
+    const honest = buildScenario(LOWEST, DEFAULT_INPUTS, DEFAULT_RATES);
+    expect(honest.paymentSubstituted).toBe(false);
+    expect(honest.mortgage.regularMonthlyPayment).toBeCloseTo(DEFAULT_INPUTS.monthlyPayment, 6);
   });
 });

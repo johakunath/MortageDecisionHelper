@@ -124,7 +124,7 @@ Shows: required annual amount · configured amount · maximum contractually perm
 Compare **buy now / wait 12 months / wait 24 months** broken into: additional capital saved, rent paid while waiting, assumed price change, assumed rate change, resulting future loan, resulting total interest, cash remaining after the later purchase, difference vs. buying now.
 
 ### 7.6 QA and assumptions
-Formula descriptions · assumptions · thresholds · validation status · known limitations · test scenarios · **comparison fields for an external mortgage calculator**.
+Formula descriptions · assumptions · thresholds · validation status · known limitations · test scenarios. ~~Comparison fields for an external mortgage calculator~~ — replaced by `src/lib/offer.test.ts`, which pins the engine to the real offer on every commit ([D23](DECISIONS.md)).
 
 ---
 

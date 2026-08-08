@@ -151,6 +151,50 @@ function PaymentField({
 }
 
 /**
+ * Kaufnebenkosten as ONE control: the two real German cases as presets, and the same
+ * value editable directly underneath.
+ *
+ * It used to be a SegmentedChoice and a separate "Kaufnebenkosten frei" field sitting
+ * next to each other, both writing `closingCostRate` — move one and the other jumped.
+ * Two controls for one number is the accretion pattern D6 exists to prevent. The free
+ * entry stays because Grunderwerbsteuer really does vary by Bundesland (3,5%-6,5%);
+ * it is the *second control* that goes, not the capability.
+ */
+function ClosingCostField({
+  inputs,
+  onInputChange,
+}: {
+  inputs: MortgageInputs;
+  onInputChange: (key: NumericInputKey, value: number) => void;
+}) {
+  return (
+    <div className="tilgung-field">
+      <div className="tilgung-modes">
+        {KNK_OPTIONS.map((option) => (
+          <Button
+            key={option.value}
+            active={Math.abs(inputs.closingCostRate - option.value) < 0.001}
+            onClick={() => onInputChange("closingCostRate", option.value)}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+      <InputField
+        label="Kaufnebenkosten"
+        value={inputs.closingCostRate}
+        suffix="%"
+        step={0.01}
+        min={0}
+        onChange={(value) => onInputChange("closingCostRate", value)}
+        info={GLOSSARY.closingCostRate}
+        hint={`= ${formatEur((inputs.purchasePrice * inputs.closingCostRate) / 100)} bei diesem Kaufpreis · andere Bundesländer weichen ab`}
+      />
+    </div>
+  );
+}
+
+/**
  * The Sollzins grid: one row per EK level, one column per Sollzinsbindung. Both
  * columns are always visible and independently editable, and the active one is marked
  * — so it is never a mystery which three of the six numbers are doing the work.
@@ -261,22 +305,7 @@ export default function InputsPanel({
               onChange={(value) => onInputChange("reserveTarget", value)}
               info={GLOSSARY.reserveTarget}
             />
-            <SegmentedChoice
-              label="Kaufnebenkosten"
-              value={inputs.closingCostRate}
-              options={KNK_OPTIONS}
-              onChange={(value) => onInputChange("closingCostRate", value)}
-              info={GLOSSARY.closingCostRate}
-            />
-            <InputField
-              label="Kaufnebenkosten frei"
-              value={inputs.closingCostRate}
-              suffix="%"
-              step={0.01}
-              min={0}
-              onChange={(value) => onInputChange("closingCostRate", value)}
-              hint={`= ${formatEur((inputs.purchasePrice * inputs.closingCostRate) / 100)} bei diesem Kaufpreis`}
-            />
+            <ClosingCostField inputs={inputs} onInputChange={onInputChange} />
             <InputField
               label="Umzug / Möbel"
               value={inputs.moving}

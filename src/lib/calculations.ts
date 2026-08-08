@@ -179,6 +179,13 @@ export type ScenarioResult = ScenarioBase & {
   realPropertyReturnRate: number;
   netWorthAtPayoff: number;
   mortgage: MortgageSimulation;
+  /**
+   * True when the entered Monatsrate cannot amortise the loan and the model simulated
+   * a higher one instead. Every derived figure — Laufzeit, Zinsen, Restschuld — then
+   * belongs to `mortgage.regularMonthlyPayment`, not to what the couple typed, and the
+   * UI has to say so. See docs/ASSUMPTIONS.md K14.
+   */
+  paymentSubstituted: boolean;
   feasible: boolean;
   diagnosis: ScenarioDiagnosis;
   status: string;
@@ -257,22 +264,6 @@ export type EkTradeoff = {
   etfForegone: number;
   /** interestSavedFixed − etfForegone. Positive favours more Eigenkapital. */
   netAdvantageFixed: number;
-};
-
-export type ExternalCheck = {
-  monthlyPayment?: number;
-  interestFixed?: number;
-  remainingAfterFixed?: number;
-};
-
-export type ExternalDiff = {
-  field: string;
-  label: string;
-  ours: number;
-  theirs: number;
-  abs: number;
-  pct: number;
-  withinTolerance: boolean;
 };
 
 export type ApartmentCase = {
@@ -544,6 +535,10 @@ export function buildScenario(
   // Interest-only floor: below this the balance never falls, whatever the plan says.
   const interestOnlyPayment = (loan * interestRate) / 1200;
   const amortises = inputs.monthlyPayment > interestOnlyPayment && mortgage.runtimeYears <= 60;
+  // `repaymentRateFromMonthlyPayment` floors the Tilgungssatz at 0,01%, so the simulated
+  // annuity equals the entered one exactly unless that floor bit. When it did, the whole
+  // scenario describes a payment nobody asked for and must be labelled, not just failed.
+  const paymentSubstituted = mortgage.regularMonthlyPayment > inputs.monthlyPayment + 0.5;
   const checks: ConstraintCheck[] = [
     // Does the rate repay the loan at all, within a lifetime?
     {
@@ -618,6 +613,7 @@ export function buildScenario(
     realPropertyReturnRate,
     netWorthAtPayoff,
     mortgage,
+    paymentSubstituted,
     feasible,
     diagnosis,
     status,
@@ -797,38 +793,6 @@ export function compareEkScenarios(
     etfForegone,
     netAdvantageFixed: interestSavedFixed - etfForegone,
   };
-}
-
-/** Compare our numbers against an external calculator or a bank offer. PRODUCT_SPEC §19. */
-export function compareExternal(
-  scenario: ScenarioResult,
-  external: ExternalCheck,
-  tolerancePct = 1,
-): ExternalDiff[] {
-  const fields: { field: keyof ExternalCheck; label: string; ours: number }[] = [
-    { field: "monthlyPayment", label: "Monatsrate", ours: scenario.mortgage.regularMonthlyPayment },
-    { field: "interestFixed", label: "Zinsen in der Zinsbindung", ours: scenario.mortgage.interestFixed },
-    { field: "remainingAfterFixed", label: "Restschuld nach Zinsbindung", ours: scenario.mortgage.remainingAfterFixed },
-  ];
-
-  return fields.flatMap(({ field, label, ours }) => {
-    const theirs = external[field];
-    if (theirs == null || !Number.isFinite(theirs)) {
-      return [];
-    }
-
-    const abs = ours - theirs;
-    const pct = theirs === 0 ? 0 : (abs / theirs) * 100;
-    return [{
-      field,
-      label,
-      ours,
-      theirs,
-      abs,
-      pct,
-      withinTolerance: Math.abs(pct) <= tolerancePct,
-    }];
-  });
 }
 
 /**

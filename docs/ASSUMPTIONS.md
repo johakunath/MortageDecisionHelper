@@ -185,10 +185,17 @@ over, and four of them happened to favour the same side.
 | K11 | The Warten table is hardcoded to `[0, 12, 24]` while "Wartezeit" sits above it as a highlighted input | The field was stored, persisted and read by nothing — editing it changed no number on screen | `waitPeriodsFor()` |
 | K12 | `narrowestMiss.gap` printed as "es fehlen X €" for every constraint | The `payment` gap is €/**Monat**; a monthly shortfall read as a one-off amount | `describeMiss()` |
 | K13 | "ihr spart \|interestSavedFixed\| Zinsen" in the trade-off statement | The Sollzinsen are hand-entered and not monotone in EK, so the sentence could state the exact opposite of its own number | Sign read, not assumed |
+| K14 | A Monatsrate below the interest-only floor is silently simulated as a higher one (the Tilgungssatz is clamped to 0,01%) | Laufzeit, Zinsen and Restschuld described a payment nobody entered, with only a red status pill to hint at it | `paymentSubstituted` + a named note |
 
 ---
 
 ## 6. Validation status
+
+**There is no in-app comparison panel.** [Spec §7.6](PRODUCT_SPEC.md#76-qa-and-assumptions) once
+asked for fields to type another calculator's figures into. It was built, tested and
+never given a screen, and `offer.test.ts` supersedes it: the same check, against the
+real offer, run automatically on every commit rather than by hand. See
+[D23](DECISIONS.md).
 
 **Validated against a real broker offer.** Source: Finanzierungsangebot vom 07.08.2026,
 Varianten 1A–3B — 90% / 85% / 80% Finanzierung × 10 / 15 Jahre Sollzinsbindung on a

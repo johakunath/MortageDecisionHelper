@@ -351,3 +351,31 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **Rationale.** The comparison is only sound in interest space. Any € figure the UI sets against `amount` re-introduces the same class of bug, because a path and a flat payment of equal size buy different amounts of interest.
 
 **Consequence.** With the selection behind, `planCovers` is false by construction — the row is only shown as a catch-up target *because* the selection running its plan is still more expensive — so the cell now states the shortfall (*"euer Jahresplan bleibt 15.519 € Zinsen darüber"*) instead of a false all-clear, and labels the amount *"jedes Jahr der Laufzeit"* so it cannot be read as a plan average. `CatchUpCell` no longer receives `configured`. Two tests pin both directions: the defaults must not report covered, and a plan that genuinely reaches the target must.
+
+---
+
+## D23 — Validation against other calculators is a test, not a screen
+
+**Date:** 2026-08-08 · **Status:** accepted · **Amends** [PRODUCT_SPEC §7.6](PRODUCT_SPEC.md#76-qa-and-assumptions)
+
+**Context.** `compareExternal` let the user type a second calculator's Monatsrate, fixed-period interest and Restschuld and see the differences with a tolerance band. It was complete, tested — and had no UI, so nobody could reach it. Meanwhile `offer.test.ts` pins all six variants of the real broker offer to within 8 cents on every commit.
+
+**Decision.** The function, its types and its test are removed. §19's validation requirement is met by `offer.test.ts`.
+
+**Rationale.** A test does this job strictly better than a panel: it runs automatically, it cannot be skipped, and it compares against the actual offer rather than whatever the user retypes. Keeping an unreachable feature alive costs render surface, engine surface and reader attention, which is the failure mode [D6](#d6--one-comparison-one-place) names.
+
+**Consequence.** If a *new* offer needs checking, the move is to extend `offer.test.ts` with its variants — not to rebuild the panel. Recoverable from git history if that judgement turns out wrong.
+
+---
+
+## D24 — One number, one control: Kaufnebenkosten
+
+**Date:** 2026-08-08 · **Status:** accepted · **Refines** [D6](#d6--one-comparison-one-place)
+
+**Context.** "Eigenkapital & Kaufkosten" held a SegmentedChoice (8% / 11,57%) and, immediately below it, a free "Kaufnebenkosten frei" field. Both wrote `closingCostRate`, so moving one made the other jump — two controls presenting themselves as two settings while being one.
+
+**Decision.** One `ClosingCostField`: the two presets as buttons above a single editable percentage, laid out exactly like `PaymentField`.
+
+**Rationale.** Free entry earns its place — Grunderwerbsteuer runs 3,5%–6,5% by Bundesland, and the 11,57% default is specific to one deal. What had to go was the *second control*, not the capability. The app already had the right pattern one box below: Monatsrate / Tilgungssatz / Laufzeit is one value with three ways in.
+
+**Consequence.** `SegmentedChoice` now has exactly one caller (Zinsbindung), where the options really are the only permitted values.
