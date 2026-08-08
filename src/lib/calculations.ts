@@ -153,7 +153,14 @@ export type ConstraintCheck = {
   passed: boolean;
   actual: number;
   required: number;
-  /** Signed shortfall. Negative means the constraint is missed by this much. */
+  /**
+   * Signed shortfall. Negative means the constraint is missed by this much.
+   *
+   * For `payment` the bar is the smallest Monatsrate that clears the loan within 60
+   * years **under the configured Sondertilgung plan** — the same plan the pass
+   * condition reads its runtime from, so the gap and the verdict cannot disagree about
+   * what is running.
+   */
   gap: number;
 };
 
@@ -485,6 +492,64 @@ export function simulateMortgage({
   };
 }
 
+/**
+ * The smallest Monatsrate that clears the loan inside the 60-year horizon, **under the
+ * Sondertilgung plan that is actually running**.
+ *
+ * The plan has to be in here because the pass condition already is: feasibility reads
+ * the simulated runtime, which the plan shortens. A bar computed without it overstates
+ * what is missing — 1.350 €/Monat with 2.000 €/Jahr for ten years needs about 41 € more,
+ * not the 99 € a no-plan bar reports.
+ *
+ * Closed form when nothing is repaid early; otherwise bisected, because the runtime
+ * under a yearly path has no closed form. Runtime is non-increasing in the payment, so
+ * the no-plan annuity is always a valid upper bound.
+ */
+export function minimumPaymentForLifetime(
+  loan: number,
+  interestRatePct: number,
+  fixedRateYears: number,
+  specialPlan: SpecialPlan,
+  specialRepaymentLimitRate: number,
+  horizonYears = 60,
+): number {
+  if (loan <= 0) {
+    return 0;
+  }
+
+  const withoutPlan = monthlyAnnuity(
+    loan,
+    interestRatePct,
+    repaymentRateFromRuntimeYears(interestRatePct, horizonYears),
+  );
+  if (!planEverPays(specialPlan)) {
+    return withoutPlan;
+  }
+
+  const runtimeAt = (payment: number) =>
+    simulateMortgage({
+      principal: loan,
+      interestRatePct,
+      repaymentRatePct: repaymentRateFromMonthlyPayment(loan, interestRatePct, payment),
+      fixedRateYears,
+      specialPlan,
+      specialRepaymentLimitRate,
+    }).runtimeYears;
+
+  let low = 0;
+  let high = withoutPlan;
+  for (let i = 0; i < 30; i += 1) {
+    const mid = (low + high) / 2;
+    if (runtimeAt(mid) > horizonYears) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+
+  return high;
+}
+
 export function calculateCashNeeded(
   purchasePrice: number,
   ekRate: number,
@@ -545,6 +610,18 @@ export function buildScenario(
   // Interest-only floor: below this the balance never falls, whatever the plan says.
   const interestOnlyPayment = (loan * interestRate) / 1200;
   const amortises = inputs.monthlyPayment > interestOnlyPayment && mortgage.runtimeYears <= 60;
+  // The bar the check actually applies: the smallest annuity that clears the loan
+  // inside the 60-year horizon, under the same plan the pass condition is read from.
+  // Reporting the shortfall against `interestOnlyPayment` instead produced a POSITIVE
+  // gap for a payment that clears the interest but would take 80 years — and the UI
+  // printed that as an amount still missing. K17.
+  const minimumPayment = minimumPaymentForLifetime(
+    loan,
+    interestRate,
+    inputs.fixedRateYears,
+    specialPlan,
+    inputs.specialRepaymentLimitRate,
+  );
   // `repaymentRateFromMonthlyPayment` floors the Tilgungssatz at 0,01%. Detect that
   // floor from the unrounded implied rate rather than from a euro tolerance: close to
   // the boundary the substituted annuity can differ by only a few cents, but the
@@ -557,8 +634,8 @@ export function buildScenario(
       id: "payment",
       passed: amortises,
       actual: inputs.monthlyPayment,
-      required: interestOnlyPayment,
-      gap: inputs.monthlyPayment - interestOnlyPayment,
+      required: minimumPayment,
+      gap: inputs.monthlyPayment - minimumPayment,
     },
     // Can the purchase be completed at all?
     { id: "cash", passed: cashLeft >= 0, actual: cashLeft, required: 0, gap: cashLeft },

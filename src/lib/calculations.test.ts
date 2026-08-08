@@ -520,6 +520,69 @@ describe("calculation engine", () => {
     expect(runtimeYearsFromRepaymentRate(3, 0)).toBe(Infinity);
   });
 
+  it("measures the payment shortfall against the 60-year bar, not the interest (K17)", () => {
+    const loan = DEFAULT_INPUTS.purchasePrice * 0.9;
+    const interestOnly = (loan * DEFAULT_RATES[10].ek10) / 1200;
+
+    // Just above the interest-only floor: the loan DOES amortise — in about 80 years.
+    // Reporting the gap against the interest made it positive, and the UI printed that
+    // positive number as an amount still missing.
+    const inputs = {
+      ...DEFAULT_INPUTS,
+      monthlyPayment: Math.ceil(interestOnly) + 5,
+      annualSpecialRepayments: [],
+    };
+    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const check = scenario.diagnosis.checks.find((entry) => entry.id === "payment")!;
+
+    expect(scenario.mortgage.runtimeYears).toBeGreaterThan(60);
+    expect(check.passed).toBe(false);
+    expect(inputs.monthlyPayment).toBeGreaterThan(interestOnly);
+    // The failure must read as a shortfall, so the gap has to be negative.
+    expect(check.gap).toBeLessThan(0);
+    expect(check.required).toBeGreaterThan(interestOnly);
+
+    // Paying exactly the reported requirement must clear the check.
+    const atTheBar = buildScenario(
+      LOWEST,
+      { ...inputs, monthlyPayment: Math.ceil(check.required) },
+      DEFAULT_RATES,
+    );
+    expect(atTheBar.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(true);
+  });
+
+  it("measures the payment bar under the Sondertilgung plan that is running (K17)", () => {
+    // The pass condition reads the simulated runtime, which the plan shortens. A bar
+    // computed without the plan therefore overstates what is missing.
+    const inputs = {
+      ...DEFAULT_INPUTS,
+      monthlyPayment: 1350,
+      annualSpecialRepayments: Array.from({ length: 10 }, () => 2000),
+    };
+    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const check = scenario.diagnosis.checks.find((entry) => entry.id === "payment")!;
+
+    expect(check.passed).toBe(false);
+    expect(scenario.mortgage.runtimeYears).toBeGreaterThan(60);
+
+    // Ignoring the plan reports roughly 99 €; the honest figure is about 41 €.
+    expect(Math.abs(check.gap)).toBeLessThan(60);
+
+    // The bar has to be tight in both directions, or it is not the requirement.
+    const atTheBar = buildScenario(
+      LOWEST,
+      { ...inputs, monthlyPayment: Math.ceil(check.required) },
+      DEFAULT_RATES,
+    );
+    const justUnder = buildScenario(
+      LOWEST,
+      { ...inputs, monthlyPayment: Math.floor(check.required) - 1 },
+      DEFAULT_RATES,
+    );
+    expect(atTheBar.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(true);
+    expect(justUnder.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(false);
+  });
+
   it("flags a Monatsrate the model had to raise to simulate at all (K14)", () => {
     const inputs = { ...DEFAULT_INPUTS, monthlyPayment: 1200 };
     const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);

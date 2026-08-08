@@ -33,7 +33,9 @@ function describeMiss(constraint: ConstraintId, gap: number): string {
     return `die Rate liegt ${formatPct(missing * 100)} über eurer Grenze.`;
   }
   if (constraint === "payment") {
-    return `der Monatsrate fehlen ${formatEur(missing)} pro Monat, um überhaupt zu tilgen.`;
+    // Covers both failures: a rate below the interest, and one that pays the loan off
+    // but not within a lifetime. "um überhaupt zu tilgen" was false for the second.
+    return `der Monatsrate fehlen ${formatEur(missing)} pro Monat, um das Darlehen in einem Leben abzuzahlen.`;
   }
   return `es fehlen ${formatEur(missing)}.`;
 }
