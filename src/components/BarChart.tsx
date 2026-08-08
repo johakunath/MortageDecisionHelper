@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent } from "react";
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import ChartTooltip, { type TooltipRow } from "./ChartTooltip";
 
 export type BarGroup = {
@@ -77,6 +77,30 @@ export default function BarChart({
     setHoverId(groupId);
   }
 
+  /**
+   * Rows are stacked, so ↑/↓ walk them — the axis the reader sees, not the ←/→ of
+   * LineChart's time axis. Without this the exact figures and the difference were
+   * reachable by pointer only, while the sibling chart in the same section was not:
+   * the reason for keyboard access there (two people, one screen, one mouse) does not
+   * stop applying one section further down.
+   */
+  function handleKey(event: KeyboardEvent<SVGSVGElement>) {
+    const last = groups.length - 1;
+    const goTo = (index: number) => {
+      event.preventDefault();
+      // Keyboard navigation has no cursor to sit beside, so the panel is centred.
+      setPointerX(50);
+      setHoverId(groups[Math.min(last, Math.max(0, index))].id);
+    };
+
+    const index = hoverId === null ? null : groups.findIndex((group) => group.id === hoverId);
+    if (event.key === "ArrowDown") goTo(index === null ? 0 : index + 1);
+    else if (event.key === "ArrowUp") goTo(index === null ? last : index - 1);
+    else if (event.key === "Home") goTo(0);
+    else if (event.key === "End") goTo(last);
+    else if (event.key === "Escape") setHoverId(null);
+  }
+
   const delta =
     hovered && formatDelta && hovered.bars.length > 1
       ? formatDelta(hovered.bars[hovered.bars.length - 1].value - hovered.bars[0].value)
@@ -109,6 +133,9 @@ export default function BarChart({
           preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label={caption}
+          tabIndex={0}
+          onKeyDown={handleKey}
+          onBlur={() => setHoverId(null)}
         >
           {groups.map((group, groupIndex) => {
             const top = PAD.top + groupIndex * ROW_HEIGHT + 8;
@@ -198,7 +225,8 @@ export default function BarChart({
         ))}
         <span className="chart-legend-item chart-legend-note">{caption}</span>
         <span className="chart-legend-item chart-legend-hint">
-          Zeigt auf eine Zeile für die genauen Zahlen und den Unterschied
+          Zeigt auf eine Zeile — oder Tab und dann ↑/↓ — für die genauen Zahlen und den
+          Unterschied
         </span>
       </figcaption>
     </figure>

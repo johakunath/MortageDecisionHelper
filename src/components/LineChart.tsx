@@ -44,6 +44,41 @@ function niceCeil(value: number): number {
 }
 
 /**
+ * What the series is worth at `x`, or `null` where it does not run.
+ *
+ * Not an exact-x lookup, and that is the whole point. Every scenario's last point is
+ * its exact payoff moment — 19,17 / 21,67 / 24,08 years on the defaults — so three of
+ * the hoverable positions are fractional. At 19,17 the 20% line ends while 10% and 15%
+ * are still running and visibly cross that x, but their own points sit at 19 and 20.
+ * An `=== x` lookup dropped them and the panel showed a single series where the reader
+ * could see three lines.
+ *
+ * The interpolation invents nothing: the chart draws straight segments between points,
+ * so a value read off the segment is exactly what is on screen. Anything smoother would
+ * claim more than the picture does.
+ */
+function valueAt(series: ChartSeries, x: number): number | null {
+  const points = series.points;
+  if (points.length === 0) return null;
+  if (x < points[0].x || x > points[points.length - 1].x) return null;
+
+  for (let index = 0; index < points.length; index += 1) {
+    if (points[index].x === x) return points[index].y;
+  }
+
+  for (let index = 1; index < points.length; index += 1) {
+    const before = points[index - 1];
+    const after = points[index];
+    if (x > before.x && x < after.x) {
+      const ratio = (x - before.x) / (after.x - before.x);
+      return before.y + ratio * (after.y - before.y);
+    }
+  }
+
+  return null;
+}
+
+/**
  * A hand-rolled SVG chart. Deliberately not a charting library: the build inlines
  * everything into one standalone HTML file the owner opens from disk, and this needs
  * roughly 200 lines rather than a 400 KB dependency.
@@ -79,9 +114,10 @@ export default function LineChart({
   const sx = (x: number) => PAD.left + (x / maxX) * plotW;
   const sy = (y: number) => PAD.top + plotH - (y / maxY) * plotH;
 
-  // The x positions that actually exist. Series end at different years — a scenario
-  // that pays off sooner simply has no point past its last — so the hover snaps to a
-  // real x and each series contributes only where it still runs.
+  // The x positions the hover can snap to: every x any series draws, including the
+  // fractional payoff moments. Which series then contribute at that x is `valueAt`'s
+  // job — a scenario that has already paid off drops out, one still running is read
+  // off its line.
   const xValues = [...new Set(allPoints.map((point) => point.x))].sort((a, b) => a - b);
 
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => maxY * f);
@@ -128,10 +164,8 @@ export default function LineChart({
     hoverX === null
       ? []
       : series
-          .map((s) => ({ series: s, point: s.points.find((p) => p.x === hoverX) }))
-          .filter((entry): entry is { series: ChartSeries; point: { x: number; y: number } } =>
-            Boolean(entry.point),
-          );
+          .map((s) => ({ series: s, y: valueAt(s, hoverX) }))
+          .filter((entry): entry is { series: ChartSeries; y: number } => entry.y !== null);
 
   /*
    * A hovered x can go stale: switching the Verlauf view, changing the EK level or
@@ -146,7 +180,7 @@ export default function LineChart({
   const tooltipRows: TooltipRow[] = hovered.map((entry) => ({
     id: entry.series.id,
     label: entry.series.label,
-    value: formatDetail(entry.point.y),
+    value: formatDetail(entry.y),
     color: entry.series.color,
     dashed: entry.series.dashed,
   }));
@@ -243,8 +277,8 @@ export default function LineChart({
               {hovered.map((entry) => (
                 <circle
                   key={entry.series.id}
-                  cx={sx(entry.point.x)}
-                  cy={sy(entry.point.y)}
+                  cx={sx(hoverX)}
+                  cy={sy(entry.y)}
                   r={4}
                   className="chart-hover-dot"
                   fill={entry.series.color}
@@ -289,7 +323,7 @@ export default function LineChart({
       <p className="visually-hidden" aria-live="polite">
         {showHover
           ? `${formatX(hoverX)}: ${hovered
-              .map((entry) => `${entry.series.label} ${formatDetail(entry.point.y)}`)
+              .map((entry) => `${entry.series.label} ${formatDetail(entry.y)}`)
               .join(", ")}`
           : ""}
       </p>
