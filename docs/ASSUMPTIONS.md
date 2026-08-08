@@ -88,11 +88,18 @@ netWorthAtPayoff        = propertyValueAtPayoff − cashNeeded − interestTotal
 years        = waitMonths ÷ 12
 futurePrice  = purchasePrice × (1 + waitPropertyGrowthRate%)^years
 saved        = waitSavingsMonthly × waitMonths
-rentPaid     = currentWarmRent × waitMonths        DISPLAY ONLY — never subtracted
+rentPaid     = currentWarmRent × waitMonths        never subtracted from capital
 adjustedCapital = availableCapital + saved
 adjustedRate    = max(0.1, baseRate + waitRateShift)
+
+deltaInterest  = interestTotal(wait) − interestTotal(now)
+deltaTotalCost = deltaInterest + rentPaid          what waiting costs, in full
 ```
-`waitSavingsMonthly` is **net of rent** by definition — see [DECISIONS.md D4](DECISIONS.md#d4--waitsavingsmonthly-is-net-of-rent). Subtracting `rentPaid` as well would double-count it.
+`waitSavingsMonthly` is **net of rent** by definition — see [DECISIONS.md D4](DECISIONS.md#d4--waitsavingsmonthly-is-net-of-rent). Subtracting `rentPaid` from *capital* as well would double-count it.
+
+**Rent is a cost, but not a capital deduction.** Those are two different questions and rent belongs to exactly one of them, which is why it appears in `deltaTotalCost` and not in `adjustedCapital`. Adding it to an interest delta is a comparison of like with like: over the same months, the buy-now column pays interest, and that interest already sits inside its `interestTotal`. Rent is the waiting side's counterpart. Principal is excluded from both — it becomes equity, not cost.
+
+What the sum still does **not** capture: the two paths reach debt-free at different calendar dates, and waiting buys a more expensive property with a larger loan. Both are visible in the same table (`futurePrice`, `futureLoan`, `runtimeYears`), neither is folded into the delta. See [DECISIONS.md D27](DECISIONS.md).
 
 ### ETF opportunity cost
 ```
@@ -186,8 +193,9 @@ over, and four of them happened to favour the same side.
 | K12 | `narrowestMiss.gap` printed as "es fehlen X €" for every constraint | The `payment` gap is €/**Monat**; a monthly shortfall read as a one-off amount | `describeMiss()` |
 | K13 | "ihr spart \|interestSavedFixed\| Zinsen" in the trade-off statement | The Sollzinsen are hand-entered and not monotone in EK, so the sentence could state the exact opposite of its own number | Sign read, not assumed |
 | K14 | A Monatsrate below the interest-only floor is silently simulated as a higher one (the Tilgungssatz is clamped to 0,01%) | Laufzeit, Zinsen and Restschuld described a payment nobody entered, with only a red status pill to hint at it | `paymentSubstituted` + a named note |
-| K15 | `migrateV1` derives the replacement Monatsrate from the stale global `inputs.purchasePrice`, a hardcoded 90% loan and today's default Sollzins | A v1 save whose active flat was 600k at the old 5% EK level loaded at 3.390 €/Monat instead of 3.111 € — **+279 €/Monat** of silently added burden, moving every affordability and interest figure | Rebuilt from the active apartment, its EK level and the stored legacy rate |
-| K16 | The `payment` check reports its shortfall against the interest-only payment while failing on the 60-year horizon | A rate that clears the interest but needs 80 years produced a **positive** gap, which the UI printed as "es fehlen 6 €" — the loan does amortise, and the real shortfall was 137 € | `required` is the 60-year annuity |
+| K15 | "Δ zu jetzt kaufen" carried the interest delta alone, with the rent paid while waiting two rows below and never added in | On the defaults, twelve months of waiting read **−16.978 € besser** on the row that looks like the bottom line, while 23.640 € of rent went uncounted. Including it, waiting is 6.662 € *more* expensive — the **sign** was wrong, not just the size. Favoured the "warten und weiter sparen" side | [D27](DECISIONS.md) |
+| K16 | `migrateV1` derives the replacement Monatsrate from the stale global `inputs.purchasePrice`, a hardcoded 90% loan and today's default Sollzins | A v1 save whose active flat was 600k at the old 5% EK level loaded at 3.390 €/Monat instead of 3.111 € — **+279 €/Monat** of silently added burden, moving every affordability and interest figure | Rebuilt from the active apartment, its EK level and the stored legacy rate |
+| K17 | The `payment` check reports its shortfall against the interest-only payment while failing on the 60-year horizon | A rate that clears the interest but needs 80 years produced a **positive** gap, which the UI printed as "es fehlen 6 €" — the loan does amortise, and the real shortfall was 137 € | `required` is the 60-year annuity |
 
 ---
 

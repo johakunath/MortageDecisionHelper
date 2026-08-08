@@ -22,6 +22,20 @@ export function formatPct(value: number, digits = 1): string {
   })}%`;
 }
 
+/**
+ * A bare German decimal number — "30,2", "12". For places that need a number inside a
+ * label of their own ("Jahr 30,2") and would otherwise interpolate the raw value: an
+ * unformatted year prints as "30.166666666666668", with an English decimal point, in
+ * German copy.
+ */
+export function formatNumber(value: number, digits = 1): string {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+
+  return value.toLocaleString("de-DE", { maximumFractionDigits: digits });
+}
+
 export function formatYears(value: number): string {
   if (!Number.isFinite(value)) {
     return "—";

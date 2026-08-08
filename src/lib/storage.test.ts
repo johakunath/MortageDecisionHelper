@@ -128,7 +128,7 @@ describe("persistence", () => {
     expect(apartment.annualSpecialRepayments).toEqual([]);
   });
 
-  it("rebuilds a v1 Monatsrate from the contract that save actually held (K15)", () => {
+  it("rebuilds a v1 Monatsrate from the contract that save actually held (K16)", () => {
     // The global inputs.purchasePrice is stale; every v1 figure came from the ACTIVE
     // apartment, at the EK level the save was on, priced with the rate it stored.
     const legacy = {

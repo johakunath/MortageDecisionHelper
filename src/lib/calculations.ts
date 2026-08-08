@@ -222,6 +222,16 @@ export type WaitScenario = {
   futureLoan: number;
   cashLeftAfterPurchase: number;
   deltaInterest: number;
+  /**
+   * The full extra cost of waiting: `deltaInterest + rentPaid`.
+   *
+   * Interest alone understates it. While the waiting column pays rent for a home it
+   * does not own, the buy-now column is already paying interest over exactly those
+   * months — and that interest sits inside its `interestTotal`. So rent is the
+   * waiting side's counterpart to it, and adding the two is a comparison of like
+   * with like rather than a double count. See docs/ASSUMPTIONS.md §2 (Waiting).
+   */
+  deltaTotalCost: number;
   years: number;
 };
 
@@ -545,7 +555,7 @@ export function buildScenario(
   // The bar the check actually applies: the smallest annuity that clears the loan
   // inside the 60-year horizon. Reporting the shortfall against `interestOnlyPayment`
   // instead produced a POSITIVE gap for a payment that clears the interest but would
-  // take 80 years — and the UI printed that as an amount still missing. K16.
+  // take 80 years — and the UI printed that as an amount still missing. K17.
   const minimumPayment = monthlyAnnuity(
     loan,
     interestRate,
@@ -1008,6 +1018,7 @@ export function buildWaitScenario(
   const years = waitMonths / 12;
   const futurePrice =
     inputs.purchasePrice * Math.pow(1 + inputs.waitPropertyGrowthRate / 100, years);
+  // Zero for the buy-now column, so `deltaTotalCost` collapses to the interest delta there.
   const rentPaid = inputs.currentWarmRent * waitMonths;
   const saved = inputs.waitSavingsMonthly * waitMonths;
   // Rent is NOT subtracted: `waitSavingsMonthly` is already the net amount that reaches
@@ -1032,6 +1043,7 @@ export function buildWaitScenario(
     [period]: { ...rates[period], [selectedBase.id]: adjustedInterestRate },
   };
   const scenario = buildScenario(selectedBase, futureInputs, futureRates);
+  const deltaInterest = scenario.mortgage.interestTotal - selectedNow.mortgage.interestTotal;
 
   return {
     scenario,
@@ -1043,7 +1055,10 @@ export function buildWaitScenario(
     adjustedInterestRate,
     futureLoan: scenario.loan,
     cashLeftAfterPurchase: scenario.cashLeft,
-    deltaInterest: scenario.mortgage.interestTotal - selectedNow.mortgage.interestTotal,
+    deltaInterest,
+    // Rent is added to the DELTA, never to `adjustedAvailableCapital` — D4 still holds.
+    // The two are different questions: what waiting costs, and what capital it leaves.
+    deltaTotalCost: deltaInterest + rentPaid,
     years,
   };
 }

@@ -191,7 +191,7 @@ function legacyActivePrice(parsed: Record<string, unknown>, fallback: number): n
  * Deriving it from the stale global `inputs.purchasePrice`, a hardcoded 90% loan and
  * today's default rate silently moved the payment by 279 €/Monat on a 600k flat at the
  * old 5% EK level, and every affordability and interest figure moved with it. See
- * docs/ASSUMPTIONS.md K15.
+ * docs/ASSUMPTIONS.md K16.
  */
 function migrateV1(parsed: Record<string, unknown>): Record<string, unknown> {
   const inputs = { ...(parsed.inputs as Record<string, unknown> | undefined) };
