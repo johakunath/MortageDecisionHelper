@@ -1,4 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { formatNumber } from "../lib/format";
 import ChartTooltip, { type TooltipRow } from "./ChartTooltip";
 
 export type ChartSeries = {
@@ -23,7 +24,11 @@ type LineChartProps = {
    */
   formatDetail?: (value: number) => string;
   xLabel?: string;
-  /** Names a hovered x, e.g. `(x) => "Jahr 12"`. Read out loud to screen readers. */
+  /**
+   * Names a hovered x, e.g. `(x) => "Jahr 12"`. Read out loud to screen readers.
+   * Note the x values are NOT all integers — a series' last point is its exact payoff
+   * moment — so this must go through `format.ts` like everything else.
+   */
   formatX?: (x: number) => string;
   caption: string;
 };
@@ -59,7 +64,7 @@ export default function LineChart({
   formatValue,
   formatDetail = formatValue,
   xLabel = "Jahr",
-  formatX = (x) => `${xLabel} ${x}`,
+  formatX = (x) => `${xLabel} ${formatNumber(x)}`,
   caption,
 }: LineChartProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -102,37 +107,49 @@ export default function LineChart({
   }
 
   function handleKey(event: KeyboardEvent<SVGSVGElement>) {
-    const index = hoverX === null ? -1 : xValues.indexOf(hoverX);
-    const step = (delta: number) => {
+    const last = xValues.length - 1;
+    const goTo = (index: number) => {
       event.preventDefault();
-      const next = index < 0 ? (delta > 0 ? 0 : xValues.length - 1) : index + delta;
-      setHoverX(xValues[Math.min(xValues.length - 1, Math.max(0, next))]);
+      setHoverX(xValues[Math.min(last, Math.max(0, index))]);
     };
 
-    if (event.key === "ArrowRight") step(1);
-    else if (event.key === "ArrowLeft") step(-1);
-    else if (event.key === "Home") step(-xValues.length);
-    else if (event.key === "End") step(xValues.length);
+    // Arrows step from where the reader is; Home/End are absolute. Routing Home
+    // through a negative step sent an un-hovered chart to its LAST point, because
+    // "no position yet" was being resolved from the direction of travel.
+    const index = hoverX === null ? null : xValues.indexOf(hoverX);
+    if (event.key === "ArrowRight") goTo(index === null ? 0 : index + 1);
+    else if (event.key === "ArrowLeft") goTo(index === null ? last : index - 1);
+    else if (event.key === "Home") goTo(0);
+    else if (event.key === "End") goTo(last);
     else if (event.key === "Escape") setHoverX(null);
   }
 
   const hovered =
     hoverX === null
-      ? null
+      ? []
       : series
           .map((s) => ({ series: s, point: s.points.find((p) => p.x === hoverX) }))
           .filter((entry): entry is { series: ChartSeries; point: { x: number; y: number } } =>
             Boolean(entry.point),
           );
 
-  const tooltipRows: TooltipRow[] =
-    hovered?.map((entry) => ({
-      id: entry.series.id,
-      label: entry.series.label,
-      value: formatDetail(entry.point.y),
-      color: entry.series.color,
-      dashed: entry.series.dashed,
-    })) ?? [];
+  /*
+   * A hovered x can go stale: switching the Verlauf view, changing the EK level or
+   * editing an assumption rebuilds `series` with different runtimes, and the year
+   * under the cursor may no longer exist in any of them. Everything the hover draws
+   * hangs off this one flag, so the guide line can never outlive its own readout —
+   * it used to survive on a non-null `hoverX` alone and stand there pointing at
+   * nothing.
+   */
+  const showHover = hoverX !== null && hovered.length > 0;
+
+  const tooltipRows: TooltipRow[] = hovered.map((entry) => ({
+    id: entry.series.id,
+    label: entry.series.label,
+    value: formatDetail(entry.point.y),
+    color: entry.series.color,
+    dashed: entry.series.dashed,
+  }));
 
   const markerHit = hoverX !== null && markers.includes(hoverX);
 
@@ -214,7 +231,7 @@ export default function LineChart({
             );
           })}
 
-          {hoverX !== null && hovered ? (
+          {showHover ? (
             <g className="chart-hover" aria-hidden="true">
               <line
                 x1={sx(hoverX)}
@@ -253,7 +270,7 @@ export default function LineChart({
           />
         </svg>
 
-        {hoverX !== null && tooltipRows.length > 0 ? (
+        {showHover ? (
           <ChartTooltip
             title={formatX(hoverX)}
             rows={tooltipRows}
@@ -270,7 +287,7 @@ export default function LineChart({
         is announced every time.
       */}
       <p className="visually-hidden" aria-live="polite">
-        {hoverX !== null && hovered
+        {showHover
           ? `${formatX(hoverX)}: ${hovered
               .map((entry) => `${entry.series.label} ${formatDetail(entry.point.y)}`)
               .join(", ")}`

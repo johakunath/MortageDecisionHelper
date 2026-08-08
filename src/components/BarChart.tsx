@@ -101,7 +101,10 @@ export default function BarChart({
       <div className="chart-plot">
         <svg
           ref={svgRef}
-          className="chart-svg"
+          // Driven by a real hovered row, not by `:hover` on the svg: the top and
+          // bottom padding strips carry no row band, so hovering them dimmed every
+          // row and singled out none.
+          className={`chart-svg ${hoverId ? "is-hovering" : ""}`}
           viewBox={`0 0 ${WIDTH} ${height}`}
           preserveAspectRatio="xMidYMid meet"
           role="img"

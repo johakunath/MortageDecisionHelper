@@ -2000,7 +2000,7 @@ button {
   transition: opacity 120ms ease;
 }
 
-.chart-svg:hover .bar-group:not(.is-hovered) {
+.chart-svg.is-hovering .bar-group:not(.is-hovered) {
   opacity: 0.45;
 }
 

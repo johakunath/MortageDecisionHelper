@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatCompactEur,
+  formatNumber,
   formatSignedEur,
   formatSignedPct,
   formatSignedYears,
@@ -25,6 +26,21 @@ describe("signed formatting", () => {
     expect(eur.startsWith("−")).toBe(true);
     expect(eur.startsWith("-")).toBe(false);
     expect(pct.startsWith("−")).toBe(true);
+  });
+});
+
+describe("formatNumber", () => {
+  it("uses a German decimal comma and never a raw float", () => {
+    // The chart's last x is an exact payoff moment, not a whole year. Interpolated
+    // raw it printed "Jahr 30.166666666666668" into German copy.
+    expect(formatNumber(30.166666666666668)).toBe("30,2");
+    expect(formatNumber(12)).toBe("12");
+    expect(formatNumber(0)).toBe("0");
+  });
+
+  it("returns the em-dash placeholder for non-finite values, like its siblings", () => {
+    expect(formatNumber(NaN)).toBe("—");
+    expect(formatNumber(Infinity)).toBe("—");
   });
 });
 
