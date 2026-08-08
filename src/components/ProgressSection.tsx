@@ -22,9 +22,9 @@ const VIEWS: { id: ViewId; label: string }[] = [
 ];
 
 const SERIES_COLORS: Record<string, string> = {
-  ek5: "var(--blue)",
-  ek10: "var(--sage)",
-  ek15: "var(--amber)",
+  ek10: "var(--blue)",
+  ek15: "var(--sage)",
+  ek20: "var(--amber)",
 };
 
 function shortEur(value: number): string {
@@ -116,7 +116,7 @@ export default function ProgressSection({
         markers={view === "equity" ? [] : specialYears}
         markerLabel="Sondertilgung"
         formatValue={shortEur}
-        caption={`${activeView.label} über die Laufzeit, für 5%, 10% und 15% Eigenkapital`}
+        caption={`${activeView.label} über die Laufzeit, für ${scenarios.map((scenario) => `${scenario.ekRate}%`).join(", ")} Eigenkapital`}
       />
 
       <div className="readout-grid three progress-readouts">
@@ -124,6 +124,7 @@ export default function ProgressSection({
           label="Laufzeit"
           value={formatYears(selected.mortgage.runtimeYears)}
           sub={`bis zur vollständigen Abzahlung · ${selected.label}`}
+          info={GLOSSARY.runtimeYears}
         />
         <Readout
           label="Immobilienwert bei Abzahlung"

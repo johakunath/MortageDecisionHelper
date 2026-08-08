@@ -1,6 +1,6 @@
-import type { WaitScenario } from "../lib/calculations";
+import { BETTER_WHEN, type WaitScenario } from "../lib/calculations";
 import { formatEur, formatPct } from "../lib/format";
-import { Readout, Section } from "./ui";
+import { Section, SignedValue } from "./ui";
 
 type WaitPanelProps = {
   scenarios: WaitScenario[];
@@ -11,58 +11,94 @@ function columnLabel(waitMonths: number): string {
 }
 
 /**
- * Buy-now against each waiting period, side by side (PRODUCT_SPEC §7.5). Rent is
- * always shown as an outflow but never subtracted from the adjusted capital — see
- * docs/DECISIONS.md D4.
+ * Buy-now against each waiting period (PRODUCT_SPEC §7.5), as a table with the metrics
+ * as ROWS and the waiting periods as columns.
+ *
+ * It used to be three stacked cards of up to eight readouts each — twenty-odd numbers
+ * with no shared baseline, so comparing "Cash nach Kauf" across the options meant
+ * hunting for the same label three times at three different heights. Reading across a
+ * row is the entire job here, so the layout is a row.
+ *
+ * Rent is always shown as an outflow but never subtracted from the adjusted capital —
+ * see docs/DECISIONS.md D4.
  */
 export default function WaitPanel({ scenarios }: WaitPanelProps) {
+  const rows: {
+    label: string;
+    note?: string;
+    render: (wait: WaitScenario) => React.ReactNode;
+  }[] = [
+    { label: "Kaufpreis dann", render: (w) => formatEur(w.futurePrice) },
+    {
+      label: "Kapital dann",
+      note: "inkl. dem, was ihr bis dahin spart",
+      render: (w) => formatEur(w.adjustedAvailableCapital),
+    },
+    { label: "Zinssatz dann", render: (w) => formatPct(w.adjustedInterestRate) },
+    { label: "Darlehen dann", render: (w) => formatEur(w.futureLoan) },
+    {
+      label: "Cash nach Kauf",
+      render: (w) => (
+        <span className={w.cashLeftAfterPurchase >= 0 ? "wait-ok" : "wait-bad"}>
+          {formatEur(w.cashLeftAfterPurchase)}
+        </span>
+      ),
+    },
+    {
+      label: "Zinsen gesamt",
+      note: "illustrativ, bei konstantem Zins",
+      render: (w) => formatEur(w.scenario.mortgage.interestTotal),
+    },
+    {
+      label: "Δ zu jetzt kaufen",
+      render: (w) =>
+        w.waitMonths === 0 ? (
+          <span className="muted">—</span>
+        ) : (
+          <SignedValue value={w.deltaInterest} betterWhen={BETTER_WHEN.interestTotal} />
+        ),
+    },
+    {
+      label: "Miete in der Zwischenzeit",
+      note: "Kosten des Wartens — bewusst nicht vom Kapital abgezogen",
+      render: (w) =>
+        w.waitMonths === 0 ? <span className="muted">—</span> : formatEur(w.rentPaid),
+    },
+  ];
+
   return (
     <Section
       title="Warten"
       subtitle="Kein Forecast, sondern eine Szenario-Sicht: Was passiert mit Preis, Kapital, Miete und Zinsannahme, wenn ihr wartet?"
     >
-      <div className="wait-columns">
-        {scenarios.map((wait) => {
-          const deltaIsPositive = wait.deltaInterest > 0;
-          return (
-            <div key={wait.waitMonths} className="wait-column">
-              <div className="wait-column-head">{columnLabel(wait.waitMonths)}</div>
-              <div className="readout-grid one">
-                <Readout label="Kaufpreis dann" value={formatEur(wait.futurePrice)} sub="mit Preisannahme" />
-                <Readout
-                  label="Kapital dann"
-                  value={formatEur(wait.adjustedAvailableCapital)}
-                  sub={wait.waitMonths === 0 ? "unverändert" : `+ ${formatEur(wait.saved)} gespart`}
-                  tone={wait.adjustedAvailableCapital >= 0 ? "blue" : "red"}
-                />
-                {wait.waitMonths > 0 ? (
-                  <Readout
-                    label="Miete in der Zwischenzeit"
-                    value={formatEur(wait.rentPaid)}
-                    sub="Kosten des Wartens, nicht vom Kapital abgezogen"
-                    tone="amber"
-                  />
-                ) : null}
-                <Readout label="Zinssatz dann" value={formatPct(wait.adjustedInterestRate)} />
-                <Readout label="Darlehen dann" value={formatEur(wait.futureLoan)} />
-                <Readout
-                  label="Cash nach Kauf"
-                  value={formatEur(wait.cashLeftAfterPurchase)}
-                  tone={wait.cashLeftAfterPurchase >= 0 ? "green" : "red"}
-                />
-                <Readout label="Zinsen gesamt (illustrativ)" value={formatEur(wait.scenario.mortgage.interestTotal)} />
-                {wait.waitMonths > 0 ? (
-                  <Readout
-                    label="Delta zu jetzt kaufen"
-                    value={formatEur(wait.deltaInterest)}
-                    sub={deltaIsPositive ? "Warten ist zinsseitig teurer" : "Warten ist zinsseitig günstiger"}
-                    tone={deltaIsPositive ? "red" : "green"}
-                  />
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
+      <div className="table-wrap">
+        <table className="tradeoff-table is-dense wait-table">
+          <thead>
+            <tr>
+              <th>Kennzahl</th>
+              {scenarios.map((wait) => (
+                <th key={wait.waitMonths} className={wait.waitMonths === 0 ? "is-active-col" : ""}>
+                  {columnLabel(wait.waitMonths)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label}>
+                <td>
+                  <strong>{row.label}</strong>
+                  {row.note ? <small>{row.note}</small> : null}
+                </td>
+                {scenarios.map((wait) => (
+                  <td key={wait.waitMonths} className={wait.waitMonths === 0 ? "is-active-col" : ""}>
+                    {row.render(wait)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </Section>
   );

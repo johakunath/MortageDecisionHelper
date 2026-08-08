@@ -15,6 +15,7 @@ type ExecutiveSummaryProps = {
 };
 
 const CONSTRAINT_LABELS: Record<ConstraintId, string> = {
+  payment: "die Monatsrate tilgt das Darlehen nicht ab",
   cash: "das Geld reicht nicht für den Kauf",
   reserve: "die Sicherheitsreserve wird unterschritten",
   burden: "die Monatsbelastung ist zu hoch",
@@ -32,9 +33,9 @@ function describeBlockers(failed: ConstraintId[]): string {
  *
  * The four winner tiles this used to render (Kosten-Minimum, Liquiditäts-Maximum,
  * niedrigste Monatslast, Kompromiss) were removed: three of them are structurally
- * fixed — the cost minimum is always 15% EK, the liquidity maximum always 5% — so
- * they restated the axis rather than informing the choice. The doors below already
- * carry the same selection. See docs/DECISIONS.md D6.
+ * fixed — the cost minimum is always the highest EK level, the liquidity maximum
+ * always the lowest — so they restated the axis rather than informing the choice. The
+ * doors below already carry the same selection. See docs/DECISIONS.md D6.
  */
 export default function ExecutiveSummary({ decision, inputs, selected }: ExecutiveSummaryProps) {
   const { diagnosis } = decision;

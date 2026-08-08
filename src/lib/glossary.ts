@@ -24,8 +24,10 @@ export const GLOSSARY = {
 
   // --- Finanzierung ---
   householdNetIncome: "Was monatlich nach Steuern und Sozialabgaben bei euch beiden zusammen ankommt.",
+  monthlyPayment:
+    "Was ihr monatlich ans Darlehen zahlt — für jede Eigenkapitalstufe gleich, weil euer Budget sich durch mehr Eigenkapital nicht ändert. Bei mehr Eigenkapital ist das Darlehen kleiner, also steckt mehr von derselben Rate in der Tilgung und ihr seid früher schuldenfrei. Genauso rechnet auch die Bank in ihren Angeboten.",
   repaymentRate:
-    "Wie viel Prozent des Darlehens ihr im ersten Jahr tilgt. Zusammen mit dem Zins ergibt sich daraus die Monatsrate — und damit auch die Laufzeit. Alle drei sind dasselbe, nur anders ausgedrückt.",
+    "Wie viel Prozent des Darlehens ihr im ersten Jahr tilgt. Ergibt sich hier aus der Monatsrate und dem Zins und ist deshalb je Eigenkapitalstufe verschieden. Monatsrate, Tilgungssatz und Laufzeit sind dasselbe, nur anders ausgedrückt.",
   fixedRateYears:
     "Wie lange der Zinssatz vertraglich garantiert ist. Danach braucht ihr eine Anschlussfinanzierung zu dann unbekannten Konditionen. Längere Bindung heißt meist etwas höherer Zins, aber mehr Sicherheit.",
   interestRate:
@@ -48,6 +50,10 @@ export const GLOSSARY = {
   cashNeeded:
     "Was ihr am Tag des Kaufs tatsächlich überweisen müsst: Anzahlung + Kaufnebenkosten + Renovierung + Umzug.",
   cashLeft: "Was vom verfügbaren Eigenkapital nach dem Kauf übrig bleibt.",
+  loan:
+    "Die Darlehenssumme: Kaufpreis minus Anzahlung. Die Kaufnebenkosten sind NICHT enthalten — die zahlt ihr zusätzlich aus Eigenkapital, keine Bank finanziert sie mit.",
+  runtimeYears:
+    "Wann das Darlehen vollständig abbezahlt wäre, wenn der heutige Zins bis zum Ende gilt und ihr den Sondertilgungsplan durchhaltet. Bei gleicher Monatsrate ist das die Größe, die mehr Eigenkapital wirklich verändert.",
   reserveGap:
     "Abstand zwischen dem, was übrig bleibt, und eurem Reserve-Ziel. Negativ heißt: ihr unterschreitet euer eigenes Polster.",
   allInMonthly:

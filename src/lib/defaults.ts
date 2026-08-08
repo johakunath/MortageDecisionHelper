@@ -7,10 +7,11 @@ import type {
 } from "./calculations";
 
 export const DEFAULT_INPUTS: MortgageInputs = {
-  purchasePrice: 720000,
-  // 11,57% = mit Makler (Grunderwerbsteuer + Notar + Grundbuch + Provision).
-  // Bewusst der teurere der beiden Fälle: eine Entscheidungshilfe soll die Kosten
-  // nicht zu niedrig ansetzen. Ohne Makler sind es 8%.
+  // Kaufpreis, Nebenkosten und Rate stammen aus dem Finanzierungsangebot vom
+  // 07.08.2026 (Varianten 1A–3B), damit die App auf dem echten Fall startet.
+  purchasePrice: 450000,
+  // 11,57% = mit Makler: 2% Notar/Grundbuch + 6% Grunderwerbsteuer + 3,57% Provision.
+  // Ergibt exakt die 52.065 € des Angebots. Ohne Makler sind es 8%.
   closingCostRate: 11.57,
   availableCapital: 145000,
   reserveTarget: 20000,
@@ -20,10 +21,11 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   currentWarmRent: 1970,
   householdNetIncome: 8500,
   maxBurdenRate: 40,
-  repaymentRate: 2.4,
-  // 15 Jahre: mehr Planungssicherheit als die üblichen 10, und bei den aktuellen
-  // Konditionen nur wenig teurer. Frei änderbar — die Zinssätze müssen dann mit.
-  fixedRateYears: 15,
+  // Die Rate aus dem Angebot. Sie gilt für jede EK-Stufe gleich — der Tilgungssatz
+  // wird daraus je Stufe abgeleitet, genau wie die Bank es rechnet.
+  monthlyPayment: 1900,
+  // 10 Jahre: die kürzere der beiden angebotenen Bindungen und die günstigere.
+  fixedRateYears: 10,
   annualSpecialRepayment: 6000,
   annualSpecialRepayments: [6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000],
   specialRepaymentLimitRate: 5,
@@ -36,27 +38,36 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   etfReturnRate: 5,
 };
 
+/**
+ * Sollzinsen aus dem Finanzierungsangebot vom 07.08.2026, Varianten 1A–3B
+ * (90% / 85% / 80% Finanzierung × 10 / 15 Jahre Zinsbindung).
+ *
+ * Sie fallen über die EK-Stufen NICHT gleichmäßig: 15% EK kauft gegenüber 10% fast
+ * nichts, bei 15 Jahren Bindung exakt nichts. Der Sprung kommt erst bei 80%
+ * Beleihung. Nichts im Modell darf Monotonie unterstellen.
+ */
 export const DEFAULT_RATES: InterestRates = {
-  ek5: 4.15,
-  ek10: 3.85,
-  ek15: 3.65,
+  10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 },
+  15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 },
 };
 
 export const EK_SCENARIOS: ScenarioBase[] = [
-  { id: "ek5", ekRate: 5, label: "5% EK", short: "Liquidität schützen", accent: "blue" },
-  { id: "ek10", ekRate: 10, label: "10% EK", short: "Kompromiss", accent: "green" },
-  { id: "ek15", ekRate: 15, label: "15% EK", short: "Zinsen senken", accent: "orange" },
+  { id: "ek10", ekRate: 10, label: "10% EK" },
+  { id: "ek15", ekRate: 15, label: "15% EK" },
+  { id: "ek20", ekRate: 20, label: "20% EK" },
 ];
 
 export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
   {
+    // Das Objekt aus dem Finanzierungsangebot. Bewusst der erste Fall: die App soll
+    // auf dem starten, was tatsächlich auf dem Tisch liegt.
     id: "flat-a",
-    label: "Wohnung A",
-    purchasePrice: 600000,
-    renovation: 5000,
-    monthlyOwnershipCosts: 760,
+    label: "Angebot 450k",
+    purchasePrice: 450000,
+    renovation: 0,
+    monthlyOwnershipCosts: 640,
     selectedScenarioId: "ek10",
-    annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
+    annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
     id: "flat-b",
@@ -70,11 +81,11 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
   {
     id: "flat-c",
     label: "Wohnung C",
-    purchasePrice: 450000,
-    renovation: 15000,
-    monthlyOwnershipCosts: 640,
+    purchasePrice: 600000,
+    renovation: 5000,
+    monthlyOwnershipCosts: 760,
     selectedScenarioId: "ek10",
-    annualSpecialRepayments: [6000, 6000, 6000, 5000, 5000, 5000, 4000, 4000, 4000, 4000],
+    annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
   },
 ];
 
@@ -87,6 +98,12 @@ export type CasePreset = {
   rates: InterestRates;
 };
 
+/**
+ * Every input that determines the expected outcome is pinned here, never inherited —
+ * a fixture that tracks a default silently stops testing what it claims (D12). That
+ * now includes `monthlyPayment` and `fixedRateYears`: with the rate held constant
+ * across EK levels, the rate IS what decides whether a scenario amortises at all.
+ */
 export const CASE_PRESETS: Record<PresetId, CasePreset> = {
   case600: {
     label: "600k machbar",
@@ -94,35 +111,52 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
     inputs: {
       ...DEFAULT_INPUTS,
       purchasePrice: 600000,
+      closingCostRate: 8,
       availableCapital: 145000,
       reserveTarget: 25000,
       monthlyOwnershipCosts: 760,
       householdNetIncome: 9000,
-      // Pinned, not inherited: this fixture exists to prove "at least one scenario is
-      // feasible" (PRODUCT_SPEC §17). If it tracked the default it would silently stop
-      // testing that the moment the default Kaufnebenkosten changed — which is exactly
-      // what happened when the default moved to 11,57%.
-      closingCostRate: 8,
+      monthlyPayment: 2400,
+      fixedRateYears: 10,
     },
-    rates: { ek5: 4.05, ek10: 3.8, ek15: 3.55 },
+    // 10% EK tragbar, 15% reißt die Reserve, 20% reicht das Geld nicht.
+    rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
   },
   case720: {
-    label: "720k Base",
+    label: "720k grenzwertig",
     selectedId: "ek10",
-    inputs: { ...DEFAULT_INPUTS },
-    rates: { ...DEFAULT_RATES },
+    inputs: {
+      ...DEFAULT_INPUTS,
+      purchasePrice: 720000,
+      closingCostRate: 8,
+      availableCapital: 200000,
+      reserveTarget: 25000,
+      monthlyOwnershipCosts: 900,
+      householdNetIncome: 9600,
+      monthlyPayment: 2900,
+      fixedRateYears: 10,
+    },
+    // Tragbar, aber mit sichtbaren Warnungen: 15% nur "gerade so", 20% scheitert.
+    rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
   },
   case850: {
     label: "850k Stress",
-    selectedId: "ek5",
+    selectedId: "ek10",
     inputs: {
       ...DEFAULT_INPUTS,
       purchasePrice: 850000,
+      closingCostRate: 11.57,
       availableCapital: 145000,
       reserveTarget: 30000,
       monthlyOwnershipCosts: 950,
+      householdNetIncome: 8500,
+      // Hoch genug, dass das Darlehen sauber tilgt — sonst scheitern alle drei an der
+      // Rate und das Fixture würde nicht mehr prüfen, was es prüfen soll: dass Cash,
+      // Reserve und Belastung reißen und trotzdem niemand zum Sieger erklärt wird.
+      monthlyPayment: 3400,
+      fixedRateYears: 10,
     },
-    rates: { ek5: 4.3, ek10: 4.05, ek15: 3.85 },
+    rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
   },
 };
 
@@ -144,15 +178,24 @@ export const SECTIONS = [
 export type SectionId = (typeof SECTIONS)[number]["id"];
 
 /**
+ * The assumption boxes, in the order the decision is actually made: what we bring,
+ * what we earn, what the loan looks like, what it costs, what the world does.
+ *
+ * These used to be tabs. Two people reading together could only ever see a third of
+ * their assumptions at once and had to remember the rest, which is the opposite of
+ * what a shared screen is for. See docs/DECISIONS.md D18.
+ *
  * Purchase price, renovation and ownership costs are NOT here — they belong to the
  * active apartment (ApartmentSwitcher). "Warten" is not here either — its inputs live
  * inline in the Warten section rather than duplicated as a group, which used to leave
  * "Warten" addressable from two different places at once.
  */
-export const INPUT_GROUPS = [
+export const INPUT_BOXES = [
+  { id: "capital", label: "Eigenkapital & Kaufkosten" },
   { id: "household", label: "Haushalt" },
-  { id: "finance", label: "Finanzierung" },
-  { id: "advanced", label: "Erweitert" },
+  { id: "loan", label: "Darlehen" },
+  { id: "rates", label: "Sollzinsen laut Angebot" },
+  { id: "market", label: "Markt" },
 ] as const;
 
-export type InputGroupId = (typeof INPUT_GROUPS)[number]["id"];
+export type InputBoxId = (typeof INPUT_BOXES)[number]["id"];

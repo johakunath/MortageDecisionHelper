@@ -137,6 +137,11 @@ type InputFieldProps = {
   highlight?: boolean;
   hint?: string;
   info?: string;
+  /**
+   * Hides the label visually but keeps it for screen readers. Only for grids where a
+   * row and column header already name the field — never to save space on a lone input.
+   */
+  labelHidden?: boolean;
 };
 
 export function InputField({
@@ -149,12 +154,15 @@ export function InputField({
   highlight = false,
   hint,
   info,
+  labelHidden = false,
 }: InputFieldProps) {
   return (
-    <label className={`input-field ${highlight ? "input-field-highlight" : ""}`}>
-      <span>
+    <label
+      className={`input-field ${highlight ? "input-field-highlight" : ""} ${labelHidden ? "input-field-bare" : ""}`}
+    >
+      <span className={labelHidden ? "visually-hidden" : undefined}>
         {label}
-        {info ? <InfoTip text={info} term={label} /> : null}
+        {info && !labelHidden ? <InfoTip text={info} term={label} /> : null}
       </span>
       <div className="input-row">
         <input

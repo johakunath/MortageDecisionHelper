@@ -10,7 +10,7 @@
 
 A personal decision-support tool for a German first-time **owner-occupied** property purchase.
 
-Its purpose is to help a married couple make a fact-based decision between Eigenkapital strategies: **5%, 10% or 15% down payment.**
+Its purpose is to help a married couple make a fact-based decision between Eigenkapital strategies: **10%, 15% or 20% down payment** — the three variants the broker actually quoted (90% / 85% / 80% Finanzierung).
 
 **The couple disagrees.** That disagreement is the product's reason to exist:
 
@@ -38,7 +38,7 @@ The tool must reduce reliance on intuition, fear, optimism and rules of thumb. I
 Down payment · purchase costs · immediate renovation · moving and furniture · total cash required · cash remaining after purchase · difference vs. the desired safety reserve.
 
 ### 2.2 Is a lower down payment acceptable?
-Compare 5% / 10% / 15% on: loan amount, interest rate, initial repayment rate, monthly payment, all-in monthly ownership cost, total interest, interest during the fixed-rate period, remaining debt after the fixed-rate period, liquidity after purchase, reserve gap, household burden.
+Compare 10% / 15% / 20% on: loan amount, interest rate, derived repayment rate, runtime to payoff, all-in monthly ownership cost, total interest, interest during the fixed-rate period, remaining debt after the fixed-rate period, liquidity after purchase, reserve gap, household burden. The monthly payment is an input held constant across the three, not an output that varies (DECISIONS.md D14).
 
 Must **explicitly quantify**: interest saved by more EK · liquidity lost by more EK · monthly payment difference · remaining debt difference · **opportunity cost of selling more ETFs**.
 
@@ -76,7 +76,7 @@ This app consumes **headline assumptions** from those tools rather than reimplem
 
 1. **Decision clarity before calculation depth.** Lead with conclusions: best for total cost, best for liquidity, best compromise, whether *any* scenario is comfortable, and the main reason a scenario is risky. Detail stays accessible but must not dominate the first screen.
 2. **Inputs and outputs must be visually unmistakable.** Editable assumptions look like compact financial-calculator controls. Calculated outputs are read-only and structurally distinct — never confusable with a field.
-3. **No false recommendation.** If every scenario violates a threshold, say **"Kein sauberes Szenario"**. Never present the least-bad option as though it were safe.
+3. **No false recommendation.** If every scenario violates a threshold, say **"Keine der drei Varianten ist tragbar"** (DECISIONS.md D11). Never present the least-bad option as though it were safe.
 4. **Transparent assumptions.** Formulas and thresholds visible. Clearly separate: mathematical outputs · user assumptions · heuristic thresholds · uncertain future scenarios.
 5. **Avoid unnecessary detail.** Big-picture decision tool. Not household accounting.
 
@@ -87,7 +87,7 @@ This app consumes **headline assumptions** from those tools rather than reimplem
 The intended flow is **linear**, not a set of parallel tabs:
 
 1. Enter property and financing assumptions
-2. Review the 5/10/15% scenarios
+2. Review the 10/15/20% scenarios
 3. Select one scenario
 4. See the cost-versus-liquidity trade-off
 5. Test whether Sondertilgung compensates for lower EK
@@ -102,7 +102,7 @@ The intended flow is **linear**, not a set of parallel tabs:
 ### 7.1 Entscheidung
 Kosten-Minimum · Liquiditäts-Maximum · best compromise · selected scenario · whether a clean scenario exists at all · main risk/limiting factor · **a central trade-off statement**, e.g.:
 
-> 15% Eigenkapital saves ~X € in interest compared with 5%, but requires Y € more cash upfront.
+> 20% Eigenkapital saves ~X € in interest compared with 10% and clears the loan Z years sooner, but requires Y € more cash upfront.
 
 ### 7.2 Eingaben
 - **Kauf** — purchase price, closing-cost %, available capital, safety reserve, renovation, moving/furniture, current warm rent, monthly ownership costs
@@ -114,7 +114,7 @@ Kosten-Minimum · Liquiditäts-Maximum · best compromise · selected scenario �
 Clickable cards per scenario showing: down payment, loan, interest rate, monthly payment, all-in cost, total interest, fixed-period interest, remaining debt, cash needed, cash remaining, reserve gap, affordability status.
 
 ### 7.4 Sondertilgung
-Answers: *how much annual Sondertilgung would a lower-EK scenario need to match the total interest of 15% EK?* — for 5%→15% and 10%→15%.
+Answers: *what does our Sondertilgung buy, and does it close the gap to the other EK levels?* The reference is the selected scenario running its current plan; every other level is measured without Sondertilgung of its own, and the app names which side would have to pay to catch up (DECISIONS.md D17).
 
 Shows: required annual amount · configured amount · maximum contractually permitted · whether break-even is mathematically feasible · whether the required amount looks realistic.
 
@@ -151,7 +151,17 @@ Formula descriptions · assumptions · thresholds · validation status · known 
 | Interest-rate change while waiting | −0,3 pp |
 | Expected ETF return | 5% p.a. |
 
-**Interest rates by EK level** (user assumptions, *not* live market rates): 5% EK → 4,15% · 10% EK → 3,85% · 15% EK → 3,65%
+**Sollzins by EK level × Zinsbindung** (from the Finanzierungsangebot 07.08.2026, entered by hand, *not* live market rates):
+
+| EK | 10 Jahre | 15 Jahre |
+|---|---|---|
+| 10% | 3,87% | 4,06% |
+| 15% | 3,86% | 4,06% |
+| 20% | 3,76% | 3,96% |
+
+They are **not monotonic** in Eigenkapital — at a 15-year binding 10% and 15% cost the same. 20 Jahre Zinsbindung is not offered and not modelled (DECISIONS.md D16).
+
+**Monatsrate** 1.900 €, identical in every scenario; the Tilgungssatz follows from it.
 
 ---
 
@@ -199,7 +209,7 @@ A scenario is **clean/feasible** only when **both** hold:
 1. cash remaining ≥ safety reserve target
 2. burden ratio ≤ the configured threshold (default 40%)
 
-**If none qualify** → say "Kein sauberes Szenario", and explain whether the problem is insufficient upfront cash, a reserve violation, an excessive monthly burden, or a combination.
+**If none qualify** → say "Keine der drei Varianten ist tragbar", and explain whether the problem is a monthly rate that does not amortise, insufficient upfront cash, a reserve violation, an excessive monthly burden, or a combination.
 
 **If several qualify** → prefer 10% EK as the default compromise; if 10% is not feasible, take the feasible scenario with the lowest total interest.
 
@@ -211,7 +221,7 @@ Always show separate winners for: **lowest cost · highest liquidity · lowest m
 
 Compare 5-vs-10, 15-vs-10, 15-vs-5. For each: difference in cash remaining, total interest, monthly cost, **remaining debt**, plus a plain-language interpretation.
 
-> Using 15% instead of 10% reduces total interest by X €, but leaves Y € less cash after purchase.
+> Using 20% instead of 10% reduces total interest by X € and pays the loan off Z years sooner, but leaves Y € less cash after purchase.
 
 **Signs must be unambiguous. The UI must not rely on colour alone.**
 
@@ -268,7 +278,7 @@ Compare: loan amount · monthly payment · remaining debt after 10 years · fixe
 1. Reliable calculation outputs
 2. Clear distinction between editable inputs and calculated results
 3. A strong first-screen decision summary
-4. Understandable 5/10/15% trade-offs
+4. Understandable 10/15/20% trade-offs
 5. A trustworthy "no clean scenario" state
 6. Clear Sondertilgung break-even results
 7. Reduced visual overload

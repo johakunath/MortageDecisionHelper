@@ -1,5 +1,5 @@
 import { BETTER_WHEN, type DecisionResult, type ScenarioResult } from "../lib/calculations";
-import { formatEur, formatPct } from "../lib/format";
+import { formatYears } from "../lib/format";
 import { SignedValue, StatusPill } from "./ui";
 
 type CompromiseFinderProps = {
@@ -39,7 +39,11 @@ function ScenarioDoor({
         <StatusPill tone={scenario.statusTone}>{scenario.status}</StatusPill>
       </div>
       <div className="door-meta">
-        <span>{formatEur(scenario.mortgage.regularMonthlyPayment)} mtl.</span>
+        {/*
+          Not the monthly rate: it is identical on all three doors by construction
+          (D14). What differs is how fast that same rate pays the loan off.
+        */}
+        <span>{formatYears(scenario.mortgage.runtimeYears)} schuldenfrei</span>
         <i />
         <span className="door-meta-cash">
           <SignedValue
@@ -59,9 +63,16 @@ export default function CompromiseFinder({
   decision,
   onSelectScenario,
 }: CompromiseFinderProps) {
-  const liquidity = scenarios.find((scenario) => scenario.id === "ek5") ?? scenarios[0];
-  const compromise = decision.recommendation ?? scenarios.find((scenario) => scenario.id === "ek10") ?? selected;
-  const interest = scenarios.find((scenario) => scenario.id === "ek15") ?? scenarios[2];
+  // Derived from the list, not from hardcoded ids: least Eigenkapital protects the
+  // most liquidity, most Eigenkapital buys the lowest interest, the middle is the
+  // compromise. Changing the EK set is a change in defaults.ts and nowhere else.
+  //
+  // The middle door is strictly the middle SCENARIO, never `decision.recommendation`:
+  // the recommendation prefers 10% EK, which is now also the lowest level, so binding
+  // it here rendered the same door twice and hid one EK level entirely.
+  const liquidity = scenarios[0];
+  const compromise = scenarios[Math.floor(scenarios.length / 2)];
+  const interest = scenarios[scenarios.length - 1];
 
   return (
     <section className="compromise-finder">
@@ -75,7 +86,7 @@ export default function CompromiseFinder({
           scenario={liquidity}
           selected={selected.id === liquidity.id}
           label="Reserve halten"
-          verdict="sicherer, aber teurer"
+          verdict="mehr Cash, aber teurer"
           onSelect={() => onSelectScenario(liquidity.id)}
         />
 
@@ -83,7 +94,7 @@ export default function CompromiseFinder({
           scenario={compromise}
           selected={selected.id === compromise.id}
           label={decision.noSafeScenario ? "Warnung" : "Mittelweg"}
-          verdict={decision.noSafeScenario ? "erst Annahmen prüfen" : `Belastung ${formatPct(compromise.burdenRatio * 100)}`}
+          verdict={decision.noSafeScenario ? "erst Annahmen prüfen" : "zwischen beidem"}
           onSelect={() => onSelectScenario(compromise.id)}
         />
 
@@ -91,7 +102,7 @@ export default function CompromiseFinder({
           scenario={interest}
           selected={selected.id === interest.id}
           label="Zinsen senken"
-          verdict="günstiger, aber knapper"
+          verdict="früher schuldenfrei, knapper"
           onSelect={() => onSelectScenario(interest.id)}
         />
       </div>

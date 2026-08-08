@@ -19,7 +19,7 @@ export default function TradeoffStatement({
   etfReturnRate,
   onEtfReturnChange,
 }: TradeoffStatementProps) {
-  const { from, to, extraCashRequired, monthlyDelta, interestSavedFixed, etfForegone, netAdvantageFixed, horizonYears } =
+  const { from, to, extraCashRequired, runtimeDelta, interestSavedFixed, etfForegone, netAdvantageFixed, horizonYears } =
     tradeoff;
   const favoursMore = netAdvantageFixed >= 0;
 
@@ -28,8 +28,9 @@ export default function TradeoffStatement({
       <p>
         <strong>{to.label} statt {from.label}:</strong> ihr spart{" "}
         <strong>{formatEur(Math.abs(interestSavedFixed))}</strong> Zinsen in den ersten{" "}
-        {horizonYears} Jahren und zahlt <strong>{formatEur(Math.abs(monthlyDelta))}</strong>{" "}
-        {monthlyDelta < 0 ? "weniger" : "mehr"} im Monat. Dafür bindet ihr{" "}
+        {horizonYears} Jahren und seid bei gleicher Monatsrate{" "}
+        <strong>{Math.abs(runtimeDelta).toFixed(1)} Jahre</strong>{" "}
+        {runtimeDelta < 0 ? "früher" : "später"} schuldenfrei. Dafür bindet ihr{" "}
         <strong>{formatEur(Math.abs(extraCashRequired))}</strong> mehr Kapital, das im ETF
         rechnerisch <strong>{formatEur(etfForegone)}</strong> gebracht hätte.
       </p>

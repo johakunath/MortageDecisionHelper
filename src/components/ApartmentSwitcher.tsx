@@ -22,6 +22,10 @@ type ApartmentFactsProps = {
  * there is exactly one place that owns purchasePrice/renovation/ownershipCosts for the
  * active apartment, this panel, which is why the old 648k-vs-600k mismatch cannot
  * recur: nothing downstream is ever fed a copy of these numbers, only a derivation.
+ *
+ * Lives at the top of §1, not in the sticky header: it is used once at the start of a
+ * session and does not earn permanent screen space (D21). The header keeps the active
+ * apartment's name and price as read-only text, so the context is still never in doubt.
  */
 export default function ApartmentSwitcher({
   results,
@@ -55,9 +59,9 @@ export default function ApartmentSwitcher({
 }
 
 /**
- * Deliberately NOT inside the sticky header. Keeping the header a fixed height means
- * everything sticking below it can clear it with one constant, instead of a runtime
- * measurement that has to stay in sync with a collapsible.
+ * Deliberately NOT inside the sticky header — a collapsible up there would make the
+ * header's height variable, and everything sticking below it clears that height with
+ * one constant rather than a runtime measurement.
  */
 export function ApartmentFacts({ apartment, onChange }: ApartmentFactsProps) {
   return (
