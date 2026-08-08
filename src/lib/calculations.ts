@@ -906,11 +906,29 @@ export function requiredSpecialToMatch(
  */
 export type SpecialCatchUp = {
   payer: "selection" | "row";
-  /** Flat annual amount, comparable to the plan's average. Null = unreachable under the cap. */
+  /**
+   * Flat annual amount, paid **every year for the whole runtime**. Null = unreachable
+   * under the cap. It is not comparable to the yearly plan's average: the plan is a
+   * finite path (ten years, then nothing), so the same € figure buys less interest.
+   * Use `planCovers` for "does our plan get there", never a comparison against the average.
+   */
   amount: number | null;
   maxSpecial: number;
   /** The payer is already at least as cheap, so nothing is required. */
   alreadyAhead: boolean;
+  /** Total interest the payer has to reach. */
+  targetInterest: number;
+  /** The payer's modelled total interest running the configured yearly path. */
+  payerInterestWithPlan: number;
+  /**
+   * Whether that modelled path — not its average — already reaches the target.
+   * The UI once answered this by comparing `annualSpecialRepayment` against `amount`,
+   * which claimed a ten-year 6.000 €/Jahr plan covered a 5.712 €/Jahr indefinite
+   * requirement while it was in fact 15.519 € of interest short. See docs/DECISIONS.md D22.
+   */
+  planCovers: boolean;
+  /** Interest the payer is still short. ≤ 0 once the path reaches the target. */
+  planShortfall: number;
 };
 
 export type SpecialMatchRow = {
@@ -974,12 +992,19 @@ export function compareSpecialScenarios(
       const target = rowIsCheaper ? interestNoSpecial : selectionInterestWithPlan;
       const chaser = rowIsCheaper ? selectedBase : base;
       const required = requiredSpecialToMatch(chaser, target, inputs, rates);
+      // What the payer's configured yearly path actually achieves, so "covered" is
+      // decided on modelled interest instead of on the path's average € figure.
+      const payerInterestWithPlan = rowIsCheaper ? selectionInterestWithPlan : interestWithPlan;
 
       catchUp = {
         payer,
         amount: required.amount,
         maxSpecial: required.maxSpecial,
         alreadyAhead: required.amount === 0,
+        targetInterest: target,
+        payerInterestWithPlan,
+        planCovers: payerInterestWithPlan <= target,
+        planShortfall: payerInterestWithPlan - target,
       };
     }
 

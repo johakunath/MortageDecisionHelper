@@ -337,3 +337,17 @@ Every status now names *what is wrong* rather than which internal constraint fai
 - `--header-height` drops from 142px to 50px; roughly 92px of viewport goes back to content on every screen.
 - `.app-header` now sets `height: var(--header-height)` explicitly with the topbar flexed inside it. Previously the header's height came from its text metrics and happened to be 43,85px against a declared constant of 50px — a 6px band in which scrolling content showed through beneath the header and above the step rail. Asserting the height makes the constant and the rendered box incapable of disagreeing, which is what D8 was actually after.
 - The rule from D8 is unchanged and now easier to keep: nothing collapsible, nothing variable-height, nothing interactive in the header.
+
+---
+
+## D22 — "Vom Plan gedeckt" is decided on modelled interest, never on the plan's average
+
+**Date:** 2026-08-08 · **Status:** accepted · **Refines** [D17](#d17--the-sondertilgung-comparison-has-exactly-one-reference-the-selected-ek-level-running-its-plan)
+
+**Context.** The catch-up cell asked "does our Sondertilgung close the gap?" by comparing two numbers that are not comparable: `catchUp.amount` is a flat payment made **every year of the runtime**, while `inputs.annualSpecialRepayment` is the **average of a finite path** — ten years at 6.000 €, then nothing. On the defaults with 10% EK selected, that plan leaves 202.498 € of interest against 186.979 € for 20% EK without any Sondertilgung, yet its 6.000 € average exceeds the required 5.712 €, so the cell printed *"vom Plan gedeckt"* for a plan that is 15.519 € short. The defect favoured the low-EK side of the couple's disagreement — the same failure mode as [D14](#d14--ek-levels-are-compared-at-a-constant-monatsrate-not-a-constant-tilgungssatz).
+
+**Decision.** `compareSpecialScenarios` publishes the answer instead of leaving the UI to infer it: `catchUp.planCovers` compares the payer's **modelled** total interest under the configured yearly path against `targetInterest`, and `catchUp.planShortfall` carries the € gap. The panel reads those fields and never touches the average.
+
+**Rationale.** The comparison is only sound in interest space. Any € figure the UI sets against `amount` re-introduces the same class of bug, because a path and a flat payment of equal size buy different amounts of interest.
+
+**Consequence.** With the selection behind, `planCovers` is false by construction — the row is only shown as a catch-up target *because* the selection running its plan is still more expensive — so the cell now states the shortfall (*"euer Jahresplan bleibt 15.519 € Zinsen darüber"*) instead of a false all-clear, and labels the amount *"jedes Jahr der Laufzeit"* so it cannot be read as a plan average. `CatchUpCell` no longer receives `configured`. Two tests pin both directions: the defaults must not report covered, and a plan that genuinely reaches the target must.

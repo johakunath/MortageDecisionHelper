@@ -27,16 +27,14 @@ function shortEur(value: number): string {
  * Names who would have to pay, always. "Deine Wahl braucht 7.400 €/Jahr" and
  * "20% EK bräuchte 7.400 €/Jahr" are statements about different people's money, and
  * the previous free-baseline UI made them impossible to tell apart.
+ *
+ * The amount is a flat payment for the **whole runtime**; the yearly plan is a finite
+ * path. Comparing the two as bare € figures is what made this cell claim "vom Plan
+ * gedeckt" for a plan that was 15.519 € of interest short, so the covered state comes
+ * from the engine's modelled path (`catchUp.planCovers`), never from the average.
+ * See docs/DECISIONS.md D22.
  */
-function CatchUpCell({
-  row,
-  selected,
-  configured,
-}: {
-  row: SpecialMatchRow;
-  selected: ScenarioResult;
-  configured: number;
-}) {
+function CatchUpCell({ row, selected }: { row: SpecialMatchRow; selected: ScenarioResult }) {
   const { catchUp } = row;
   if (!catchUp) return <span className="muted">—</span>;
 
@@ -62,16 +60,16 @@ function CatchUpCell({
     );
   }
 
-  const covered = catchUp.payer === "selection" && configured >= catchUp.amount;
+  const covered = catchUp.payer === "selection" && catchUp.planCovers;
   return (
     <span className={covered ? "special-covered" : "special-short"}>
       {formatEur(catchUp.amount)}/Jahr
       <small>
-        {payerName}
+        {payerName} · jedes Jahr der Laufzeit
         {catchUp.payer === "selection"
           ? covered
-            ? " — vom Plan gedeckt"
-            : ` — Plan heute: Ø ${formatEur(configured)}`
+            ? " — euer Jahresplan erreicht das bereits"
+            : ` — euer Jahresplan bleibt ${formatEur(catchUp.planShortfall)} Zinsen darüber`
           : ""}
       </small>
     </span>
@@ -205,7 +203,7 @@ export default function SondertilgungPanel({
                   />
                 </td>
                 <td>
-                  <CatchUpCell row={row} selected={selected} configured={configured} />
+                  <CatchUpCell row={row} selected={selected} />
                 </td>
               </tr>
             ))}

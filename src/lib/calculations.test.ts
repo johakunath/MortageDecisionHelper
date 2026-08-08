@@ -362,6 +362,44 @@ describe("calculation engine", () => {
     expect(lower.catchUp!.payer).toBe("row");
   });
 
+  it("decides 'covered' on the modelled path, not on the plan's average (D22)", () => {
+    const fromLowest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, DEFAULT_RATES);
+    const higher = fromLowest.rows.find((row) => row.base.id === HIGHEST.id)!;
+    const catchUp = higher.catchUp!;
+
+    // The exact trap: the ten-year 6.000 €/Jahr plan averages MORE than the flat amount
+    // the catch-up asks for, and still pays more interest, because the flat amount runs
+    // for the whole runtime and the plan stops after year ten.
+    expect(catchUp.payer).toBe("selection");
+    expect(catchUp.amount).not.toBeNull();
+    expect(DEFAULT_INPUTS.annualSpecialRepayment).toBeGreaterThan(catchUp.amount!);
+    expect(catchUp.planCovers).toBe(false);
+    expect(catchUp.planShortfall).toBeGreaterThan(0);
+
+    // The shortfall is the modelled gap, so it must reconcile with the row's own delta.
+    expect(catchUp.targetInterest).toBeCloseTo(higher.interestNoSpecial, 6);
+    expect(catchUp.payerInterestWithPlan).toBeCloseTo(fromLowest.selectionInterestWithPlan, 6);
+    expect(catchUp.planShortfall).toBeCloseTo(-higher.deltaToSelection, 6);
+  });
+
+  it("reports the catch-up as covered once the path really reaches the target", () => {
+    // Same defaults, but the plan runs long enough and high enough to actually get there.
+    const generous = {
+      ...DEFAULT_INPUTS,
+      annualSpecialRepayments: Array.from({ length: 30 }, () => 20000),
+      annualSpecialRepayment: 20000,
+    };
+    const comparison = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, generous, DEFAULT_RATES);
+    const higher = comparison.rows.find((row) => row.base.id === HIGHEST.id)!;
+
+    // With the selection now cheaper than the untouched higher level, the payer flips to
+    // that row — and our side is recorded as needing nothing.
+    expect(comparison.selectionInterestWithPlan).toBeLessThan(higher.interestNoSpecial);
+    expect(higher.catchUp!.payer).toBe("row");
+    expect(higher.catchUp!.planShortfall).toBeLessThanOrEqual(0);
+    expect(higher.catchUp!.planCovers).toBe(true);
+  });
+
   it("raises the required catch-up as the target gets cheaper", () => {
     const modest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, DEFAULT_RATES);
     const modestNeeded = modest.rows.find((row) => row.base.id === MIDDLE.id)!.catchUp!;
