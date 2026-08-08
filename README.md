@@ -75,7 +75,11 @@ Everything stays **in this browser** — there is no server and nothing is trans
 
 Full list of simplifications and known defects: [`docs/ASSUMPTIONS.md`](docs/ASSUMPTIONS.md).
 
-⚠️ **Not yet validated against an external calculator.** Before this informs a real purchase, check the preferred scenario against an independent German mortgage calculator and ideally a real bank offer — see [PRODUCT_SPEC §19](docs/PRODUCT_SPEC.md#19-validation-before-real-use).
+✅ **Validated against a real broker offer.** All six quoted financing variants agree
+with the model to within eight cents and are pinned in an automated regression test.
+The owner's Google Sheet and an independent German mortgage calculator are still
+outstanding checks — see [the validation record](docs/ASSUMPTIONS.md#6-validation-status)
+and [PRODUCT_SPEC §19](docs/PRODUCT_SPEC.md#19-validation-before-real-use).
 
 ---
 
