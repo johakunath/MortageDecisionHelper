@@ -128,6 +128,39 @@ describe("persistence", () => {
     expect(apartment.annualSpecialRepayments).toEqual([]);
   });
 
+  it("rebuilds a v1 Monatsrate from the contract that save actually held (K15)", () => {
+    // The global inputs.purchasePrice is stale; every v1 figure came from the ACTIVE
+    // apartment, at the EK level the save was on, priced with the rate it stored.
+    const legacy = {
+      version: 1,
+      inputs: { purchasePrice: 720000, repaymentRate: 2.4, fixedRateYears: 10 },
+      rates: { ek5: 4.15, ek10: 3.85, ek15: 3.65 },
+      apartmentCases: [
+        {
+          id: "flat-a",
+          label: "Wohnung A",
+          purchasePrice: 600000,
+          renovation: 0,
+          monthlyOwnershipCosts: 700,
+          selectedScenarioId: "ek5",
+          annualSpecialRepayments: [],
+        },
+      ],
+      activeApartmentId: "flat-a",
+      selectedId: "ek5",
+    };
+    window.localStorage.setItem("mdh:save:v1-active", JSON.stringify(legacy));
+
+    const loaded = loadNamed("v1-active")!;
+    // 5% EK on the 600k flat at the stored 4,15% plus 2,4% Tilgung.
+    const expected = (600000 * 0.95 * ((4.15 + 2.4) / 100)) / 12;
+    expect(loaded.inputs.monthlyPayment).toBeCloseTo(expected, -1);
+
+    // Deriving it from the stale 720k, a hardcoded 90% loan and today's default rate
+    // produced 3.390 € — 279 €/Monat of silently added burden.
+    expect(loaded.inputs.monthlyPayment).toBeLessThan(3300);
+  });
+
   it("rejects a save from an unknown future version", () => {
     window.localStorage.setItem("mdh:save:future", JSON.stringify({ version: 99, apartmentCases: [] }));
     expect(loadNamed("future")).toBeNull();

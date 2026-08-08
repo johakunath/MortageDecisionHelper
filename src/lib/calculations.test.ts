@@ -502,6 +502,37 @@ describe("calculation engine", () => {
     expect(runtimeYearsFromRepaymentRate(3, 0)).toBe(Infinity);
   });
 
+  it("measures the payment shortfall against the 60-year bar, not the interest (K16)", () => {
+    const loan = DEFAULT_INPUTS.purchasePrice * 0.9;
+    const interestOnly = (loan * DEFAULT_RATES[10].ek10) / 1200;
+
+    // Just above the interest-only floor: the loan DOES amortise — in about 80 years.
+    // Reporting the gap against the interest made it positive, and the UI printed that
+    // positive number as an amount still missing.
+    const inputs = {
+      ...DEFAULT_INPUTS,
+      monthlyPayment: Math.ceil(interestOnly) + 5,
+      annualSpecialRepayments: [],
+    };
+    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const check = scenario.diagnosis.checks.find((entry) => entry.id === "payment")!;
+
+    expect(scenario.mortgage.runtimeYears).toBeGreaterThan(60);
+    expect(check.passed).toBe(false);
+    expect(inputs.monthlyPayment).toBeGreaterThan(interestOnly);
+    // The failure must read as a shortfall, so the gap has to be negative.
+    expect(check.gap).toBeLessThan(0);
+    expect(check.required).toBeGreaterThan(interestOnly);
+
+    // Paying exactly the reported requirement must clear the check.
+    const atTheBar = buildScenario(
+      LOWEST,
+      { ...inputs, monthlyPayment: Math.ceil(check.required) },
+      DEFAULT_RATES,
+    );
+    expect(atTheBar.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(true);
+  });
+
   it("flags a Monatsrate the model had to raise to simulate at all (K14)", () => {
     const inputs = { ...DEFAULT_INPUTS, monthlyPayment: 1200 };
     const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);

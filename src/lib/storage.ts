@@ -159,26 +159,58 @@ function reviveApartment(stored: unknown, index: number): ApartmentCase {
   };
 }
 
+/** The EK level a v1 save was sitting on, read off its legacy id ("ek5" → 5). */
+function legacyEkRate(selectedId: unknown): number {
+  const parsed = Number(String(selectedId ?? "").replace("ek", ""));
+  return Number.isFinite(parsed) && parsed > 0 && parsed < 100 ? parsed : 10;
+}
+
+/** The price every v1 figure was really based on: the apartment that was active. */
+function legacyActivePrice(parsed: Record<string, unknown>, fallback: number): number {
+  const cases = Array.isArray(parsed.apartmentCases) ? parsed.apartmentCases : [];
+  const active =
+    cases.find((entry) => (entry as Record<string, unknown>)?.id === parsed.activeApartmentId) ??
+    cases[0];
+  const price = Number((active as Record<string, unknown> | undefined)?.purchasePrice);
+  return Number.isFinite(price) && price > 0 ? price : fallback;
+}
+
 /**
  * v1 → v2. The EK levels moved from 5/10/15 to 10/15/20, the rates became a matrix
  * over the two Sollzinsbindungen, and the contract input changed from Tilgungssatz to
  * Monatsrate.
  *
- * The stored rates are dropped rather than mapped: a flat v1 rate carries no record
- * of which binding it belonged to, so any placement would be a guess dressed up as
- * data. The new defaults come from an actual offer, which beats a guess.
+ * The stored rates are dropped **as a rate matrix**: a flat v1 rate carries no record
+ * of which Sollzinsbindung it belonged to, so placing it in a column would be a guess
+ * dressed up as data. Reconstructing the monthly payment is a different question, and
+ * there the legacy rate is the best evidence there is — it is the rate that produced
+ * the annuity the couple was actually paying.
+ *
+ * So the replacement Monatsrate is rebuilt from the contract as it stood: the **active
+ * apartment's** price, the EK level the save was on, and the rate stored for that level.
+ * Deriving it from the stale global `inputs.purchasePrice`, a hardcoded 90% loan and
+ * today's default rate silently moved the payment by 279 €/Monat on a 600k flat at the
+ * old 5% EK level, and every affordability and interest figure moved with it. See
+ * docs/ASSUMPTIONS.md K15.
  */
 function migrateV1(parsed: Record<string, unknown>): Record<string, unknown> {
   const inputs = { ...(parsed.inputs as Record<string, unknown> | undefined) };
-  const price = Number(inputs.purchasePrice) || DEFAULT_INPUTS.purchasePrice;
   const repaymentRate = Number(inputs.repaymentRate);
 
   if (Number.isFinite(repaymentRate) && repaymentRate > 0) {
-    // Same contract, expressed the way the model now stores it: what that Tilgungssatz
-    // would have cost per month on the 90% loan the old default assumed.
-    const referenceLoan = price * 0.9;
+    const globalPrice = Number(inputs.purchasePrice) || DEFAULT_INPUTS.purchasePrice;
+    const price = legacyActivePrice(parsed, globalPrice);
+    const ekRate = legacyEkRate(parsed.selectedId);
+    const storedRates = (parsed.rates ?? {}) as Record<string, unknown>;
+    const storedRate = Number(storedRates[String(parsed.selectedId)]);
+    const interestRate =
+      Number.isFinite(storedRate) && storedRate > 0 ? storedRate : DEFAULT_RATES[10].ek10;
+
+    // Rounded to the nearest 10 € — this is a faithful reconstruction, not a figure
+    // the save ever actually held.
+    const loan = price * (1 - ekRate / 100);
     inputs.monthlyPayment =
-      Math.round((referenceLoan * ((DEFAULT_RATES[10].ek10 + repaymentRate) / 100)) / 12 / 10) * 10;
+      Math.round((loan * ((interestRate + repaymentRate) / 100)) / 12 / 10) * 10;
   }
   delete inputs.repaymentRate;
   inputs.fixedRateYears = normaliseFixedPeriod(Number(inputs.fixedRateYears) || DEFAULT_INPUTS.fixedRateYears);

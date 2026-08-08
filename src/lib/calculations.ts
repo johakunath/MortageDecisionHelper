@@ -153,7 +153,14 @@ export type ConstraintCheck = {
   passed: boolean;
   actual: number;
   required: number;
-  /** Signed shortfall. Negative means the constraint is missed by this much. */
+  /**
+   * Signed shortfall. Negative means the constraint is missed by this much.
+   *
+   * For `payment` the bar is the 60-year annuity, while `passed` reflects the runtime
+   * actually simulated — so a plan whose Sondertilgung drags a slow loan back under 60
+   * years can pass with a negative gap. Only failed checks are ever read for their gap
+   * (see `findNarrowestMiss`), so that combination never reaches the screen.
+   */
   gap: number;
 };
 
@@ -535,6 +542,15 @@ export function buildScenario(
   // Interest-only floor: below this the balance never falls, whatever the plan says.
   const interestOnlyPayment = (loan * interestRate) / 1200;
   const amortises = inputs.monthlyPayment > interestOnlyPayment && mortgage.runtimeYears <= 60;
+  // The bar the check actually applies: the smallest annuity that clears the loan
+  // inside the 60-year horizon. Reporting the shortfall against `interestOnlyPayment`
+  // instead produced a POSITIVE gap for a payment that clears the interest but would
+  // take 80 years — and the UI printed that as an amount still missing. K16.
+  const minimumPayment = monthlyAnnuity(
+    loan,
+    interestRate,
+    repaymentRateFromRuntimeYears(interestRate, 60),
+  );
   // `repaymentRateFromMonthlyPayment` floors the Tilgungssatz at 0,01%. Detect that
   // floor from the unrounded implied rate rather than from a euro tolerance: close to
   // the boundary the substituted annuity can differ by only a few cents, but the
@@ -547,8 +563,8 @@ export function buildScenario(
       id: "payment",
       passed: amortises,
       actual: inputs.monthlyPayment,
-      required: interestOnlyPayment,
-      gap: inputs.monthlyPayment - interestOnlyPayment,
+      required: minimumPayment,
+      gap: inputs.monthlyPayment - minimumPayment,
     },
     // Can the purchase be completed at all?
     { id: "cash", passed: cashLeft >= 0, actual: cashLeft, required: 0, gap: cashLeft },
