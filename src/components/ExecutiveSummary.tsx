@@ -21,6 +21,23 @@ const CONSTRAINT_LABELS: Record<ConstraintId, string> = {
   burden: "die Monatsbelastung ist zu hoch",
 };
 
+/**
+ * `gap` carries a different unit per constraint — a ratio for `burden`, €/Monat for
+ * `payment`, € for `cash` and `reserve` — so the unit is chosen here rather than
+ * assumed. Printing the payment gap as a plain "es fehlen X €" read as a one-off
+ * shortfall when it is a monthly one.
+ */
+function describeMiss(constraint: ConstraintId, gap: number): string {
+  const missing = Math.abs(gap);
+  if (constraint === "burden") {
+    return `die Rate liegt ${formatPct(missing * 100)} über eurer Grenze.`;
+  }
+  if (constraint === "payment") {
+    return `der Monatsrate fehlen ${formatEur(missing)} pro Monat, um überhaupt zu tilgen.`;
+  }
+  return `es fehlen ${formatEur(missing)}.`;
+}
+
 function describeBlockers(failed: ConstraintId[]): string {
   const parts = failed.map((id) => CONSTRAINT_LABELS[id]);
   if (parts.length === 0) return "die Annahmen passen nicht zusammen";
@@ -62,9 +79,7 @@ export default function ExecutiveSummary({ decision, inputs, selected }: Executi
         {miss ? (
           <p className="verdict-miss">
             Am nächsten dran ist <strong>{miss.scenarioId.replace("ek", "")}% EK</strong> —{" "}
-            {miss.constraint === "burden"
-              ? `die Rate liegt ${formatPct(Math.abs(miss.gap) * 100)} über eurer Grenze.`
-              : `es fehlen ${formatEur(Math.abs(miss.gap))}.`}
+            {describeMiss(miss.constraint, miss.gap)}
           </p>
         ) : null}
       </div>

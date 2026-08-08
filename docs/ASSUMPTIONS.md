@@ -168,7 +168,7 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 ## 5. Defect log
 
 All resolved. Kept as history — each of these skewed a number the couple was arguing
-over, and three of them happened to favour the same side.
+over, and four of them happened to favour the same side.
 
 | # | Defect | Effect | Resolved by |
 |---|---|---|---|
@@ -181,6 +181,10 @@ over, and three of them happened to favour the same side.
 | K7 | 40% burden threshold hardcoded in logic and duplicated in four display strings | Spec calls it adjustable; it wasn't | `maxBurdenRate` input |
 | K8 | `annualSpecialRepayment` is both an editable input and a value overwritten with the path average | A field the user typed into got silently replaced | Readout only; the Jahresplan is the single source |
 | K9 | EK levels compared at a constant Tilgungssatz while the bank compares at a constant Monatsrate | Understated what more Eigenkapital buys by **35.494 €** of remaining debt after 10 years, systematically against the "more EK" side | [D14](DECISIONS.md) |
+| K10 | `SondertilgungPanel` calls a plan "vom Plan gedeckt" by comparing the yearly path's **average** against the required **flat, whole-runtime** amount | Claimed the defaults' ten-year 6.000 €/Jahr plan had caught 20% EK while it was 15.519 € of interest short. **Favoured the low-EK side** | [D22](DECISIONS.md) |
+| K11 | The Warten table is hardcoded to `[0, 12, 24]` while "Wartezeit" sits above it as a highlighted input | The field was stored, persisted and read by nothing — editing it changed no number on screen | `waitPeriodsFor()` |
+| K12 | `narrowestMiss.gap` printed as "es fehlen X €" for every constraint | The `payment` gap is €/**Monat**; a monthly shortfall read as a one-off amount | `describeMiss()` |
+| K13 | "ihr spart \|interestSavedFixed\| Zinsen" in the trade-off statement | The Sollzinsen are hand-entered and not monotone in EK, so the sentence could state the exact opposite of its own number | Sign read, not assumed |
 
 ---
 

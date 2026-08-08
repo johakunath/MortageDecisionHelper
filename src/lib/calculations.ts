@@ -244,7 +244,6 @@ export type EkTradeoff = {
   from: ScenarioResult;
   to: ScenarioResult;
   extraCashRequired: number;
-  cashLeftDelta: number;
   /**
    * Near zero by construction — the monthly rate is held constant across EK levels.
    * Kept because it is still a true figure, but `runtimeDelta` is what actually moves.
@@ -252,12 +251,9 @@ export type EkTradeoff = {
   monthlyDelta: number;
   /** Negative = debt-free this many years sooner. What more Eigenkapital really buys. */
   runtimeDelta: number;
-  remainingDebtDelta: number;
   horizonYears: number;
   /** Reliable: both sides are inside the fixed-rate period. */
   interestSavedFixed: number;
-  /** Illustrative only: assumes today's rate holds for the whole term. */
-  interestSavedTotal: number;
   etfForegone: number;
   /** interestSavedFixed − etfForegone. Positive favours more Eigenkapital. */
   netAdvantageFixed: number;
@@ -516,7 +512,13 @@ export function buildScenario(
   const downPayment = inputs.purchasePrice * (base.ekRate / 100);
   const loan = Math.max(0, inputs.purchasePrice - downPayment);
   const closingCosts = inputs.purchasePrice * (inputs.closingCostRate / 100);
-  const cashNeeded = downPayment + closingCosts + inputs.renovation + inputs.moving;
+  const cashNeeded = calculateCashNeeded(
+    inputs.purchasePrice,
+    base.ekRate,
+    inputs.closingCostRate,
+    inputs.renovation,
+    inputs.moving,
+  );
   const interestRate = rateFor(rates, inputs.fixedRateYears, base.id);
   // Same € every month at every EK level; the Tilgungssatz is what moves. Verified
   // against the broker's Tilgungsplan: 405.000 € at 3,87 % and 1.900 €/month yields
@@ -727,8 +729,9 @@ function constraintsFailedInAll(scenarios: ScenarioResult[]): ConstraintId[] {
  * The infeasible scenario that came closest, and its primary blocker.
  *
  * Ranked by how many constraints failed; ties keep the given scenario order.
- * NOTE: `gap` is in € for `cash`/`reserve` and a ratio for `burden` — the consumer
- * must format according to `constraint`.
+ * NOTE: `gap` carries a different unit per constraint — € for `cash`/`reserve`,
+ * €/Monat for `payment`, a ratio for `burden`. The consumer must format according to
+ * `constraint`; this list omitted `payment` and the UI printed it as a one-off €.
  */
 function findNarrowestMiss(scenarios: ScenarioResult[]): DecisionDiagnosis["narrowestMiss"] {
   const infeasible = scenarios.filter((scenario) => !scenario.feasible);
@@ -796,14 +799,10 @@ export function compareEkScenarios(
     from,
     to,
     extraCashRequired,
-    cashLeftDelta: to.cashLeft - from.cashLeft,
     monthlyDelta: to.allInMonthly - from.allInMonthly,
     runtimeDelta: to.mortgage.runtimeYears - from.mortgage.runtimeYears,
-    remainingDebtDelta:
-      to.mortgage.remainingAfterFixed - from.mortgage.remainingAfterFixed,
     horizonYears,
     interestSavedFixed,
-    interestSavedTotal: from.mortgage.interestTotal - to.mortgage.interestTotal,
     etfForegone,
     netAdvantageFixed: interestSavedFixed - etfForegone,
   };
@@ -1074,6 +1073,19 @@ export function buildWaitScenario(
     deltaInterest: scenario.mortgage.interestTotal - selectedNow.mortgage.interestTotal,
     years,
   };
+}
+
+/**
+ * The columns the Warten table shows: the buy-now baseline, the spec's two reference
+ * periods (PRODUCT_SPEC §7.5), and whatever the couple typed into "Wartezeit".
+ *
+ * That last one is the point. The table used to be hardcoded to `[0, 12, 24]` while
+ * "Wartezeit" sat above it as a highlighted input — stored, persisted, and read by
+ * nothing. Deduplicated, so the default of 12 does not produce two identical columns.
+ */
+export function waitPeriodsFor(waitMonths: number): number[] {
+  const requested = Number.isFinite(waitMonths) ? Math.max(0, Math.round(waitMonths)) : 0;
+  return [...new Set([0, 12, 24, requested])].sort((a, b) => a - b);
 }
 
 /**

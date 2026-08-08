@@ -19,6 +19,7 @@ import {
   requiredSpecialToMatch,
   runtimeYearsFromRepaymentRate,
   simulateMortgage,
+  waitPeriodsFor,
   type ScenarioId,
 } from "./calculations";
 import { CASE_PRESETS, DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
@@ -304,6 +305,23 @@ describe("calculation engine", () => {
       etfReturnRate: 14,
     });
     expect(optimistic.netAdvantageFixed).toBeLessThan(tradeoff.netAdvantageFixed);
+  });
+
+  it("gives the entered Wartezeit its own column", () => {
+    // The default coincides with a reference period, so it must NOT add a duplicate.
+    expect(waitPeriodsFor(12)).toEqual([0, 12, 24]);
+    expect(waitPeriodsFor(24)).toEqual([0, 12, 24]);
+
+    // Anything else earns a column of its own, in chronological order — without one,
+    // "Wartezeit" was an input the table ignored.
+    expect(waitPeriodsFor(18)).toEqual([0, 12, 18, 24]);
+    expect(waitPeriodsFor(36)).toEqual([0, 12, 24, 36]);
+
+    // Nothing a number input can emit may produce a bogus column.
+    expect(waitPeriodsFor(0)).toEqual([0, 12, 24]);
+    expect(waitPeriodsFor(-5)).toEqual([0, 12, 24]);
+    expect(waitPeriodsFor(NaN)).toEqual([0, 12, 24]);
+    expect(waitPeriodsFor(18.4)).toEqual([0, 12, 18, 24]);
   });
 
   it("builds buy-now and waiting periods side by side", () => {

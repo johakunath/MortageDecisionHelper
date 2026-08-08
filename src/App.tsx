@@ -22,6 +22,7 @@ import {
   compareSpecialScenarios,
   evaluateDecision,
   normaliseFixedPeriod,
+  waitPeriodsFor,
   type ApartmentCase,
   type InterestRates,
   type MortgageInputs,
@@ -121,9 +122,14 @@ export default function App() {
     [selected.id, activeInputs, rates],
   );
 
+  const waitPeriods = useMemo(
+    () => waitPeriodsFor(activeInputs.waitMonths),
+    [activeInputs.waitMonths],
+  );
+
   const waitScenarios = useMemo(
-    () => buildWaitScenarios(selected, selected, activeInputs, rates, [0, 12, 24]),
-    [selected, activeInputs, rates],
+    () => buildWaitScenarios(selected, selected, activeInputs, rates, waitPeriods),
+    [selected, activeInputs, rates, waitPeriods],
   );
 
   // Headline trade-off: maximum contrast — least against most Eigenkapital, over one
@@ -227,8 +233,11 @@ export default function App() {
           : apartment,
       ),
     );
-    // Sicherheitsfokus keeps the most cash back, i.e. the lowest EK level.
-    setSelectedId(preset === "safety" ? EK_SCENARIOS[0].id : "ek10");
+    // Both presets land on the lowest EK level: Sicherheitsfokus because it keeps the
+    // most cash back, Mehr Sondertilgung because that is the side of the argument
+    // Sondertilgung is meant to answer. The ternary that used to stand here chose
+    // between two spellings of the same id.
+    setSelectedId(EK_SCENARIOS[0].id);
   }
 
   // Drives the step rail. The page is one scroll surface so two people reading
@@ -432,6 +441,7 @@ export default function App() {
                     step={1}
                     min={0}
                     onChange={(value) => updateInput("waitMonths", value)}
+                    hint="Bekommt unten eine eigene Spalte neben 12 und 24 Monaten"
                     highlight
                   />
                   <InputField
