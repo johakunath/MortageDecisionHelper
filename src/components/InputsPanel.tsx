@@ -14,7 +14,7 @@ import {
 } from "../lib/calculations";
 import { INPUT_BOXES } from "../lib/defaults";
 import { GLOSSARY } from "../lib/glossary";
-import { formatEur } from "../lib/format";
+import { formatEur, formatPct, formatYears } from "../lib/format";
 import { Button, InputField, Readout, Section, SegmentedChoice, type SegmentedOption } from "./ui";
 
 /** The two real German cases: with and without Makler. Nothing in between is common. */
@@ -83,7 +83,8 @@ function PaymentField({
     inputs.monthlyPayment,
   );
   const runtime = runtimeYearsFromRepaymentRate(referenceRate, repaymentRate);
-  const runtimeText = Number.isFinite(runtime) ? `${runtime.toFixed(0)} Jahre` : "läuft nie ab";
+  const runtimeText = Number.isFinite(runtime) ? formatYears(Math.round(runtime)) : "läuft nie ab";
+  const repaymentText = `${formatPct(repaymentRate, 2)} Tilgung`;
 
   return (
     <div className="tilgung-field">
@@ -105,7 +106,7 @@ function PaymentField({
           highlight
           onChange={(value) => onInputChange("monthlyPayment", Math.max(1, value))}
           info={GLOSSARY.monthlyPayment}
-          hint={`bei ${ekRate}% EK: ${repaymentRate.toFixed(2)}% Tilgung · ${runtimeText}`}
+          hint={`bei ${ekRate}% EK: ${repaymentText} · ${runtimeText}`}
         />
       ) : null}
 
@@ -142,7 +143,7 @@ function PaymentField({
               Math.round(monthlyAnnuity(referenceLoan, referenceRate, derived)),
             );
           }}
-          hint={`= ${formatEur(inputs.monthlyPayment)}/Monat · ${repaymentRate.toFixed(2)}% Tilgung`}
+          hint={`= ${formatEur(inputs.monthlyPayment)}/Monat · ${repaymentText}`}
         />
       ) : null}
     </div>
@@ -377,9 +378,7 @@ export default function InputsPanel({
               step={0.1}
               onChange={(value) => onInputChange("inflationRate", value)}
               info={GLOSSARY.inflationRate}
-              hint={`Realrendite: ${(inputs.propertyGrowthRate - inputs.inflationRate).toLocaleString("de-DE", {
-                maximumFractionDigits: 1,
-              })}% p.a.`}
+              hint={`Realrendite: ${formatPct(inputs.propertyGrowthRate - inputs.inflationRate)} p.a.`}
             />
             <InputField
               label="ETF-Rendite Annahme"

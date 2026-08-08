@@ -1,5 +1,5 @@
 import { BETTER_WHEN, type ScenarioResult } from "../lib/calculations";
-import { formatEur, formatSignedEur } from "../lib/format";
+import { formatEur, formatSignedEur, formatSignedYears, formatYears } from "../lib/format";
 import { SignedValue } from "./ui";
 
 type TradeoffMatrixProps = {
@@ -32,8 +32,8 @@ function interpret(cashDelta: number, interestDelta: number, runtimeDelta: numbe
     Math.abs(runtimeDelta) < 0.1
       ? ""
       : runtimeDelta < 0
-        ? `, ${Math.abs(runtimeDelta).toFixed(1)} Jahre früher schuldenfrei`
-        : `, ${runtimeDelta.toFixed(1)} Jahre länger`;
+        ? `, ${formatYears(Math.abs(runtimeDelta))} früher schuldenfrei`
+        : `, ${formatYears(runtimeDelta)} länger`;
 
   return `${interestPart}, ${cashPart}${runtimePart}.`;
 }
@@ -102,9 +102,7 @@ export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
                   value={row.runtime}
                   betterWhen="lower"
                   epsilon={0.05}
-                  format={(value) =>
-                    `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)} J.`
-                  }
+                  format={formatSignedYears}
                 />
               </td>
               <td>

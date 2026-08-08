@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { MortgageInputs, ScenarioResult } from "../lib/calculations";
 import { GLOSSARY } from "../lib/glossary";
-import { formatEur, formatPct, formatYears } from "../lib/format";
+import { formatCompactEur, formatEur, formatPct, formatYears } from "../lib/format";
 import LineChart, { type ChartSeries } from "./LineChart";
 import { Button, Readout, Section } from "./ui";
 
@@ -26,13 +26,6 @@ const SERIES_COLORS: Record<string, string> = {
   ek15: "var(--sage)",
   ek20: "var(--amber)",
 };
-
-function shortEur(value: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} Mio`;
-  if (abs >= 1000) return `${Math.round(value / 1000)}k`;
-  return String(Math.round(value));
-}
 
 /**
  * The time dimension the app otherwise lacks: every number elsewhere is a single
@@ -115,7 +108,7 @@ export default function ProgressSection({
         series={series}
         markers={view === "equity" ? [] : specialYears}
         markerLabel="Sondertilgung"
-        formatValue={shortEur}
+        formatValue={formatCompactEur}
         caption={`${activeView.label} über die Laufzeit, für ${scenarios.map((scenario) => `${scenario.ekRate}%`).join(", ")} Eigenkapital`}
       />
 

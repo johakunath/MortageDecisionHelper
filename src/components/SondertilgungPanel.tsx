@@ -5,7 +5,7 @@ import {
   type SpecialComparison,
   type SpecialMatchRow,
 } from "../lib/calculations";
-import { formatEur } from "../lib/format";
+import { formatCompactEur, formatEur } from "../lib/format";
 import BarChart, { type BarGroup } from "./BarChart";
 import { Button, Readout, Section, SignedValue } from "./ui";
 
@@ -16,12 +16,6 @@ type SondertilgungPanelProps = {
   onSpecialRepaymentChange: (yearIndex: number, value: number) => void;
   onLevelSpecialRepayments: (value: number) => void;
 };
-
-function shortEur(value: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1000) return `${Math.round(value / 1000)}k €`;
-  return formatEur(value);
-}
 
 /**
  * Names who would have to pay, always. "Deine Wahl braucht 7.400 €/Jahr" and
@@ -165,7 +159,7 @@ export default function SondertilgungPanel({
 
       <BarChart
         groups={groups}
-        formatValue={shortEur}
+        formatValue={(value) => formatCompactEur(value, true)}
         seriesLabels={["Zinsen ohne Sondertilgung", "Zinsen mit eurem Plan"]}
         caption="Gesamtzinsen je EK-Stufe über die volle Laufzeit — illustrativ, bei konstantem Zins"
       />
