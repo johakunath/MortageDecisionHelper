@@ -35,13 +35,18 @@ export default function ApartmentSwitcher({
 }: ApartmentSwitcherProps) {
   return (
     <div className="apartment-switcher">
-      <div className="apartment-chip-row" role="tablist" aria-label="Wohnung wählen">
+      {/*
+        A group of toggles, not a tablist: these chips control the entire page rather
+        than a tabpanel, and the "+ Neue Wohnung" button sitting among them is not a
+        tab at all. `aria-pressed` is also what the scenario doors use, so the two
+        selection controls on this screen announce themselves the same way.
+      */}
+      <div className="apartment-chip-row" role="group" aria-label="Wohnung wählen">
         {results.map((result) => (
           <button
             key={result.apartment.id}
             type="button"
-            role="tab"
-            aria-selected={result.apartment.id === activeApartmentId}
+            aria-pressed={result.apartment.id === activeApartmentId}
             className={`apartment-chip ${result.apartment.id === activeApartmentId ? "is-active" : ""}`}
             onClick={() => onSelect(result.apartment.id)}
           >
