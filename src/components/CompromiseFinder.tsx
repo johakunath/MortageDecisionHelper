@@ -67,9 +67,10 @@ export default function CompromiseFinder({
   // most liquidity, most Eigenkapital buys the lowest interest, the middle is the
   // compromise. Changing the EK set is a change in defaults.ts and nowhere else.
   //
-  // The middle door is strictly the middle SCENARIO, never `decision.recommendation`:
-  // the recommendation prefers 10% EK, which is now also the lowest level, so binding
-  // it here rendered the same door twice and hid one EK level entirely.
+  // The middle door is strictly the middle SCENARIO. It was once bound to a
+  // "recommendation" that preferred 10% EK, which since D15 is the lowest level, so the
+  // same door rendered twice and one EK level was hidden. The engine no longer names a
+  // recommendation at all (D28).
   const liquidity = scenarios[0];
   const compromise = scenarios[Math.floor(scenarios.length / 2)];
   const interest = scenarios[scenarios.length - 1];

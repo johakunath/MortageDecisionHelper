@@ -59,7 +59,7 @@ function headline(inputs: MortgageInputs, rates: InterestRates) {
     scenarios: Object.fromEntries(scenarios.map((scenario) => [scenario.id, scenarioRow(scenario)])),
     decision: {
       noSafeScenario: decision.noSafeScenario,
-      recommendation: decision.recommendation?.id ?? null,
+      feasible: decision.feasibleScenarios.map((scenario) => scenario.id),
       failedInAll: decision.diagnosis.failedInAll,
     },
     tradeoff: {

@@ -344,7 +344,12 @@ export default function App() {
               apartment={activeApartment}
               onChange={(patch) => updateApartmentCase(activeApartmentId, patch)}
             />
-            <ExecutiveSummary decision={decision} inputs={activeInputs} selected={selected} />
+            <ExecutiveSummary
+              scenarios={scenarios}
+              decision={decision}
+              inputs={activeInputs}
+              selected={selected}
+            />
             <TradeoffStatement
               tradeoff={headlineTradeoff}
               etfReturnRate={inputs.etfReturnRate}

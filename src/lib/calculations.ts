@@ -257,11 +257,16 @@ export type DecisionDiagnosis = {
 /**
  * Winners are drawn ONLY from feasible scenarios and are `null` when nothing is clean.
  * PRODUCT_SPEC §5.3: never present the least-bad option as though it were safe.
+ *
+ * There is deliberately no single `recommendation`. It used to prefer "10% EK", a rule
+ * written when 10% was the middle of 5/10/15. Since D15 it is the lowest level, so the
+ * rule named the maximum-liquidity option in the verdict headline, which is one side of
+ * the couple's disagreement chosen by code. The verdict now lists `feasibleScenarios`
+ * and leaves the choice to the two people reading it. See docs/DECISIONS.md D28.
  */
 export type DecisionResult = {
   feasibleScenarios: ScenarioResult[];
   noSafeScenario: boolean;
-  recommendation: ScenarioResult | null;
   costMinimum: ScenarioResult | null;
   liquidityMaximum: ScenarioResult | null;
   monthlyMinimum: ScenarioResult | null;
@@ -849,16 +854,10 @@ function findNarrowestMiss(scenarios: ScenarioResult[]): DecisionDiagnosis["narr
 export function evaluateDecision(scenarios: ScenarioResult[]): DecisionResult {
   const feasibleScenarios = scenarios.filter((scenario) => scenario.feasible);
   const noSafeScenario = feasibleScenarios.length === 0;
-  const preferred10 = feasibleScenarios.find((scenario) => scenario.id === "ek10");
-  const lowestInterestFeasible = pickBest(
-    feasibleScenarios,
-    (scenario) => scenario.mortgage.interestTotal,
-  );
 
   return {
     feasibleScenarios,
     noSafeScenario,
-    recommendation: noSafeScenario ? null : preferred10 ?? lowestInterestFeasible,
     // Winners come only from feasible scenarios: naming a "winner" while nothing is
     // clean would present the least-bad option as safe. PRODUCT_SPEC §5.3.
     costMinimum: pickBest(feasibleScenarios, (scenario) => scenario.mortgage.interestTotal),

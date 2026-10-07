@@ -76,7 +76,7 @@ export const GLOSSARY = {
 
   // --- Regeln ---
   cleanScenario:
-    "Ein Weg gilt als tragbar, wenn beides gleichzeitig stimmt: nach dem Kauf bleibt mindestens eure Reserve übrig, und die Monatsbelastung bleibt unter eurer selbstgesetzten Grenze.",
+    "Ein Weg gilt als tragbar, wenn drei Dinge gleichzeitig stimmen: die Monatsrate zahlt das Darlehen in einem Leben ab, nach dem Kauf bleibt mindestens eure Reserve übrig, und die Monatsbelastung bleibt unter eurer selbstgesetzten Grenze. „Gerade so tragbar“ heißt: tragbar, aber es bleibt weniger als das Anderthalbfache eurer Reserve übrig.",
   waitSavings:
     "Was monatlich wirklich zusätzlich aufs Konto wandert — nach Miete und normalen Ausgaben. Die Miete wird separat ausgewiesen und nicht noch einmal abgezogen.",
 } as const;

@@ -4,8 +4,10 @@ exports[`golden master > QA preset case600 1`] = `
 {
   "decision": {
     "failedInAll": [],
+    "feasible": [
+      "ek10",
+    ],
     "noSafeScenario": false,
-    "recommendation": "ek10",
   },
   "scenarios": {
     "ek10": {
@@ -95,8 +97,11 @@ exports[`golden master > QA preset case720 1`] = `
 {
   "decision": {
     "failedInAll": [],
+    "feasible": [
+      "ek10",
+      "ek15",
+    ],
     "noSafeScenario": false,
-    "recommendation": "ek10",
   },
   "scenarios": {
     "ek10": {
@@ -190,8 +195,8 @@ exports[`golden master > QA preset case850 1`] = `
       "reserve",
       "burden",
     ],
+    "feasible": [],
     "noSafeScenario": true,
-    "recommendation": null,
   },
   "scenarios": {
     "ek10": {
@@ -281,8 +286,11 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
 {
   "decision": {
     "failedInAll": [],
+    "feasible": [
+      "ek10",
+      "ek15",
+    ],
     "noSafeScenario": false,
-    "recommendation": "ek10",
   },
   "scenarios": {
     "ek10": {
@@ -372,8 +380,10 @@ exports[`golden master > default apartment Wohnung B 1`] = `
 {
   "decision": {
     "failedInAll": [],
+    "feasible": [
+      "ek10",
+    ],
     "noSafeScenario": false,
-    "recommendation": "ek10",
   },
   "scenarios": {
     "ek10": {
@@ -465,8 +475,8 @@ exports[`golden master > default apartment Wohnung C 1`] = `
     "failedInAll": [
       "reserve",
     ],
+    "feasible": [],
     "noSafeScenario": true,
-    "recommendation": null,
   },
   "scenarios": {
     "ek10": {

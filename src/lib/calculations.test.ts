@@ -105,7 +105,7 @@ describe("calculation engine", () => {
     const decision = evaluateDecision(scenarios);
 
     expect(decision.noSafeScenario).toBe(true);
-    expect(decision.recommendation).toBeNull();
+    expect(decision.feasibleScenarios).toHaveLength(0);
   });
 
   it("keeps the 600k preset clean when at least one scenario is feasible", () => {
@@ -201,10 +201,20 @@ describe("calculation engine", () => {
     const decision = evaluateDecision([]);
 
     expect(decision.noSafeScenario).toBe(true);
-    expect(decision.recommendation).toBeNull();
+    expect(decision.feasibleScenarios).toHaveLength(0);
     expect(decision.costMinimum).toBeNull();
     expect(decision.liquidityMaximum).toBeNull();
     expect(decision.monthlyMinimum).toBeNull();
+  });
+
+  it("lists every tragbar level instead of preferring one (D28)", () => {
+    // The offer flat: 10% and 15% EK carry the reserve, 20% does not. The old rule
+    // named "10% EK" as the recommendation, which since D15 is the lowest level.
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const decision = evaluateDecision(buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES));
+
+    expect(decision.feasibleScenarios.map((scenario) => scenario.id)).toEqual(["ek10", "ek15"]);
+    expect("recommendation" in decision).toBe(false);
   });
 
   it("names no winner when no scenario is clean (spec 5.3)", () => {

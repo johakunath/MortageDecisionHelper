@@ -9,6 +9,7 @@ import { formatEur, formatPct } from "../lib/format";
 import { InfoTip } from "./ui";
 
 type ExecutiveSummaryProps = {
+  scenarios: ScenarioResult[];
   decision: DecisionResult;
   inputs: MortgageInputs;
   selected: ScenarioResult;
@@ -40,6 +41,13 @@ function describeMiss(constraint: ConstraintId, gap: number): string {
   return `es fehlen ${formatEur(missing)}.`;
 }
 
+/** "10%", "10% und 15%", "10%, 15% und 20%". The levels, in the order given. */
+function joinLevels(scenarios: ScenarioResult[]): string {
+  const levels = scenarios.map((scenario) => `${scenario.ekRate}%`);
+  if (levels.length <= 1) return levels.join("");
+  return `${levels.slice(0, -1).join(", ")} und ${levels[levels.length - 1]}`;
+}
+
 function describeBlockers(failed: ConstraintId[]): string {
   const parts = failed.map((id) => CONSTRAINT_LABELS[id]);
   if (parts.length === 0) return "die Annahmen passen nicht zusammen";
@@ -56,7 +64,7 @@ function describeBlockers(failed: ConstraintId[]): string {
  * always the lowest — so they restated the axis rather than informing the choice. The
  * doors below already carry the same selection. See docs/DECISIONS.md D6.
  */
-export default function ExecutiveSummary({ decision, inputs, selected }: ExecutiveSummaryProps) {
+export default function ExecutiveSummary({ scenarios, decision, inputs, selected }: ExecutiveSummaryProps) {
   const { diagnosis } = decision;
 
   // PRODUCT_SPEC §5.3: when nothing works, say so plainly and name the reason.
@@ -72,10 +80,11 @@ export default function ExecutiveSummary({ decision, inputs, selected }: Executi
           <InfoTip text={GLOSSARY.cleanScenario} term="Tragbar" />
         </h2>
         <p>
-          Tragbar heißt für euch: nach dem Kauf bleiben mindestens{" "}
-          <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig <em>und</em> die
-          Monatsrate bleibt unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom
-          Haushaltsnetto. Beides zusammen schafft hier keine Variante.
+          Tragbar heißt für euch: die Rate zahlt das Darlehen ab, nach dem Kauf bleiben
+          mindestens <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig{" "}
+          <em>und</em> die Monatsrate bleibt unter{" "}
+          <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto. Alles zusammen
+          schafft hier keine Variante.
           {diagnosis.failedInAll.length > 0 ? <> Bei allen dreien gilt: {describeBlockers(diagnosis.failedInAll)}.</> : null}
         </p>
         {miss ? (
@@ -88,17 +97,40 @@ export default function ExecutiveSummary({ decision, inputs, selected }: Executi
     );
   }
 
+  // Every tragbar level, never one picked by rule. The headline used to name a single
+  // "recommendation" that preferred 10% EK, a rule from the 5/10/15 grid that since D15
+  // names the lowest level: one spouse's side of the argument, chosen by code (D28).
+  const feasible = decision.feasibleScenarios;
+  const blocked = scenarios.filter((scenario) => !scenario.feasible);
+  const headline =
+    blocked.length === 0
+      ? "Alle drei Varianten sind tragbar"
+      : `${joinLevels(feasible)} EK ${feasible.length === 1 ? "ist" : "sind"} tragbar`;
+
   return (
     <div className="verdict verdict-ok">
       <h2>
-        {decision.recommendation?.label} ist tragbar
+        {headline}
         <InfoTip text={GLOSSARY.cleanScenario} term="Tragbar" />
       </h2>
       <p>
-        Tragbar heißt: nach dem Kauf bleiben mindestens{" "}
+        Tragbar heißt: die Rate zahlt das Darlehen ab, nach dem Kauf bleiben mindestens{" "}
         <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig und die Monatsrate bleibt
-        unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto. Gewählt ist{" "}
-        <strong>{selected.label}</strong> mit {formatPct(selected.burdenRatio * 100)} Belastung.
+        unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto.
+        {blocked.length > 0 ? (
+          <>
+            {" "}Nicht tragbar:{" "}
+            {blocked.map((scenario, index) => (
+              <span key={scenario.id}>
+                {index > 0 ? ", " : null}
+                {scenario.label} ({scenario.status})
+              </span>
+            ))}
+            .
+          </>
+        ) : null}{" "}
+        Gewählt ist <strong>{selected.label}</strong> mit {formatPct(selected.burdenRatio * 100)}{" "}
+        Belastung.
       </p>
     </div>
   );
