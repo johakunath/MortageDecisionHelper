@@ -1,9 +1,10 @@
-import type { EkTradeoff, MortgageInputs } from "../lib/calculations";
-import { formatEur, formatSignedEur, formatYears } from "../lib/format";
+import { afterTaxAnnualReturn, type EkTradeoff, type MortgageInputs } from "../lib/calculations";
+import { formatEur, formatPct, formatSignedEur, formatYears } from "../lib/format";
 
 type TradeoffStatementProps = {
   tradeoff: EkTradeoff;
   etfReturnRate: MortgageInputs["etfReturnRate"];
+  etfTaxRate: MortgageInputs["etfTaxRate"];
   onEtfReturnChange: (value: number) => void;
 };
 
@@ -17,11 +18,14 @@ type TradeoffStatementProps = {
 export default function TradeoffStatement({
   tradeoff,
   etfReturnRate,
+  etfTaxRate,
   onEtfReturnChange,
 }: TradeoffStatementProps) {
   const { from, to, extraCashRequired, runtimeDelta, interestSavedFixed, etfForegone, netAdvantageFixed, horizonYears } =
     tradeoff;
   const favoursMore = netAdvantageFixed >= 0;
+  // The rate that is actually comparable with the tax-free mortgage rate (K18).
+  const netEtfReturn = afterTaxAnnualReturn(etfReturnRate, etfTaxRate, horizonYears);
 
   return (
     <div className="tradeoff-statement">
@@ -39,7 +43,7 @@ export default function TradeoffStatement({
         <strong>{formatYears(Math.abs(runtimeDelta))}</strong>{" "}
         {runtimeDelta < 0 ? "früher" : "später"} schuldenfrei. Dafür bindet ihr{" "}
         <strong>{formatEur(Math.abs(extraCashRequired))}</strong> mehr Kapital, das im ETF
-        rechnerisch <strong>{formatEur(etfForegone)}</strong> gebracht hätte.
+        nach Steuer rechnerisch <strong>{formatEur(etfForegone)}</strong> gebracht hätte.
       </p>
       <p className={`tradeoff-net ${favoursMore ? "tradeoff-net-favours" : "tradeoff-net-against"}`}>
         Netto: <strong>{formatSignedEur(netAdvantageFixed)}</strong>{" "}
@@ -54,8 +58,8 @@ export default function TradeoffStatement({
             onChange={(event) => onEtfReturnChange(Number(event.target.value) || 0)}
           />
           % ETF-Annahme
-        </label>
-        .
+        </label>{" "}
+        (nach Steuer ≈ {formatPct(netEtfReturn)} p.a.; die gesparten Zinsen sind steuerfrei).
       </p>
     </div>
   );

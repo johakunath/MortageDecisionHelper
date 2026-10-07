@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  afterTaxAnnualReturn,
+  buildApartmentInputs,
   buildScenario,
   buildScenarios,
   buildWaitScenario,
@@ -21,7 +23,13 @@ import {
   waitPeriodsFor,
   type ScenarioId,
 } from "./calculations";
-import { CASE_PRESETS, DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
+import {
+  CASE_PRESETS,
+  DEFAULT_APARTMENT_CASES,
+  DEFAULT_INPUTS,
+  DEFAULT_RATES,
+  EK_SCENARIOS,
+} from "./defaults";
 
 /**
  * Scenarios are addressed by id, never by array position. Positional lookups survived
@@ -318,6 +326,28 @@ describe("calculation engine", () => {
       etfReturnRate: 14,
     });
     expect(optimistic.netAdvantageFixed).toBeLessThan(tradeoff.netAdvantageFixed);
+  });
+
+  it("taxes the foregone ETF growth, which flips the verdict on the real offer (K18)", () => {
+    // The offer flat, 10% against 20% EK. Interest saved is tax-free for an owner-occupier;
+    // ETF gains are not. Left untaxed, the comparison read "für mehr Liquidität".
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const scenarios = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    const taxed = compareEkScenarios(scenarios[0], scenarios[2], inputs);
+    const untaxed = compareEkScenarios(scenarios[0], scenarios[2], { ...inputs, etfTaxRate: 0 });
+
+    expect(taxed.etfForegone).toBeCloseTo(taxed.etfForegoneGross * (1 - 0.184625), 6);
+    expect(taxed.netAdvantageFixed).toBeCloseTo(taxed.interestSavedFixed - taxed.etfForegone, 6);
+    expect(untaxed.netAdvantageFixed).toBeLessThan(0);
+    expect(taxed.netAdvantageFixed).toBeGreaterThan(0);
+  });
+
+  it("converts an ETF return into its after-tax annual equivalent", () => {
+    expect(afterTaxAnnualReturn(5, 0, 10)).toBeCloseTo(5, 9);
+    // 5% for ten years, 18,4625% on the gain at the end: about 4,23% a year.
+    expect(afterTaxAnnualReturn(5, 18.4625, 10)).toBeCloseTo(4.23, 2);
+    // A stray rate above 100% cannot turn a gain into more than a total loss of it.
+    expect(afterTaxAnnualReturn(5, 250, 10)).toBeCloseTo(0, 9);
   });
 
   it("gives the entered Wartezeit its own column", () => {

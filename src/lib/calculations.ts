@@ -63,6 +63,18 @@ export type MortgageInputs = {
   waitPropertyGrowthRate: number;
   waitRateShift: number;
   etfReturnRate: number;
+  /**
+   * Tax on ETF gains when they are realised, in percent of the gain. The default
+   * 18,4625% is Abgeltungsteuer 25% plus Soli 5,5% on it, applied to 70% of the gain
+   * (Teilfreistellung for equity ETFs): 26,375% × 0,7. Kirchensteuer raises it, an
+   * unused Sparerpauschbetrag lowers it.
+   *
+   * It belongs in every ETF comparison because the other side of it is tax-free: the
+   * interest an owner-occupier does not pay is not income. Comparing pre-tax ETF growth
+   * against tax-free interest saved flipped the headline verdict on all three default
+   * apartments. See docs/ASSUMPTIONS.md K18.
+   */
+  etfTaxRate: number;
 };
 
 /**
@@ -278,8 +290,14 @@ export type EkTradeoff = {
   horizonYears: number;
   /** Reliable: both sides are inside the fixed-rate period. */
   interestSavedFixed: number;
+  /** Growth the extra capital would have earned in the ETF over the horizon, before tax. */
+  etfForegoneGross: number;
+  /**
+   * The same growth after tax on realising it at the horizon: what would actually be
+   * there to compare. The interest saved needs no such adjustment: it is tax-free.
+   */
   etfForegone: number;
-  /** interestSavedFixed − etfForegone. Positive favours more Eigenkapital. */
+  /** interestSavedFixed − etfForegone (after tax). Positive favours more Eigenkapital. */
   netAdvantageFixed: number;
 };
 
@@ -865,11 +883,15 @@ export function compareEkScenarios(
   const extraCashRequired = to.cashNeeded - from.cashNeeded;
   const horizonYears = inputs.fixedRateYears;
   const interestSavedFixed = from.mortgage.interestFixed - to.mortgage.interestFixed;
-  const etfForegone = opportunityCost(
+  const etfForegoneGross = opportunityCost(
     Math.max(0, extraCashRequired),
     inputs.etfReturnRate,
     horizonYears,
   );
+  // Taxed, because the interest it is set against is not: an owner-occupier's saved
+  // interest is no income. Untaxed, this flipped the verdict on every default apartment
+  // toward "mehr Liquidität" (K18).
+  const etfForegone = etfForegoneGross * (1 - clampRate(inputs.etfTaxRate) / 100);
 
   return {
     from,
@@ -879,6 +901,7 @@ export function compareEkScenarios(
     runtimeDelta: to.mortgage.runtimeYears - from.mortgage.runtimeYears,
     horizonYears,
     interestSavedFixed,
+    etfForegoneGross,
     etfForegone,
     netAdvantageFixed: interestSavedFixed - etfForegone,
   };
@@ -1152,6 +1175,30 @@ export function buildWaitScenarios(
   return months.map((waitMonths) =>
     buildWaitScenario(selectedBase, selectedNow, inputs, rates, waitMonths),
   );
+}
+
+/** A tax rate in percent, kept inside 0–100 so a stray input cannot invert a gain. */
+function clampRate(ratePct: number): number {
+  return Number.isFinite(ratePct) ? Math.min(100, Math.max(0, ratePct)) : 0;
+}
+
+/**
+ * The ETF return per year that is left after tax on realising the gain at the end of
+ * `years`: the figure that is comparable with a tax-free mortgage rate. Tax is paid
+ * once, on the whole gain, so the after-tax rate depends on the holding period.
+ */
+export function afterTaxAnnualReturn(
+  annualReturnPct: number,
+  taxRatePct: number,
+  years: number,
+): number {
+  if (years <= 0) {
+    return annualReturnPct * (1 - clampRate(taxRatePct) / 100);
+  }
+
+  const gain = Math.pow(1 + annualReturnPct / 100, years) - 1;
+  const netGrowth = 1 + gain * (1 - clampRate(taxRatePct) / 100);
+  return netGrowth > 0 ? (Math.pow(netGrowth, 1 / years) - 1) * 100 : -100;
 }
 
 export function opportunityCost(

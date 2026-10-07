@@ -40,6 +40,8 @@ export const GLOSSARY = {
   // --- Erweitert ---
   etfReturnRate:
     "Womit ihr rechnet, wenn das Geld statt in die Immobilie im ETF bliebe. Reine Annahme — sie entscheidet mit darüber, ob mehr Eigenkapital sich lohnt.",
+  etfTaxRate:
+    "Was vom ETF-Gewinn beim Verkauf an Steuer abgeht. 18,46% gilt für Aktien-ETFs: 25% Abgeltungsteuer plus Soli, aber nur auf 70% des Gewinns (Teilfreistellung). Mit Kirchensteuer etwas mehr, mit ungenutztem Sparerpauschbetrag weniger. Die Zinsen, die ihr durch mehr Eigenkapital spart, sind steuerfrei. Deshalb gehört die Steuer in den Vergleich.",
   maxBurdenRate:
     "Wie viel eures Haushaltsnettos maximal in die Wohnung fließen darf. 40% ist eine verbreitete Faustregel, keine Bankregel — ihr könnt sie anpassen.",
   propertyGrowthRate: "Angenommene jährliche Wertsteigerung der Immobilie. Bewusst konservativ setzen.",

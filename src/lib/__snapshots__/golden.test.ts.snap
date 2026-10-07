@@ -63,10 +63,10 @@ exports[`golden master > QA preset case600 1`] = `
     "planSaving": -99776,
   },
   "tradeoff": {
-    "etfForegone": 37734,
+    "etfForegone": 30767,
     "extraCashRequired": 60000,
     "interestSavedFixed": 33599,
-    "netAdvantageFixed": -4134,
+    "netAdvantageFixed": 2832,
   },
   "wait": [
     {
@@ -154,10 +154,10 @@ exports[`golden master > QA preset case720 1`] = `
     "planSaving": -99922,
   },
   "tradeoff": {
-    "etfForegone": 45280,
+    "etfForegone": 36921,
     "extraCashRequired": 72000,
     "interestSavedFixed": 40378,
-    "netAdvantageFixed": -4903,
+    "netAdvantageFixed": 3457,
   },
   "wait": [
     {
@@ -249,10 +249,10 @@ exports[`golden master > QA preset case850 1`] = `
     "planSaving": -104659,
   },
   "tradeoff": {
-    "etfForegone": 53456,
+    "etfForegone": 43587,
     "extraCashRequired": 85000,
     "interestSavedFixed": 47757,
-    "netAdvantageFixed": -5699,
+    "netAdvantageFixed": 4170,
   },
   "wait": [
     {
@@ -340,10 +340,10 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
     "planSaving": -78750,
   },
   "tradeoff": {
-    "etfForegone": 28300,
+    "etfForegone": 23075,
     "extraCashRequired": 45000,
     "interestSavedFixed": 25021,
-    "netAdvantageFixed": -3280,
+    "netAdvantageFixed": 1945,
   },
   "wait": [
     {
@@ -431,10 +431,10 @@ exports[`golden master > default apartment Wohnung B 1`] = `
     "planSaving": -117439,
   },
   "tradeoff": {
-    "etfForegone": 31445,
+    "etfForegone": 25639,
     "extraCashRequired": 50000,
     "interestSavedFixed": 28021,
-    "netAdvantageFixed": -3424,
+    "netAdvantageFixed": 2381,
   },
   "wait": [
     {
@@ -524,10 +524,10 @@ exports[`golden master > default apartment Wohnung C 1`] = `
     "planSaving": -290247,
   },
   "tradeoff": {
-    "etfForegone": 37734,
+    "etfForegone": 30767,
     "extraCashRequired": 60000,
     "interestSavedFixed": 34147,
-    "netAdvantageFixed": -3587,
+    "netAdvantageFixed": 3380,
   },
   "wait": [
     {

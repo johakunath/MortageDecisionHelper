@@ -348,6 +348,7 @@ export default function App() {
             <TradeoffStatement
               tradeoff={headlineTradeoff}
               etfReturnRate={inputs.etfReturnRate}
+              etfTaxRate={inputs.etfTaxRate}
               onEtfReturnChange={(value) => updateInput("etfReturnRate", value)}
             />
             <CompromiseFinder

@@ -418,6 +418,16 @@ export default function InputsPanel({
               onChange={(value) => onInputChange("etfReturnRate", value)}
               info={GLOSSARY.etfReturnRate}
             />
+            <InputField
+              label="Steuer auf ETF-Gewinne"
+              value={inputs.etfTaxRate}
+              suffix="%"
+              step={0.1}
+              min={0}
+              onChange={(value) => onInputChange("etfTaxRate", value)}
+              info={GLOSSARY.etfTaxRate}
+              hint="18,46% = Abgeltungsteuer + Soli, Aktien-ETF"
+            />
           </div>
         </InputBox>
       </div>

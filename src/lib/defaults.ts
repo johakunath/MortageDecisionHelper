@@ -36,6 +36,9 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   waitPropertyGrowthRate: 2,
   waitRateShift: -0.3,
   etfReturnRate: 5,
+  // Abgeltungsteuer + Soli auf 70% des Gewinns (Teilfreistellung Aktien-ETF), ohne
+  // Kirchensteuer. Die gesparten Kreditzinsen sind steuerfrei, die ETF-Gewinne nicht.
+  etfTaxRate: 18.4625,
 };
 
 /**
