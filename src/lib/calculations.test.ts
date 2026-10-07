@@ -92,12 +92,18 @@ describe("calculation engine", () => {
     expect(calculateCashNeeded(600000, 10, 9, 15000, 5000)).toBe(134000);
   });
 
-  it("includes property value and net worth in each scenario", () => {
+  it("values every EK level's wealth on the same date, not at its own payoff (K19)", () => {
+    // The old "Nettovermögen" grew the flat until each scenario's own payoff year, so
+    // the longest loan looked richest. On one date the flat is worth the same at every
+    // EK level, and only debt and free capital tell the levels apart.
     const preset = CASE_PRESETS.case720;
-    const scenario = buildScenario(MIDDLE, preset.inputs, preset.rates);
+    const paths = EK_SCENARIOS.map((base) =>
+      wealthAtHorizon({ base, inputs: preset.inputs, rates: preset.rates }),
+    );
 
-    expect(scenario.propertyValueAtPayoff).toBeGreaterThan(preset.inputs.purchasePrice);
-    expect(Number.isFinite(scenario.netWorthAtPayoff)).toBe(true);
+    expect(paths[0].propertyValue).toBeGreaterThan(preset.inputs.purchasePrice);
+    expect(new Set(paths.map((path) => path.propertyValue)).size).toBe(1);
+    expect(paths.every((path) => path.horizonMonths === preset.inputs.fixedRateYears * 12)).toBe(true);
   });
 
   it("marks the 850k stress preset as no clean scenario", () => {

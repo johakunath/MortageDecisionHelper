@@ -4,6 +4,8 @@ import { SignedValue } from "./ui";
 
 type TradeoffMatrixProps = {
   scenarios: ScenarioResult[];
+  /** Length of the Zinsbindung, for the column that is reliable. */
+  fixedRateYears: number;
 };
 
 /**
@@ -11,7 +13,12 @@ type TradeoffMatrixProps = {
  * string per row — so it stays correct if the underlying inputs change and a
  * comparison flips direction, which three hardcoded sentences could not do.
  */
-function interpret(cashDelta: number, interestDelta: number, runtimeDelta: number): string {
+function interpret(
+  cashDelta: number,
+  interestDelta: number,
+  runtimeDelta: number,
+  fixedRateYears: number,
+): string {
   if (Math.abs(cashDelta) < 1 && Math.abs(interestDelta) < 1) {
     return "Praktisch kein Unterschied.";
   }
@@ -24,9 +31,9 @@ function interpret(cashDelta: number, interestDelta: number, runtimeDelta: numbe
         : "gleich viel Cash";
   const interestPart =
     interestDelta < 0
-      ? `${formatEur(Math.abs(interestDelta))} weniger Zinsen`
+      ? `${formatEur(Math.abs(interestDelta))} weniger Zinsen in ${fixedRateYears} Jahren`
       : interestDelta > 0
-        ? `${formatEur(interestDelta)} mehr Zinsen`
+        ? `${formatEur(interestDelta)} mehr Zinsen in ${fixedRateYears} Jahren`
         : "gleich viele Zinsen";
   const runtimePart =
     Math.abs(runtimeDelta) < 0.1
@@ -47,7 +54,7 @@ function interpret(cashDelta: number, interestDelta: number, runtimeDelta: numbe
  * levels (docs/DECISIONS.md D14), so that column read zero everywhere; the runtime is
  * what more Eigenkapital actually moves.
  */
-export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
+export default function TradeoffMatrix({ scenarios, fixedRateYears }: TradeoffMatrixProps) {
   const low = scenarios[0];
   const mid = scenarios[Math.floor(scenarios.length / 2)];
   const high = scenarios[scenarios.length - 1];
@@ -58,7 +65,10 @@ export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
     { from: low, to: high },
   ].map(({ from, to }) => {
     const cash = to.cashLeft - from.cashLeft;
-    const interest = to.mortgage.interestTotal - from.mortgage.interestTotal;
+    // Interest inside the binding, not over the full term: the full-term total assumes
+    // today's rate for 20+ years and read 65.867 € where the reliable figure is 25.021 €
+    // (10 vs 20% on the offer). ASSUMPTIONS §1: never give the two the same weight.
+    const interest = to.mortgage.interestFixed - from.mortgage.interestFixed;
     const runtime = to.mortgage.runtimeYears - from.mortgage.runtimeYears;
     const remainingDebt = to.mortgage.remainingAfterFixed - from.mortgage.remainingAfterFixed;
 
@@ -68,7 +78,7 @@ export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
       interest,
       runtime,
       remainingDebt,
-      meaning: interpret(cash, interest, runtime),
+      meaning: interpret(cash, interest, runtime, fixedRateYears),
     };
   });
 
@@ -79,7 +89,7 @@ export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
           <tr>
             <th>Vergleich</th>
             <th>Cash</th>
-            <th>Zinsen gesamt</th>
+            <th>Zinsen in {fixedRateYears} J.</th>
             <th>Laufzeit</th>
             <th>Restschuld n. Bindung</th>
           </tr>
@@ -95,7 +105,7 @@ export default function TradeoffMatrix({ scenarios }: TradeoffMatrixProps) {
                 <SignedValue value={row.cash} betterWhen={BETTER_WHEN.cashLeft} />
               </td>
               <td>
-                <SignedValue value={row.interest} betterWhen={BETTER_WHEN.interestTotal} />
+                <SignedValue value={row.interest} betterWhen={BETTER_WHEN.interestFixed} />
               </td>
               <td>
                 <SignedValue

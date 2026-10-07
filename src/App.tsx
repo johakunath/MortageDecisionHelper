@@ -24,6 +24,7 @@ import {
   evaluateDecision,
   normaliseFixedPeriod,
   waitPeriodsFor,
+  wealthAtHorizon,
   type ApartmentCase,
   type InterestRates,
   type MortgageInputs,
@@ -145,6 +146,13 @@ export default function App() {
   const selectedWithoutSpecial = useMemo(() => {
     const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
     return buildScenario(base, activeInputs, rates, { kind: "none" });
+  }, [selected.id, activeInputs, rates]);
+
+  // The selected scenario on one common date, the end of the binding: the same date
+  // for every EK level, so switching levels compares like with like (K19).
+  const selectedWealth = useMemo(() => {
+    const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
+    return wealthAtHorizon({ base, inputs: activeInputs, rates });
   }, [selected.id, activeInputs, rates]);
 
   function updateInput(key: NumericInputKey, value: number) {
@@ -411,7 +419,7 @@ export default function App() {
               subtitle="Was kaufen wir uns durch mehr Eigenkapital, und welchen Puffer geben wir dafür auf?"
               right={<span className="muted">Kaufnebenkosten: {formatEur(selected.closingCosts)}</span>}
             >
-              <TradeoffMatrix scenarios={scenarios} />
+              <TradeoffMatrix scenarios={scenarios} fixedRateYears={activeInputs.fixedRateYears} />
             </Section>
           </section>
 
@@ -421,6 +429,7 @@ export default function App() {
               scenarios={scenarios}
               selected={selected}
               selectedWithoutSpecial={selectedWithoutSpecial}
+              selectedWealth={selectedWealth}
               inputs={activeInputs}
             />
           </section>

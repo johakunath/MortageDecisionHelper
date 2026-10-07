@@ -67,10 +67,10 @@ export const GLOSSARY = {
     "Zinsen über die gesamte Laufzeit, unter der Annahme, dass der heutige Zins für immer gilt. Das ist eine Illustration, keine Prognose: den Zins der Anschlussfinanzierung kennt heute niemand.",
   remainingAfterFixed:
     "Was am Ende der Zinsbindung noch offen ist und neu finanziert werden muss. Die wichtigste Zahl für das Zinsänderungsrisiko.",
-  propertyValueAtPayoff:
-    "Was die Wohnung bei vollständiger Abzahlung wert wäre, wenn die angenommene Wertsteigerung eintritt. Illustrativ.",
-  netWorthAtPayoff:
-    "Immobilienwert minus eingesetztem Cash minus allen gezahlten Zinsen. Grobe Orientierung, keine Vermögensrechnung.",
+  wealthAtHorizon:
+    "Was euch am Ende der Zinsbindung gehört: der Wert der Wohnung minus Restschuld, plus euer freies Kapital nach Steuer. Für jede EK-Stufe am selben Stichtag gerechnet und deshalb direkt vergleichbar. Enthält, was ihr monatlich übrig habt (Netto-Sparrate plus Miete, minus Rate und Eigentumskosten), angelegt zur ETF-Annahme.",
+  liquidAtHorizon:
+    "Der Teil davon, an den ihr ohne Verkauf der Wohnung kommt: was nach dem Kauf übrig bleibt, plus das laufende Sparen, minus Sondertilgungen, angelegt zur ETF-Annahme und nach Steuer.",
   specialRepayment:
     "Zusätzliche Zahlung ans Darlehen, meist einmal im Jahr möglich. Sie geht komplett in die Tilgung und verkürzt die Laufzeit spürbar.",
 

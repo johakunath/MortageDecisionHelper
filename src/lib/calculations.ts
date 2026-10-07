@@ -21,7 +21,7 @@ export type MetricKey =
   | "interestFixed"
   | "allInMonthly"
   | "remainingAfterFixed"
-  | "netWorthAtPayoff";
+  | "wealth";
 
 export const BETTER_WHEN: Record<MetricKey, "higher" | "lower"> = {
   cashLeft: "higher",
@@ -29,7 +29,7 @@ export const BETTER_WHEN: Record<MetricKey, "higher" | "lower"> = {
   interestFixed: "lower",
   allInMonthly: "lower",
   remainingAfterFixed: "lower",
-  netWorthAtPayoff: "higher",
+  wealth: "higher",
 };
 
 export type MortgageInputs = {
@@ -210,9 +210,6 @@ export type ScenarioResult = ScenarioBase & {
   allInMonthly: number;
   burdenRatio: number;
   rentDelta: number;
-  propertyValueAtPayoff: number;
-  realPropertyReturnRate: number;
-  netWorthAtPayoff: number;
   mortgage: MortgageSimulation;
   /**
    * True when the entered Monatsrate cannot amortise the loan and the model simulated
@@ -651,11 +648,10 @@ export function buildScenario(
   const allInMonthly = mortgage.regularMonthlyPayment + inputs.monthlyOwnershipCosts;
   const burdenRatio = allInMonthly / Math.max(1, inputs.householdNetIncome);
   const rentDelta = allInMonthly - inputs.currentWarmRent;
-  const propertyValueAtPayoff =
-    inputs.purchasePrice *
-    Math.pow(1 + inputs.propertyGrowthRate / 100, mortgage.runtimeYears);
-  const realPropertyReturnRate = inputs.propertyGrowthRate - inputs.inflationRate;
-  const netWorthAtPayoff = propertyValueAtPayoff - cashNeeded - mortgage.interestTotal;
+  // No "net worth at payoff" here any more. It was valued at each scenario's own payoff
+  // year, so the same flat was worth 67.000 € more at 10% EK than at 20% purely because
+  // that loan runs five years longer. Wealth is compared on one common date by
+  // `wealthAtHorizon` instead (K19).
   const maxBurdenRatio = inputs.maxBurdenRate / 100;
   // Interest-only floor: below this the balance never falls, whatever the plan says.
   const interestOnlyPayment = (loan * interestRate) / 1200;
@@ -748,9 +744,6 @@ export function buildScenario(
     allInMonthly,
     burdenRatio,
     rentDelta,
-    propertyValueAtPayoff,
-    realPropertyReturnRate,
-    netWorthAtPayoff,
     mortgage,
     paymentSubstituted,
     feasible,
