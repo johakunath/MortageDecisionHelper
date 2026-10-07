@@ -7,6 +7,7 @@ import {
   compareSpecialScenarios,
   evaluateDecision,
   waitPeriodsFor,
+  wealthAtHorizon,
   type InterestRates,
   type MortgageInputs,
   type ScenarioResult,
@@ -55,7 +56,23 @@ function headline(inputs: MortgageInputs, rates: InterestRates) {
   const waits = buildWaitScenarios(EK_SCENARIOS[0], low, inputs, rates, waitPeriodsFor(inputs.waitMonths));
   const special = compareSpecialScenarios(EK_SCENARIOS, low.id, inputs, rates);
 
+  const wealthNow = EK_SCENARIOS.map((base) => wealthAtHorizon({ base, inputs, rates }));
+  const lowNow = wealthNow[0];
+
   return {
+    wealthAtFixedEnd: Object.fromEntries(
+      EK_SCENARIOS.map((base, index) => [
+        base.id,
+        { wealth: euro(wealthNow[index].wealth), liquidAfterTax: euro(wealthNow[index].liquid - wealthNow[index].liquidTax) },
+      ]),
+    ),
+    waitWealthDelta: [12, 24].map((months) => ({
+      months,
+      delta: euro(
+        wealthAtHorizon({ base: EK_SCENARIOS[0], inputs, rates, waitMonths: months }).wealth -
+          lowNow.wealth,
+      ),
+    })),
     scenarios: Object.fromEntries(scenarios.map((scenario) => [scenario.id, scenarioRow(scenario)])),
     decision: {
       noSafeScenario: decision.noSafeScenario,

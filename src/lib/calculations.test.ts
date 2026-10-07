@@ -21,6 +21,7 @@ import {
   runtimeYearsFromRepaymentRate,
   simulateMortgage,
   waitPeriodsFor,
+  wealthAtHorizon,
   type ScenarioId,
 } from "./calculations";
 import {
@@ -358,6 +359,36 @@ describe("calculation engine", () => {
     expect(afterTaxAnnualReturn(5, 18.4625, 10)).toBeCloseTo(4.23, 2);
     // A stray rate above 100% cannot turn a gain into more than a total loss of it.
     expect(afterTaxAnnualReturn(5, 250, 10)).toBeCloseTo(0, 9);
+  });
+
+  it("values buying now and waiting on one common date (wealth ledger)", () => {
+    // Pinned against the hand calculation in docs/REVIEW.md: the offer flat at 10% EK,
+    // valued at the end of the binding, with free capital earning 0% and no tax. Waiting
+    // a year then costs 8.028 € of wealth, while the old interest-plus-rent delta said
+    // 6.662 €; at 5% before tax, waiting comes out ahead. Same flat, same day, so the
+    // property value cancels and only cash, debt and capital differ.
+    const inputs = {
+      ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
+      etfReturnRate: 0,
+      etfTaxRate: 0,
+    };
+    const now = wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES });
+    const wait = wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES, waitMonths: 12 });
+
+    expect(now.propertyValue).toBeCloseTo(wait.propertyValue, 6);
+    expect(wait.rentPaid).toBe(23640);
+    expect(Math.round(now.wealth)).toBe(401768);
+    expect(Math.round(wait.wealth - now.wealth)).toBe(-8028);
+
+    const invested = { ...inputs, etfReturnRate: 5, etfTaxRate: 18.4625 };
+    const nowInvested = wealthAtHorizon({ base: LOWEST, inputs: invested, rates: DEFAULT_RATES });
+    const waitInvested = wealthAtHorizon({
+      base: LOWEST,
+      inputs: invested,
+      rates: DEFAULT_RATES,
+      waitMonths: 12,
+    });
+    expect(waitInvested.wealth).toBeGreaterThan(nowInvested.wealth);
   });
 
   it("gives the entered Wartezeit its own column", () => {

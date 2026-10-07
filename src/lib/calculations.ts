@@ -128,6 +128,22 @@ export type MortgageSimulationParams = {
   fixedRateYears: number;
   specialPlan: SpecialPlan;
   specialRepaymentLimitRate: number;
+  /**
+   * Called once per simulated month with what was paid. Read-only: it observes the
+   * schedule and cannot change it, so the offer-pinned amortisation stays exactly as
+   * it is. Used by `wealthAtHorizon` to follow the cash month by month.
+   */
+  onMonth?: (entry: MortgageMonth) => void;
+};
+
+export type MortgageMonth = {
+  /** 1 = the first month after disbursement. */
+  month: number;
+  interest: number;
+  principal: number;
+  /** Sondertilgung applied at the end of this month (only at loan-year ends). */
+  special: number;
+  balance: number;
 };
 
 export type YearlyMortgagePoint = {
@@ -417,6 +433,7 @@ export function simulateMortgage({
   fixedRateYears,
   specialPlan,
   specialRepaymentLimitRate,
+  onMonth,
 }: MortgageSimulationParams): MortgageSimulation {
   const safePrincipal = Math.max(0, principal);
   if (safePrincipal === 0) {
@@ -471,6 +488,7 @@ export function simulateMortgage({
       interestFixed += interest;
     }
 
+    let appliedSpecial = 0;
     if (months % 12 === 0 && balance > 0.01) {
       const yearIndex = months / 12 - 1;
       const requestedSpecial = requestedSpecialForYear(specialPlan, yearIndex);
@@ -478,9 +496,18 @@ export function simulateMortgage({
       usedAnnualSpecialRepayments[yearIndex] = cappedSpecial;
 
       if (cappedSpecial > 0) {
-        balance -= Math.min(balance, cappedSpecial);
+        appliedSpecial = Math.min(balance, cappedSpecial);
+        balance -= appliedSpecial;
       }
     }
+
+    onMonth?.({
+      month: months,
+      interest,
+      principal: principalPart,
+      special: appliedSpecial,
+      balance: Math.max(0, balance),
+    });
 
     if (months === fixedRateYears * 12) {
       remainingAfterFixed = Math.max(0, balance);
@@ -1091,6 +1118,33 @@ export function compareSpecialScenarios(
   };
 }
 
+/**
+ * The price and the Sollzins a purchase after `waitMonths` would meet: the price grown
+ * at the waiting assumption, the rate moved by the assumed shift. Shared by the Warten
+ * table and `wealthAtHorizon`, so the two can never disagree about what waiting buys.
+ */
+function purchaseAfterWaiting(
+  base: ScenarioBase,
+  inputs: MortgageInputs,
+  rates: InterestRates,
+  waitMonths: number,
+): { futurePrice: number; adjustedInterestRate: number; purchaseRates: InterestRates } {
+  const futurePrice =
+    inputs.purchasePrice * Math.pow(1 + inputs.waitPropertyGrowthRate / 100, waitMonths / 12);
+  const adjustedInterestRate = Math.max(
+    0.1,
+    rateFor(rates, inputs.fixedRateYears, base.id) + (waitMonths > 0 ? inputs.waitRateShift : 0),
+  );
+  // Only the column actually in use is shifted: the other binding's rates are not a
+  // forecast this function has any basis to move.
+  const period = normaliseFixedPeriod(inputs.fixedRateYears);
+  const purchaseRates: InterestRates = {
+    ...rates,
+    [period]: { ...rates[period], [base.id]: adjustedInterestRate },
+  };
+  return { futurePrice, adjustedInterestRate, purchaseRates };
+}
+
 export function buildWaitScenario(
   selectedBase: ScenarioBase,
   selectedNow: ScenarioResult,
@@ -1099,8 +1153,12 @@ export function buildWaitScenario(
   waitMonths: number = inputs.waitMonths,
 ): WaitScenario {
   const years = waitMonths / 12;
-  const futurePrice =
-    inputs.purchasePrice * Math.pow(1 + inputs.waitPropertyGrowthRate / 100, years);
+  const { futurePrice, adjustedInterestRate, purchaseRates } = purchaseAfterWaiting(
+    selectedBase,
+    inputs,
+    rates,
+    waitMonths,
+  );
   // Zero for the buy-now column, so `deltaTotalCost` collapses to the interest delta there.
   const rentPaid = inputs.currentWarmRent * waitMonths;
   const saved = inputs.waitSavingsMonthly * waitMonths;
@@ -1108,24 +1166,12 @@ export function buildWaitScenario(
   // Eigenkapital after rent. Subtracting it here as well double-counted it and made
   // waiting look far worse than it is. See docs/DECISIONS.md D4.
   const adjustedAvailableCapital = inputs.availableCapital + saved;
-  const adjustedInterestRate = Math.max(
-    0.1,
-    rateFor(rates, inputs.fixedRateYears, selectedBase.id) +
-      (waitMonths > 0 ? inputs.waitRateShift : 0),
-  );
   const futureInputs: MortgageInputs = {
     ...inputs,
     purchasePrice: futurePrice,
     availableCapital: adjustedAvailableCapital,
   };
-  // Only the column actually in use is shifted — the other binding's rates are not
-  // a forecast this function has any basis to move.
-  const period = normaliseFixedPeriod(inputs.fixedRateYears);
-  const futureRates: InterestRates = {
-    ...rates,
-    [period]: { ...rates[period], [selectedBase.id]: adjustedInterestRate },
-  };
-  const scenario = buildScenario(selectedBase, futureInputs, futureRates);
+  const scenario = buildScenario(selectedBase, futureInputs, purchaseRates);
   const deltaInterest = scenario.mortgage.interestTotal - selectedNow.mortgage.interestTotal;
 
   return {
@@ -1174,6 +1220,146 @@ export function buildWaitScenarios(
   return months.map((waitMonths) =>
     buildWaitScenario(selectedBase, selectedNow, inputs, rates, waitMonths),
   );
+}
+
+export type WealthPathParams = {
+  base: ScenarioBase;
+  inputs: MortgageInputs;
+  rates: InterestRates;
+  /** Months of renting before the purchase. 0 = buy now. */
+  waitMonths?: number;
+  /** Defaults to the yearly plan in `inputs`. */
+  specialPlan?: SpecialPlan;
+  /**
+   * The common date every path is valued at, in months from today. Defaults to the
+   * Zinsbindung: the longest span over which every rate in play is contractually known
+   * (a later purchase is still inside its own binding then). Beyond it the figure
+   * inherits the constant-rate assumption of ASSUMPTIONS §1.
+   */
+  horizonMonths?: number;
+};
+
+export type WealthAtHorizon = {
+  horizonMonths: number;
+  /** What was paid for the flat, at the month of purchase. */
+  purchasePrice: number;
+  loan: number;
+  /** Market value of the flat at the horizon. Identical across every path for one flat. */
+  propertyValue: number;
+  debt: number;
+  /** Free capital at the horizon, before tax on its gains. */
+  liquid: number;
+  /**
+   * Tax on that capital's gains if realised at the horizon. Linear in the gain, so it
+   * turns negative where withdrawals (a down payment, Sondertilgung) leave the pot below
+   * what was put in: that is the after-tax growth those withdrawals gave up.
+   */
+  liquidTax: number;
+  /** propertyValue − debt + liquid − liquidTax. */
+  wealth: number;
+  /** Sondertilgung actually paid by the horizon, after the contractual cap. */
+  specialPaid: number;
+  /** Rent paid before the purchase. */
+  rentPaid: number;
+};
+
+/**
+ * Everything the household owns at one common date: the flat, minus what is still owed,
+ * plus the free capital, after tax on its gains. Followed month by month.
+ *
+ * This is the comparison every other one in the app approximates. Each of them used to
+ * compare on its own basis: interest alone, interest plus rent, pre-tax ETF growth, a
+ * full-term total at each path's own payoff date. Several defects came from exactly
+ * that (K1, K10, K15, K18, the old Nettovermögen). Here every path pays the same
+ * household out of the same budget and is valued on the same day, so a difference
+ * between two calls is a like-for-like difference and nothing else.
+ *
+ * The household budget for housing plus saving is `waitSavingsMonthly + currentWarmRent`.
+ * That is D4's definition read the other way round: the net savings rate is what is left
+ * after rent, so rent plus savings is what is available for housing at all. Before the
+ * purchase the household pays rent from it; after, the Monatsrate and the ownership
+ * costs. Whatever is left, and the starting capital not spent on the purchase, is
+ * invested at the ETF assumption; Sondertilgung is drawn from it. The amortisation
+ * itself is `simulateMortgage`, observed through `onMonth`, so the offer-pinned schedule
+ * is reused, not re-implemented.
+ */
+export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
+  const { base, inputs, rates } = params;
+  const waitMonths = Math.max(0, Math.round(params.waitMonths ?? 0));
+  const horizonMonths = Math.max(
+    waitMonths,
+    Math.round(params.horizonMonths ?? inputs.fixedRateYears * 12),
+  );
+  const specialPlan = params.specialPlan ?? planFromInputs(inputs);
+  const monthlyReturn = Math.pow(1 + inputs.etfReturnRate / 100, 1 / 12) - 1;
+  const budget = inputs.waitSavingsMonthly + inputs.currentWarmRent;
+
+  let liquid = inputs.availableCapital;
+  let contributed = liquid;
+  const move = (amount: number) => {
+    liquid += amount;
+    contributed += amount;
+  };
+
+  // Renting until the purchase.
+  for (let month = 1; month <= waitMonths; month += 1) {
+    liquid *= 1 + monthlyReturn;
+    move(budget - inputs.currentWarmRent);
+  }
+
+  const { futurePrice, purchaseRates } = purchaseAfterWaiting(base, inputs, rates, waitMonths);
+  const purchase = buildScenario(
+    base,
+    { ...inputs, purchasePrice: futurePrice },
+    purchaseRates,
+    specialPlan,
+  );
+  move(-purchase.cashNeeded);
+
+  // Owning, until the horizon. Months after the loan is repaid carry no bank payment.
+  const loanMonths = horizonMonths - waitMonths;
+  const paidToBank = new Array<number>(loanMonths + 1).fill(0);
+  const specialByMonth = new Array<number>(loanMonths + 1).fill(0);
+  let debt = purchase.loan;
+  simulateMortgage({
+    principal: purchase.loan,
+    interestRatePct: purchase.interestRate,
+    repaymentRatePct: purchase.repaymentRate,
+    fixedRateYears: inputs.fixedRateYears,
+    specialPlan,
+    specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+    onMonth: (entry) => {
+      if (entry.month > loanMonths) return;
+      paidToBank[entry.month] = entry.interest + entry.principal;
+      specialByMonth[entry.month] = entry.special;
+      debt = entry.balance;
+    },
+  });
+  if (loanMonths === 0) debt = purchase.loan;
+
+  let specialPaid = 0;
+  for (let month = 1; month <= loanMonths; month += 1) {
+    liquid *= 1 + monthlyReturn;
+    move(budget - inputs.monthlyOwnershipCosts - paidToBank[month] - specialByMonth[month]);
+    specialPaid += specialByMonth[month];
+  }
+
+  const propertyValue =
+    inputs.purchasePrice * Math.pow(1 + inputs.propertyGrowthRate / 100, horizonMonths / 12);
+  const liquidTax = (liquid - contributed) * (clampRate(inputs.etfTaxRate) / 100);
+
+  return {
+    horizonMonths,
+    purchasePrice: futurePrice,
+    loan: purchase.loan,
+    propertyValue,
+    debt,
+    liquid,
+    liquidTax,
+    wealth: propertyValue - debt + liquid - liquidTax,
+    specialPaid,
+    rentPaid: inputs.currentWarmRent * waitMonths,
+  };
 }
 
 /** A tax rate in percent, kept inside 0–100 so a stray input cannot invert a gain. */

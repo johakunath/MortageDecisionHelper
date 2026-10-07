@@ -90,6 +90,30 @@ exports[`golden master > QA preset case600 1`] = `
       "months": 24,
     },
   ],
+  "waitWealthDelta": [
+    {
+      "delta": 13915,
+      "months": 12,
+    },
+    {
+      "delta": 11072,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": 29247,
+      "wealth": 388781,
+    },
+    "ek15": {
+      "liquidAfterTax": -16136,
+      "wealth": 388075,
+    },
+    "ek20": {
+      "liquidAfterTax": -61520,
+      "wealth": 391613,
+    },
+  },
 }
 `;
 
@@ -184,6 +208,30 @@ exports[`golden master > QA preset case720 1`] = `
       "months": 24,
     },
   ],
+  "waitWealthDelta": [
+    {
+      "delta": 23567,
+      "months": 12,
+    },
+    {
+      "delta": 26594,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": -14958,
+      "wealth": 405040,
+    },
+    "ek15": {
+      "liquidAfterTax": -69418,
+      "wealth": 404199,
+    },
+    "ek20": {
+      "liquidAfterTax": -123878,
+      "wealth": 408498,
+    },
+  },
 }
 `;
 
@@ -279,6 +327,30 @@ exports[`golden master > QA preset case850 1`] = `
       "months": 24,
     },
   ],
+  "waitWealthDelta": [
+    {
+      "delta": 33316,
+      "months": 12,
+    },
+    {
+      "delta": 41945,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": -260876,
+      "wealth": 218532,
+    },
+    "ek15": {
+      "liquidAfterTax": -325169,
+      "wealth": 217547,
+    },
+    "ek20": {
+      "liquidAfterTax": -389463,
+      "wealth": 222702,
+    },
+  },
 }
 `;
 
@@ -373,6 +445,30 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
       "months": 24,
     },
   ],
+  "waitWealthDelta": [
+    {
+      "delta": 3207,
+      "months": 12,
+    },
+    {
+      "delta": -5410,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": 137561,
+      "wealth": 439794,
+    },
+    "ek15": {
+      "liquidAfterTax": 103524,
+      "wealth": 439249,
+    },
+    "ek20": {
+      "liquidAfterTax": 69486,
+      "wealth": 441740,
+    },
+  },
 }
 `;
 
@@ -466,6 +562,30 @@ exports[`golden master > default apartment Wohnung B 1`] = `
       "months": 24,
     },
   ],
+  "waitWealthDelta": [
+    {
+      "delta": 8057,
+      "months": 12,
+    },
+    {
+      "delta": 2244,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": 98717,
+      "wealth": 395676,
+    },
+    "ek15": {
+      "liquidAfterTax": 60897,
+      "wealth": 395090,
+    },
+    "ek20": {
+      "liquidAfterTax": 23078,
+      "wealth": 398058,
+    },
+  },
 }
 `;
 
@@ -559,5 +679,29 @@ exports[`golden master > default apartment Wohnung C 1`] = `
       "months": 24,
     },
   ],
+  "waitWealthDelta": [
+    {
+      "delta": 15866,
+      "months": 12,
+    },
+    {
+      "delta": 13538,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": 79425,
+      "wealth": 349978,
+    },
+    "ek15": {
+      "liquidAfterTax": 34041,
+      "wealth": 349323,
+    },
+    "ek20": {
+      "liquidAfterTax": -11342,
+      "wealth": 353358,
+    },
+  },
 }
 `;

@@ -6,6 +6,7 @@ import {
   buildWaitScenario,
   compareEkScenarios,
   interestForPlan,
+  wealthAtHorizon,
 } from "./calculations";
 import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
 
@@ -74,4 +75,55 @@ describe("engine invariants", () => {
       }
     },
   );
+
+  it.each(apartments)(
+    "%s: the wealth ledger reproduces the after-tax trade-off exactly",
+    (_label, inputs) => {
+      // Same Monatsrate, same budget, same Sondertilgung: the only thing that differs
+      // between two EK levels is where the extra capital sits. So the ledger's wealth gap
+      // at the end of the binding must be the closed-form statement, to the cent.
+      const scenarios = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+      const wealth = EK_SCENARIOS.map(
+        (base) => wealthAtHorizon({ base, inputs, rates: DEFAULT_RATES }).wealth,
+      );
+      for (let i = 0; i < scenarios.length; i += 1) {
+        for (let j = i + 1; j < scenarios.length; j += 1) {
+          const tradeoff = compareEkScenarios(scenarios[i], scenarios[j], inputs);
+          expect(wealth[j] - wealth[i]).toBeCloseTo(tradeoff.netAdvantageFixed, 4);
+        }
+      }
+    },
+  );
+
+  it.each(apartments)(
+    "%s: Sondertilgung is neutral when the ETF earns exactly the loan's rate, untaxed",
+    (_label, inputs) => {
+      // Paying s into the loan saves the Sollzins on s; keeping it earns the ETF rate on
+      // s. At equal effective rates and no tax the two paths must end level. Anything
+      // else would mean the ledger books a cash flow on one side only.
+      for (const base of EK_SCENARIOS) {
+        const rate = buildScenario(base, inputs, DEFAULT_RATES).interestRate;
+        const effective = (Math.pow(1 + rate / 1200, 12) - 1) * 100;
+        const neutral = { ...inputs, etfReturnRate: effective, etfTaxRate: 0 };
+        const withPlan = wealthAtHorizon({ base, inputs: neutral, rates: DEFAULT_RATES });
+        const without = wealthAtHorizon({
+          base,
+          inputs: neutral,
+          rates: DEFAULT_RATES,
+          specialPlan: { kind: "none" },
+        });
+        expect(withPlan.specialPaid).toBeGreaterThan(0);
+        expect(withPlan.wealth - without.wealth).toBeCloseTo(0, 4);
+      }
+    },
+  );
+
+  it.each(apartments)("%s: the ledger's debt is the simulated Restschuld", (_label, inputs) => {
+    for (const base of EK_SCENARIOS) {
+      const scenario = buildScenario(base, inputs, DEFAULT_RATES);
+      const path = wealthAtHorizon({ base, inputs, rates: DEFAULT_RATES });
+      expect(path.debt).toBeCloseTo(scenario.mortgage.remainingAfterFixed, 6);
+      expect(path.loan).toBeCloseTo(scenario.loan, 6);
+    }
+  });
 });
