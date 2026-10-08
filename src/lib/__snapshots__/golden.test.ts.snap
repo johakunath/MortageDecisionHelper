@@ -19,6 +19,7 @@ exports[`golden master > QA preset case600 1`] = `
       "remainingAfterFixed": 371863,
       "runtimeYears": 28,
       "status": "Gerade so tragbar",
+      "stressExtraYears": 6.25,
     },
     "ek15": {
       "cashLeft": 7000,
@@ -29,6 +30,7 @@ exports[`golden master > QA preset case600 1`] = `
       "remainingAfterFixed": 327185,
       "runtimeYears": 25,
       "status": "Reserve zu dünn",
+      "stressExtraYears": 3.75,
     },
     "ek20": {
       "cashLeft": -23000,
@@ -39,6 +41,7 @@ exports[`golden master > QA preset case600 1`] = `
       "remainingAfterFixed": 278264,
       "runtimeYears": 22.08,
       "status": "Geld reicht nicht",
+      "stressExtraYears": 2.08,
     },
   },
   "special": {
@@ -142,6 +145,7 @@ exports[`golden master > QA preset case720 1`] = `
       "remainingAfterFixed": 457678,
       "runtimeYears": 28.42,
       "status": "Tragbar",
+      "stressExtraYears": 6.83,
     },
     "ek15": {
       "cashLeft": 34400,
@@ -152,6 +156,7 @@ exports[`golden master > QA preset case720 1`] = `
       "remainingAfterFixed": 404059,
       "runtimeYears": 25.5,
       "status": "Gerade so tragbar",
+      "stressExtraYears": 4.08,
     },
     "ek20": {
       "cashLeft": -1600,
@@ -162,6 +167,7 @@ exports[`golden master > QA preset case720 1`] = `
       "remainingAfterFixed": 345300,
       "runtimeYears": 22.5,
       "status": "Geld reicht nicht",
+      "stressExtraYears": 2.25,
     },
   },
   "special": {
@@ -266,6 +272,7 @@ exports[`golden master > QA preset case850 1`] = `
       "remainingAfterFixed": 556737,
       "runtimeYears": 29.5,
       "status": "Geld reicht nicht",
+      "stressExtraYears": 8.08,
     },
     "ek15": {
       "cashLeft": -80845,
@@ -276,6 +283,7 @@ exports[`golden master > QA preset case850 1`] = `
       "remainingAfterFixed": 493429,
       "runtimeYears": 26.33,
       "status": "Geld reicht nicht",
+      "stressExtraYears": 4.83,
     },
     "ek20": {
       "cashLeft": -123345,
@@ -286,6 +294,7 @@ exports[`golden master > QA preset case850 1`] = `
       "remainingAfterFixed": 423981,
       "runtimeYears": 23.25,
       "status": "Geld reicht nicht",
+      "stressExtraYears": 2.67,
     },
   },
   "special": {
@@ -389,6 +398,7 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
       "remainingAfterFixed": 246314,
       "runtimeYears": 24.08,
       "status": "Tragbar",
+      "stressExtraYears": 3.17,
     },
     "ek15": {
       "cashLeft": 25435,
@@ -399,6 +409,7 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
       "remainingAfterFixed": 212822,
       "runtimeYears": 21.67,
       "status": "Gerade so tragbar",
+      "stressExtraYears": 1.92,
     },
     "ek20": {
       "cashLeft": 2935,
@@ -409,6 +420,7 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
       "remainingAfterFixed": 176294,
       "runtimeYears": 19.17,
       "status": "Reserve zu dünn",
+      "stressExtraYears": 1.17,
     },
   },
   "special": {
@@ -511,6 +523,7 @@ exports[`golden master > default apartment Wohnung B 1`] = `
       "remainingAfterFixed": 312538,
       "runtimeYears": 29.58,
       "status": "Gerade so tragbar",
+      "stressExtraYears": 8.33,
     },
     "ek15": {
       "cashLeft": 2150,
@@ -521,6 +534,7 @@ exports[`golden master > default apartment Wohnung B 1`] = `
       "remainingAfterFixed": 275305,
       "runtimeYears": 26.33,
       "status": "Reserve zu dünn",
+      "stressExtraYears": 4.75,
     },
     "ek20": {
       "cashLeft": -22850,
@@ -531,6 +545,7 @@ exports[`golden master > default apartment Wohnung B 1`] = `
       "remainingAfterFixed": 234517,
       "runtimeYears": 23.08,
       "status": "Geld reicht nicht",
+      "stressExtraYears": 2.58,
     },
   },
   "special": {
@@ -633,6 +648,7 @@ exports[`golden master > default apartment Wohnung C 1`] = `
       "remainingAfterFixed": 460843,
       "runtimeYears": 49.5,
       "status": "Reserve zu dünn",
+      "stressExtraYears": "never",
     },
     "ek15": {
       "cashLeft": -19420,
@@ -643,6 +659,7 @@ exports[`golden master > default apartment Wohnung C 1`] = `
       "remainingAfterFixed": 416115,
       "runtimeYears": 41.67,
       "status": "Geld reicht nicht",
+      "stressExtraYears": "never",
     },
     "ek20": {
       "cashLeft": -49420,
@@ -653,6 +670,7 @@ exports[`golden master > default apartment Wohnung C 1`] = `
       "remainingAfterFixed": 366696,
       "runtimeYears": 34.75,
       "status": "Geld reicht nicht",
+      "stressExtraYears": 20.67,
     },
   },
   "special": {

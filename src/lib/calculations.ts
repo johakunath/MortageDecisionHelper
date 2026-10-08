@@ -75,6 +75,13 @@ export type MortgageInputs = {
    * apartments. See docs/ASSUMPTIONS.md K18.
    */
   etfTaxRate: number;
+  /**
+   * How much higher the Anschlusszins might be than today's Sollzins, in percentage
+   * points. A stress test, not a forecast: nobody knows the rate in ten years, but the
+   * Restschuld that has to be refinanced at it is known, and so is what a shock does to
+   * it. See docs/DECISIONS.md D31.
+   */
+  refiStressShift: number;
 };
 
 /**
@@ -1352,6 +1359,81 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
     wealth: propertyValue - debt + liquid - liquidTax,
     specialPaid,
     rentPaid: inputs.currentWarmRent * waitMonths,
+  };
+}
+
+export type RefinanceStress = {
+  /** False when the loan is repaid inside the binding: there is nothing to refinance. */
+  applies: boolean;
+  stressRate: number;
+  /** Whether the same Monatsrate still covers the interest on the Restschuld at that rate. */
+  coversInterest: boolean;
+  /** Years to debt-free in total, at today's rate after the binding (the usual assumption). */
+  runtimeYearsAtSameRate: number;
+  /** Years to debt-free in total if the rate after the binding is `stressRate`. Infinity if never. */
+  runtimeYearsStressed: number;
+  /** `runtimeYearsStressed − runtimeYearsAtSameRate`. */
+  extraYears: number;
+};
+
+/**
+ * The refinancing risk as one number: at the same Monatsrate, how much longer the loan
+ * runs if the Anschlusszins is `refiStressShift` points above today's.
+ *
+ * The Restschuld after the binding was already on screen, but a balance does not say
+ * what it means. Holding the rate constant keeps D14's reading (the Monatsrate is the
+ * budget) and makes the risk comparable across EK levels: more Eigenkapital leaves less
+ * debt exposed to the new rate. Both runtimes are computed the same way, from the
+ * Restschuld onward with the rest of the yearly plan, so only the rate differs.
+ */
+export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs): RefinanceStress {
+  const fixedYears = inputs.fixedRateYears;
+  const remaining = scenario.mortgage.remainingAfterFixed;
+  const stressRate = Math.max(0, scenario.interestRate + inputs.refiStressShift);
+  const payment = scenario.mortgage.regularMonthlyPayment;
+  const laterPlan: SpecialPlan = {
+    kind: "path",
+    years: inputs.annualSpecialRepayments.slice(Math.round(fixedYears)),
+  };
+
+  if (remaining <= 0.01 || !Number.isFinite(remaining)) {
+    const runtime = scenario.mortgage.runtimeYears;
+    return {
+      applies: false,
+      stressRate,
+      coversInterest: true,
+      runtimeYearsAtSameRate: runtime,
+      runtimeYearsStressed: runtime,
+      extraYears: 0,
+    };
+  }
+
+  const followUp = (ratePct: number): { covers: boolean; years: number } => {
+    const covers = payment > (remaining * ratePct) / 1200;
+    if (!covers) return { covers, years: Infinity };
+    const simulation = simulateMortgage({
+      principal: remaining,
+      interestRatePct: ratePct,
+      repaymentRatePct: repaymentRateFromMonthlyPayment(remaining, ratePct, payment),
+      fixedRateYears: 0,
+      specialPlan: laterPlan,
+      specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+    });
+    return { covers, years: simulation.runtimeYears };
+  };
+
+  const same = followUp(scenario.interestRate);
+  const stressed = followUp(stressRate);
+  const runtimeYearsAtSameRate = fixedYears + same.years;
+  const runtimeYearsStressed = fixedYears + stressed.years;
+
+  return {
+    applies: true,
+    stressRate,
+    coversInterest: stressed.covers,
+    runtimeYearsAtSameRate,
+    runtimeYearsStressed,
+    extraYears: runtimeYearsStressed - runtimeYearsAtSameRate,
   };
 }
 

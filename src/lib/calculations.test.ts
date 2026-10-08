@@ -15,6 +15,7 @@ import {
   monthlyAnnuity,
   normaliseFixedPeriod,
   rateFor,
+  refinanceStress,
   repaymentRateFromMonthlyPayment,
   repaymentRateFromRuntimeYears,
   requiredSpecialToMatch,
@@ -414,6 +415,35 @@ describe("calculation engine", () => {
 
     const cautious = specialPlanEffect(LOWEST, { ...inputs, etfReturnRate: 2 }, DEFAULT_RATES);
     expect(cautious.wealthDelta).toBeGreaterThan(0);
+  });
+
+  it("turns the Restschuld into a refinancing stress test (D31)", () => {
+    // Offer flat, same Monatsrate, Anschlusszins 2 points above today's: the less
+    // Eigenkapital, the more debt meets the new rate and the longer the loan runs.
+    const offer = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const stresses = buildScenarios(EK_SCENARIOS, offer, DEFAULT_RATES).map((scenario) => ({
+      scenario,
+      stress: refinanceStress(scenario, offer),
+    }));
+    for (const { scenario, stress } of stresses) {
+      expect(stress.applies).toBe(true);
+      expect(stress.runtimeYearsAtSameRate).toBeCloseTo(scenario.mortgage.runtimeYears, 6);
+    }
+    expect(stresses[0].stress.extraYears).toBeGreaterThan(stresses[1].stress.extraYears);
+    expect(stresses[1].stress.extraYears).toBeGreaterThan(stresses[2].stress.extraYears);
+    expect(stresses[0].stress.extraYears).toBeCloseTo(3.17, 1);
+
+    // Wohnung C at 10% EK: 1.900 € no longer even covers the interest on the Restschuld.
+    const flatC = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[2]);
+    const tight = refinanceStress(buildScenario(LOWEST, flatC, DEFAULT_RATES), flatC);
+    expect(tight.coversInterest).toBe(false);
+    expect(tight.runtimeYearsStressed).toBe(Infinity);
+
+    // Repaid inside the binding: nothing to refinance, nothing to stress.
+    const small = { ...offer, purchasePrice: 150000 };
+    const repaid = refinanceStress(buildScenario(LOWEST, small, DEFAULT_RATES), small);
+    expect(repaid.applies).toBe(false);
+    expect(repaid.extraYears).toBe(0);
   });
 
   it("gives the entered Wartezeit its own column", () => {

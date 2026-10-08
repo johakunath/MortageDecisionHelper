@@ -131,15 +131,15 @@ export default function ProgressSection({
           figures now sit on one date, the end of the binding, for every EK level.
         */}
         <Readout
-          label={`Vermögen nach ${formatNumber(selectedWealth.horizonMonths / 12, 0)} Jahren`}
+          label="Vermögen"
           value={formatEur(selectedWealth.wealth)}
-          sub="Wohnung − Restschuld + freies Kapital nach Steuer · gleicher Stichtag für alle Stufen"
+          sub={`nach ${formatNumber(selectedWealth.horizonMonths / 12, 0)} J.: Wohnung − Restschuld + freies Kapital nach Steuer · gleicher Stichtag für alle Stufen`}
           info={GLOSSARY.wealthAtHorizon}
         />
         <Readout
-          label="Davon frei verfügbar"
+          label="Frei verfügbar"
           value={formatEur(selectedWealth.liquid - selectedWealth.liquidTax)}
-          sub={`angelegt zu ${formatPct(inputs.etfReturnRate)} p.a. · inkl. eurer Netto-Sparrate`}
+          sub={`davon nicht in der Wohnung · angelegt zu ${formatPct(inputs.etfReturnRate)} p.a., inkl. Netto-Sparrate`}
           info={GLOSSARY.liquidAtHorizon}
         />
       </div>

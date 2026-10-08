@@ -428,6 +428,16 @@ export default function InputsPanel({
               info={GLOSSARY.etfTaxRate}
               hint="18,46% = Abgeltungsteuer + Soli, Aktien-ETF"
             />
+            <InputField
+              label="Anschlusszins-Stress"
+              value={inputs.refiStressShift}
+              suffix="%-Pkt."
+              step={0.5}
+              min={0}
+              onChange={(value) => onInputChange("refiStressShift", value)}
+              info={GLOSSARY.refiStressShift}
+              hint="über dem heutigen Sollzins · kein Forecast"
+            />
           </div>
         </InputBox>
       </div>

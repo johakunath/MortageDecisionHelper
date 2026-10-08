@@ -39,6 +39,8 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   // Abgeltungsteuer + Soli auf 70% des Gewinns (Teilfreistellung Aktien-ETF), ohne
   // Kirchensteuer. Die gesparten Kreditzinsen sind steuerfrei, die ETF-Gewinne nicht.
   etfTaxRate: 18.4625,
+  // Stresstest, keine Prognose: 2 Prozentpunkte über dem heutigen Sollzins.
+  refiStressShift: 2,
 };
 
 /**

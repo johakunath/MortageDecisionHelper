@@ -22,6 +22,7 @@ import {
   compareEkScenarios,
   compareSpecialScenarios,
   evaluateDecision,
+  refinanceStress,
   specialPlanEffect,
   normaliseFixedPeriod,
   waitPeriodsFor,
@@ -124,6 +125,8 @@ export default function App() {
     () => compareSpecialScenarios(EK_SCENARIOS, selected.id, activeInputs, rates),
     [selected.id, activeInputs, rates],
   );
+
+  const stress = useMemo(() => refinanceStress(selected, activeInputs), [selected, activeInputs]);
 
   const planEffect = useMemo(() => {
     const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
@@ -502,7 +505,7 @@ export default function App() {
           </section>
         </main>
 
-        <RightPanel selected={selected} inputs={activeInputs} decision={decision} />
+        <RightPanel selected={selected} inputs={activeInputs} decision={decision} stress={stress} />
       </div>
     </div>
   );

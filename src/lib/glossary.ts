@@ -42,6 +42,8 @@ export const GLOSSARY = {
     "Womit ihr rechnet, wenn das Geld statt in die Immobilie im ETF bliebe. Reine Annahme — sie entscheidet mit darüber, ob mehr Eigenkapital sich lohnt.",
   etfTaxRate:
     "Was vom ETF-Gewinn beim Verkauf an Steuer abgeht. 18,46% gilt für Aktien-ETFs: 25% Abgeltungsteuer plus Soli, aber nur auf 70% des Gewinns (Teilfreistellung). Mit Kirchensteuer etwas mehr, mit ungenutztem Sparerpauschbetrag weniger. Die Zinsen, die ihr durch mehr Eigenkapital spart, sind steuerfrei. Deshalb gehört die Steuer in den Vergleich.",
+  refiStressShift:
+    "Um wie viele Prozentpunkte der Zins nach der Zinsbindung höher liegen könnte als heute. Kein Forecast, sondern ein Stresstest: Wie viel länger würde dieselbe Monatsrate dann brauchen, bis ihr schuldenfrei seid? Weniger Restschuld heißt weniger Risiko an dieser Stelle.",
   maxBurdenRate:
     "Wie viel eures Haushaltsnettos maximal in die Wohnung fließen darf. 40% ist eine verbreitete Faustregel, keine Bankregel — ihr könnt sie anpassen.",
   propertyGrowthRate: "Angenommene jährliche Wertsteigerung der Immobilie. Bewusst konservativ setzen.",
@@ -66,7 +68,7 @@ export const GLOSSARY = {
   interestTotal:
     "Zinsen über die gesamte Laufzeit, unter der Annahme, dass der heutige Zins für immer gilt. Das ist eine Illustration, keine Prognose: den Zins der Anschlussfinanzierung kennt heute niemand.",
   remainingAfterFixed:
-    "Was am Ende der Zinsbindung noch offen ist und neu finanziert werden muss. Die wichtigste Zahl für das Zinsänderungsrisiko.",
+    "Was am Ende der Zinsbindung noch offen ist und neu finanziert werden muss. Die wichtigste Zahl für das Zinsänderungsrisiko. Darunter steht, wie viel länger dieselbe Monatsrate bräuchte, wenn der Anschlusszins um den Stresswert (unter Markt einstellbar) höher liegt als heute, oder ob sie dann nicht einmal mehr die Zinsen deckt.",
   wealthAtHorizon:
     "Was euch am Ende der Zinsbindung gehört: der Wert der Wohnung minus Restschuld, plus euer freies Kapital nach Steuer. Für jede EK-Stufe am selben Stichtag gerechnet und deshalb direkt vergleichbar. Enthält, was ihr monatlich übrig habt (Netto-Sparrate plus Miete, minus Rate und Eigentumskosten), angelegt zur ETF-Annahme.",
   liquidAtHorizon:

@@ -1,12 +1,11 @@
 import {
-  BETTER_WHEN,
   type MortgageInputs,
   type ScenarioResult,
   type SpecialComparison,
   type SpecialMatchRow,
   type SpecialPlanEffect,
 } from "../lib/calculations";
-import { formatCompactEur, formatEur, formatNumber, formatPct } from "../lib/format";
+import { formatCompactEur, formatEur, formatNumber, formatPct, formatSignedEur } from "../lib/format";
 import BarChart, { type BarGroup } from "./BarChart";
 import { Button, Readout, Section, SignedValue, useNumericDraft } from "./ui";
 
@@ -157,6 +156,7 @@ export default function SondertilgungPanel({
   }
 
   const otherRows = comparison.rows.filter((row) => !row.isSelected);
+  const years = formatNumber(planEffect.horizonMonths / 12, 0);
   const groups: BarGroup[] = comparison.rows.map((row) => ({
     id: row.base.id,
     label: row.base.label,
@@ -186,26 +186,24 @@ export default function SondertilgungPanel({
         */}
         <div className="readout-grid three">
           <Readout
-            label={`Eingezahlt in ${formatNumber(planEffect.horizonMonths / 12, 0)} Jahren`}
+            label="Eingezahlt"
             value={formatEur(planEffect.paid)}
-            sub={`Ø ${formatEur(configured)}/Jahr laut Jahresplan`}
+            sub={`in ${years} Jahren · Ø ${formatEur(configured)}/Jahr laut Plan`}
           />
           <Readout
-            label="Weniger Restschuld danach"
+            label="Weniger Schuld"
             value={formatEur(planEffect.debtReduction)}
-            sub={`davon ${formatEur(planEffect.interestSaved)} gesparte Zinsen · verlässlich`}
+            sub={`nach ${years} J. · davon ${formatEur(planEffect.interestSaved)} Zinsen gespart`}
             tone="amber"
           />
+          {/*
+            The sign carries the number, the words carry the verdict: hard rule 4, never
+            colour alone. A SignedValue with its verdict word did not fit the column.
+          */}
           <Readout
             label="Gegenüber ETF"
-            value={
-              <SignedValue
-                value={planEffect.wealthDelta}
-                betterWhen={BETTER_WHEN.wealth}
-                verdictLabels={{ better: "Plan lohnt", worse: "ETF lohnt" }}
-              />
-            }
-            sub={`gleiches Geld zu ${formatPct(inputs.etfReturnRate)} angelegt, nach Steuer`}
+            value={formatSignedEur(planEffect.wealthDelta)}
+            sub={`${planEffect.wealthDelta >= 0 ? "Plan liegt vorn" : "ETF liegt vorn"} · gleiches Geld zu ${formatPct(inputs.etfReturnRate)}, nach Steuer`}
             tone={planEffect.wealthDelta >= 0 ? "green" : "slate"}
           />
         </div>

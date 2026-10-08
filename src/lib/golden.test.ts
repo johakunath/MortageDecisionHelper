@@ -6,6 +6,7 @@ import {
   compareEkScenarios,
   compareSpecialScenarios,
   evaluateDecision,
+  refinanceStress,
   specialPlanEffect,
   waitPeriodsFor,
   wealthAtHorizon,
@@ -35,8 +36,10 @@ import {
 const euro = (value: number) => Math.round(value);
 const years = (value: number) => Math.round(value * 100) / 100;
 
-function scenarioRow(scenario: ScenarioResult) {
+function scenarioRow(scenario: ScenarioResult, inputs: MortgageInputs) {
+  const stress = refinanceStress(scenario, inputs);
   return {
+    stressExtraYears: Number.isFinite(stress.extraYears) ? years(stress.extraYears) : "never",
     loan: euro(scenario.loan),
     cashLeft: euro(scenario.cashLeft),
     status: scenario.status,
@@ -74,7 +77,7 @@ function headline(inputs: MortgageInputs, rates: InterestRates) {
           lowNow.wealth,
       ),
     })),
-    scenarios: Object.fromEntries(scenarios.map((scenario) => [scenario.id, scenarioRow(scenario)])),
+    scenarios: Object.fromEntries(scenarios.map((scenario) => [scenario.id, scenarioRow(scenario, inputs)])),
     decision: {
       noSafeScenario: decision.noSafeScenario,
       feasible: decision.feasibleScenarios.map((scenario) => scenario.id),
