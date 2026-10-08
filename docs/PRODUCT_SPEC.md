@@ -153,6 +153,7 @@ Mirrors `src/lib/defaults.ts` (amended 2026-10-08; the original table described 
 | Expected ETF return | 5% p.a. |
 | Tax on ETF gains | 18,4625% (D29) |
 | Anschlusszins stress | +2 pp (D31) |
+| Max. Laufzeit | 26 years: debt-free by the older partner's retirement (D34) |
 
 **Sollzins by EK level × Zinsbindung** (from the Finanzierungsangebot 07.08.2026, entered by hand, *not* live market rates):
 
@@ -252,7 +253,7 @@ Optionally three manual annual assumptions (bear / base / bull), ideally sourced
 
 ## 17. Test cases
 
-Executed by `npm test` from `CASE_PRESETS` in `src/lib/defaults.ts`, which pin every input that decides their outcome (D12). Amended 2026-10-08 to match them.
+Executed by `npm test` from `CASE_PRESETS` in `src/lib/defaults.ts`, which pin every input that decides their outcome (D12), including `maxRuntimeYears: 35` so the personal runtime limit does not change what they test (D34). Amended 2026-10-08 to match them.
 
 | Case | Inputs (pinned) | Expected |
 |---|---|---|
@@ -314,3 +315,5 @@ Rationale in [DECISIONS.md D6](DECISIONS.md). This is a deliberate narrowing tow
 **A5 — Default apartments are 600.000 € / 500.000 € / 450.000 €**, replacing the earlier 600/720/850k set, which mirrored the QA stress fixtures and left every scenario infeasible on first load.
 
 **A6: Calculation-integrity pass (2026-10-08).** Four decisions from [docs/REVIEW.md](REVIEW.md): no single recommendation ([D28](DECISIONS.md)), ETF comparisons after tax ([D29](DECISIONS.md)), every comparison on one common date from one ledger ([D30](DECISIONS.md)), and a refinancing stress line under the Restschuld ([D31](DECISIONS.md)).
+
+**A7: Owner's choices from the mockups (2026-10-08).** Return per EK step in the matrix and as a chart ([D32](DECISIONS.md)), the Warten bottom line on one date with its tipping points ([D33](DECISIONS.md), answering §2.3), and a personal runtime limit ([D34](DECISIONS.md)).

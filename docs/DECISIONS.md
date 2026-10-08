@@ -496,3 +496,45 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **Rationale.** Holding the rate keeps D14's reading (the Monatsrate is the budget) and makes the risk comparable across EK levels. A stress, not a forecast: it says what a shock does, not that it will come. A single number, not an Anschlussfinanzierung model (spec §10).
 
 **Consequence.** No new readout: the panel stays at five and does not scroll at 1280×800 (D19). Verified at 1280 / 1000 / 820 / 560 px: the header still measures exactly 50 px. Offer flat: 10% EK +3,2 J., 20% EK +1,2 J.; Wohnung C at 10% and 15% EK: the 1.900 € rate would not cover the interest.
+
+---
+
+## D32: Every step of extra Eigenkapital gets a yearly return, in the matrix and as a chart
+
+**Date:** 2026-10-08 · **Status:** accepted · **Extends** [D29](#d29-every-etf-comparison-is-after-tax)
+
+**Context.** The headline compares only the two ends (10% vs 20%). The bank's pricing is not monotone, so the steps can point different ways: on the offer, 10→15% buys almost no rate (3,87 → 3,86%), 15→20% buys the drop to 3,76% on the whole loan. A single net figure cannot show that, and a yearly rate is the unit the couple's disagreement is actually about.
+
+**Decision.** `ekStepReturn()`: the tax-free yearly rate at which a step's extra cash grows into the Restschuld it removes by the end of the binding, the pre-tax ETF return at which keeping the money invested would do as well, and the verdict. Shown twice, by the owner's explicit choice from the mockup (REVIEW.md U2, options B and C): a "Rendite der Mehr-EK" column in the trade-off matrix and a step chart under it.
+
+**Rationale on showing it twice.** [D6](#d6--aggressive-deletion-the-same-comparison-was-rendered-five-times) treats a second rendering of the same comparison as a regression. This one is a deliberate exception chosen by the owner: the column gives exact figures for each pair, the chart makes the non-monotone pricing visible at a glance (offer: 4,1% and 5,0% p.a. against ≈4,2% for the ETF after tax). An invariant test pins that the step verdict never disagrees with the after-tax trade-off at any ETF assumption, so the two renderings cannot drift apart.
+
+**Consequence.** The chart's bars start at 0%, not at the smallest value as in the mockup: a cut axis would make 4,1% against 5,0% look like a factor of three. Each bar carries its verdict in words ("EK vorn" / "ETF vorn"), never colour alone.
+
+---
+
+## D33: The Warten bottom line is a wealth difference on one date, plus where it flips
+
+**Date:** 2026-10-08 · **Status:** accepted · **Supersedes** the bottom line of [D27](#d27--δ-zu-jetzt-kaufen-splits-into-interest-rent-and-the-sum)
+
+**Context.** D27's "Δ gesamt" added a full-term interest delta to rent. It extrapolated the assumed rate shift over 25+ years and left out the buy-now path's ownership costs and principal, the return on capital while waiting, and the extra cash a later purchase leaves. On the offer flat it read "6.662 € teurer" for a year of waiting; on one date, from the ledger ([D30](#d30-comparisons-are-made-on-one-common-date-from-one-ledger)), waiting is 3.207 € ahead at the default assumptions. On Wohnung C it read 79.374 € "besser" where the ledger says 15.866 €. K22.
+
+**Decision.** Owner's choice from the mockup (REVIEW.md U5, option A). The table keeps Kaufpreis, Zinssatz, Darlehen and Cash nach Kauf, and replaces Zinsen gesamt, Δ Zinsen, Miete and Δ gesamt with Restschuld and free capital in N years and **Δ Vermögen zu jetzt kaufen**. Every column shares one horizon. Under the table, one sentence for the entered Wartezeit: who is ahead by how much, and the value of each assumption (rate change, price rise, return on capital) at which that flips, each on its own.
+
+**Rationale.** It answers the question [PRODUCT_SPEC §2.3](PRODUCT_SPEC.md#23-should-we-buy-now-or-wait) actually asks ("what conditions would need to occur for waiting to beat buying now") and shows how fragile the answer is: on the offer flat, a 0,3-point rate drop is assumed and the verdict flips at 0,2.
+
+**Consequence.** `WaitScenario.deltaInterest` and `deltaTotalCost` are removed; `deltaWealth`, `wealth` and a ledger-based `cashLeftAfterPurchase` take their place. Rent stays in the model, paid out of the household budget inside the ledger, which is where D4 puts it.
+
+---
+
+## D34: A tragbar scenario that runs past the couple's own limit is flagged, not failed
+
+**Date:** 2026-10-08 · **Status:** accepted
+
+**Context.** Feasibility only failed a loan that would not be repaid inside 60 years. Wohnung C at 10% EK ran 49,5 years at 1.900 €/Monat with no warning. The owners gave their birth years; the older partner reaches the statutory retirement age of 67 about 26 years after a 2026 purchase.
+
+**Decision.** New input `maxRuntimeYears`, default 26, under Darlehen ("Max. Laufzeit"). A scenario that is tragbar but runs longer shows the amber status "Läuft zu lange". It stays tragbar. Failed checks still name themselves first.
+
+**Rationale.** The runtime rests on today's rate holding for the whole term (ASSUMPTIONS §1), so it can warn but must not decide. A loan into retirement is a real risk and one of the two people reading this is the one who would be retiring.
+
+**Consequence.** The birth years are not stored anywhere in the repository, only the derived 26 years. On the defaults Wohnung B at 10% EK (29,6 years) is flagged. The QA presets pin `maxRuntimeYears: 35` so they keep testing tragbarkeit rather than the personal limit ([D12](#d12--kaufnebenkosten-two-presets-and-1157-as-default)).

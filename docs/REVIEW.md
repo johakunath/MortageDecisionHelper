@@ -15,8 +15,9 @@ How the numbers below were produced: the engine itself, run on the default state
 | C6/A1 common-horizon ledger (`wealthAtHorizon`) | Done: [D30](DECISIONS.md) |
 | C7 Sondertilgung on the same basis · C8 refinancing stress | Done: [D30](DECISIONS.md), [D31](DECISIONS.md) |
 | C11 rent / ownership-cost basis, C12, C13, U7 | Done (glossary, ASSUMPTIONS, spec) |
-| C5/U5 Warten bottom line · U2 marginal EK return | Engine ready; layout waits on the mockup choice |
-| C9 runtime warning | Waits on your ages (question 5) |
+| U2 return per EK step (options B + C) | Done: [D32](DECISIONS.md) |
+| C5/U5 Warten bottom line (option A) + tipping points | Done: [D33](DECISIONS.md) |
+| C9 runtime warning | Done: [D34](DECISIONS.md), limit 26 years |
 
 ## 0. Bottom line
 
