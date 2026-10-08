@@ -20,6 +20,7 @@ import {
   requiredSpecialToMatch,
   runtimeYearsFromRepaymentRate,
   simulateMortgage,
+  specialPlanEffect,
   waitPeriodsFor,
   wealthAtHorizon,
   type ScenarioId,
@@ -395,6 +396,24 @@ describe("calculation engine", () => {
       waitMonths: 12,
     });
     expect(waitInvested.wealth).toBeGreaterThan(nowInvested.wealth);
+  });
+
+  it("measures the Sondertilgung plan inside the binding, against the ETF (K20)", () => {
+    // The offer flat at 10% EK, 6.000 €/Jahr for ten years. Inside the binding the plan
+    // pays 60.000 € in; the Restschuld falls by that plus the interest it saves. Against
+    // the same money in the ETF the verdict depends on the ETF assumption: 5% before
+    // tax (≈4,2% after) beats a 3,87% loan, 2% does not.
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const effect = specialPlanEffect(LOWEST, inputs, DEFAULT_RATES);
+
+    expect(effect.horizonMonths).toBe(120);
+    expect(effect.paid).toBeCloseTo(60000, 6);
+    expect(effect.interestSaved).toBeGreaterThan(0);
+    expect(effect.debtReduction).toBeCloseTo(effect.paid + effect.interestSaved, 6);
+    expect(effect.wealthDelta).toBeLessThan(0);
+
+    const cautious = specialPlanEffect(LOWEST, { ...inputs, etfReturnRate: 2 }, DEFAULT_RATES);
+    expect(cautious.wealthDelta).toBeGreaterThan(0);
   });
 
   it("gives the entered Wartezeit its own column", () => {

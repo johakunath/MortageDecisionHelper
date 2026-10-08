@@ -62,6 +62,11 @@ exports[`golden master > QA preset case600 1`] = `
         "planCovers": false,
       },
     ],
+    "effectInBinding": {
+      "debtReduction": 71834,
+      "paid": 60000,
+      "wealthDelta": -777,
+    },
     "planSaving": -99776,
   },
   "tradeoff": {
@@ -180,6 +185,11 @@ exports[`golden master > QA preset case720 1`] = `
         "planCovers": false,
       },
     ],
+    "effectInBinding": {
+      "debtReduction": 71834,
+      "paid": 60000,
+      "wealthDelta": -777,
+    },
     "planSaving": -99922,
   },
   "tradeoff": {
@@ -299,6 +309,11 @@ exports[`golden master > QA preset case850 1`] = `
         "planCovers": false,
       },
     ],
+    "effectInBinding": {
+      "debtReduction": 71834,
+      "paid": 60000,
+      "wealthDelta": -777,
+    },
     "planSaving": -104659,
   },
   "tradeoff": {
@@ -417,6 +432,11 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
         "planCovers": false,
       },
     ],
+    "effectInBinding": {
+      "debtReduction": 71834,
+      "paid": 60000,
+      "wealthDelta": -777,
+    },
     "planSaving": -78750,
   },
   "tradeoff": {
@@ -534,6 +554,11 @@ exports[`golden master > default apartment Wohnung B 1`] = `
         "planCovers": false,
       },
     ],
+    "effectInBinding": {
+      "debtReduction": 71834,
+      "paid": 60000,
+      "wealthDelta": -777,
+    },
     "planSaving": -117439,
   },
   "tradeoff": {
@@ -651,6 +676,11 @@ exports[`golden master > default apartment Wohnung C 1`] = `
         "planCovers": false,
       },
     ],
+    "effectInBinding": {
+      "debtReduction": 55977,
+      "paid": 48000,
+      "wealthDelta": -499,
+    },
     "planSaving": -290247,
   },
   "tradeoff": {

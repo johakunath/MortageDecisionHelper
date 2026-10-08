@@ -22,6 +22,7 @@ import {
   compareEkScenarios,
   compareSpecialScenarios,
   evaluateDecision,
+  specialPlanEffect,
   normaliseFixedPeriod,
   waitPeriodsFor,
   wealthAtHorizon,
@@ -123,6 +124,11 @@ export default function App() {
     () => compareSpecialScenarios(EK_SCENARIOS, selected.id, activeInputs, rates),
     [selected.id, activeInputs, rates],
   );
+
+  const planEffect = useMemo(() => {
+    const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
+    return specialPlanEffect(base, activeInputs, rates);
+  }, [selected.id, activeInputs, rates]);
 
   const waitPeriods = useMemo(
     () => waitPeriodsFor(activeInputs.waitMonths),
@@ -440,6 +446,7 @@ export default function App() {
               inputs={activeInputs}
               selected={selected}
               comparison={specialComparison}
+              planEffect={planEffect}
               onSpecialRepaymentChange={(yearIndex, value) =>
                 updateApartmentSpecialRepayment(activeApartmentId, yearIndex, value)
               }

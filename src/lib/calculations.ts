@@ -1355,6 +1355,49 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
   };
 }
 
+export type SpecialPlanEffect = {
+  horizonMonths: number;
+  /** Sondertilgung actually paid by the end of the binding, after the cap. */
+  paid: number;
+  /** How much lower the Restschuld is at the end of the binding. Reliable. */
+  debtReduction: number;
+  /** `debtReduction − paid`: interest not paid inside the binding thanks to the plan. */
+  interestSaved: number;
+  /**
+   * Wealth with the plan minus wealth without it, on the same date and from the same
+   * budget: the plan's money kept invested at the ETF assumption instead, after tax.
+   * Positive = the plan beats keeping the money in the ETF.
+   */
+  wealthDelta: number;
+};
+
+/**
+ * What the yearly plan buys inside the binding, measured the same way the EK trade-off
+ * is: against the same money kept invested, after tax, on one date.
+ *
+ * The section used to lead with "Das bringt der Plan: 78.750 € gespart", a full-term
+ * interest total at a rate nobody can know for 24 years, and with no opportunity cost,
+ * while section 1 charged extra Eigenkapital an ETF opportunity cost. Two frames for
+ * the same decision (K20).
+ */
+export function specialPlanEffect(
+  base: ScenarioBase,
+  inputs: MortgageInputs,
+  rates: InterestRates,
+): SpecialPlanEffect {
+  const withPlan = wealthAtHorizon({ base, inputs, rates });
+  const without = wealthAtHorizon({ base, inputs, rates, specialPlan: { kind: "none" } });
+  const debtReduction = without.debt - withPlan.debt;
+
+  return {
+    horizonMonths: withPlan.horizonMonths,
+    paid: withPlan.specialPaid,
+    debtReduction,
+    interestSaved: debtReduction - withPlan.specialPaid,
+    wealthDelta: withPlan.wealth - without.wealth,
+  };
+}
+
 /** A tax rate in percent, kept inside 0–100 so a stray input cannot invert a gain. */
 function clampRate(ratePct: number): number {
   return Number.isFinite(ratePct) ? Math.min(100, Math.max(0, ratePct)) : 0;

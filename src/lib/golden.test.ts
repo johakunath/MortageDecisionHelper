@@ -6,6 +6,7 @@ import {
   compareEkScenarios,
   compareSpecialScenarios,
   evaluateDecision,
+  specialPlanEffect,
   waitPeriodsFor,
   wealthAtHorizon,
   type InterestRates,
@@ -93,6 +94,14 @@ function headline(inputs: MortgageInputs, rates: InterestRates) {
     })),
     special: {
       planSaving: euro(special.planSaving),
+      effectInBinding: (() => {
+        const effect = specialPlanEffect(EK_SCENARIOS[0], inputs, rates);
+        return {
+          paid: euro(effect.paid),
+          debtReduction: euro(effect.debtReduction),
+          wealthDelta: euro(effect.wealthDelta),
+        };
+      })(),
       catchUp: special.rows.map((row) => ({
         id: row.base.id,
         payer: row.catchUp?.payer ?? null,
