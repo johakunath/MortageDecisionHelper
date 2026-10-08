@@ -18,9 +18,11 @@ export const GLOSSARY = {
   renovation: "Was direkt nach dem Kauf gemacht werden muss, bevor ihr einzieht.",
   moving: "Umzug, Küche, Möbel — einmalige Kosten rund um den Einzug.",
   currentWarmRent:
-    "Was ihr heute für die Miete zahlt, inklusive Nebenkosten und Heizung, ohne Strom. Gleiche Basis wie die Eigentumskosten, damit Miete und Eigentum vergleichbar sind.",
-  monthlyOwnershipCosts:
-    "Alles, was ihr als Eigentümer monatlich für die Wohnung zahlt außer der Kreditrate: das komplette Hausgeld (mit Heizung, Nebenkosten und Rücklage), Grundsteuer und was ihr selbst für die Wohnung zurücklegt. Gleiche Basis wie eure Warmmiete, ohne Strom. Bewusst grob.",
+    "Was ihr heute für die Miete zahlt, inklusive Nebenkosten und Heizung, ohne Strom. Gleiche Basis wie Hausgeld plus Grundsteuer und eigene Rücklage, damit Miete und Eigentum vergleichbar sind.",
+  hausgeld:
+    "Was ihr monatlich an die Eigentümergemeinschaft zahlt, so wie es im Exposé oder im Wirtschaftsplan steht. Darin stecken Verwaltung, Gebäudeversicherung, Hausreinigung, Wasser, Müll, die Rücklage der Gemeinschaft und bei einer Zentralheizung auch die Heizung. Nicht darin: die Grundsteuer und Reparaturen in eurer eigenen Wohnung, die kommen über „Grundsteuer + eigene Rücklage“ dazu. Habt ihr eine eigene Gasetagenheizung, rechnet die Heizkosten hier mit ein.",
+  ownerExtraMonthly:
+    "Was ein Eigentümer zusätzlich zum Hausgeld trägt: die Grundsteuer, die ihr direkt an die Gemeinde zahlt (für eine Wohnung grob 300 bis 500 € im Jahr), und eine eigene Rücklage für Bad, Böden, Fenster und Geräte in eurer Wohnung, die die Rücklage der Gemeinschaft nicht abdeckt. Die 90 € sind eine Schätzung: etwa 35 € Grundsteuer und 55 € Rücklage.",
 
   // --- Finanzierung ---
   householdNetIncome: "Was monatlich nach Steuern und Sozialabgaben bei euch beiden zusammen ankommt.",

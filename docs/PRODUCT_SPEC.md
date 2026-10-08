@@ -139,7 +139,8 @@ Mirrors `src/lib/defaults.ts` (amended 2026-10-08; the original table described 
 | Available capital | 145.000 € |
 | Safety reserve target | 20.000 € |
 | Renovation · moving | 0 € · 0 € (per apartment) |
-| Monthly ownership costs | per apartment: 640 / 690 / 760 € |
+| Hausgeld (laut Exposé) | per apartment: 550 / 600 / 670 € (placeholders, D35) |
+| Grundsteuer + eigene Rücklage | 90 €/Monat on top of the Hausgeld (D35) |
 | Current warm rent | 1.970 € |
 | Household net income | 8.500 € |
 | Monatsrate | 1.900 € (identical for every EK level, D14) |
@@ -174,7 +175,7 @@ They are **not monotonic** in Eigenkapital — at a 15-year binding 10% and 15% 
 - **Eigenkapital %** — applies to the purchase price. 720.000 € at 10% → 72.000 € down payment. Purchase costs are *additional*.
 - **Available capital** — total liquid or liquidatable capital: cash, savings, sellable ETFs. Composition is tracked in the external EK tracker, not here.
 - **Safety reserve** — what must remain after down payment, purchase costs, renovation, moving and furniture. A personal threshold, **not** a bank requirement.
-- **Monthly ownership costs** — deliberately rough: everything an owner pays monthly for the flat except the loan, on the **same basis as the warm rent** (full Hausgeld incl. heating, Nebenkosten and reserve, Grundsteuer, own maintenance reserve; no electricity). Not a service-charge statement. Amended by [D30](DECISIONS.md): the earlier "non-recoverable Hausgeld" wording understated owning against a warm rent.
+- **Monthly ownership costs** — deliberately rough: everything an owner pays monthly for the flat except the loan, on the **same basis as the warm rent** (heating and Nebenkosten in, electricity out). Entered as the apartment's **Hausgeld from the Exposé** plus one global **Grundsteuer + eigene Rücklage** (default 90 €). Amended by [D30](DECISIONS.md) and [D35](DECISIONS.md): the earlier "non-recoverable Hausgeld" wording understated owning against a warm rent, and a single "Eigentumskosten" figure could not be traced back to anything.
 - **Monthly savings while waiting** — **net**: what actually lands in Eigenkapital each month *after* rent and normal household expenses. **Therefore rent must NOT also be subtracted from future capital.** Rent is still displayed separately as a cost of waiting. This definition exists specifically to prevent double-counting.
 
 ---

@@ -92,6 +92,19 @@ describe("calculation engine", () => {
     expect(simulation.usedAnnualSpecialRepayments[1]).toBe(5000);
   });
 
+  it("builds an apartment's ownership costs from its Hausgeld plus the owner's extra (D35)", () => {
+    const apartment = { ...DEFAULT_APARTMENT_CASES[0], hausgeld: 400 };
+    const inputs = buildApartmentInputs({ ...DEFAULT_INPUTS, ownerExtraMonthly: 75 }, apartment);
+    expect(inputs.monthlyOwnershipCosts).toBe(475);
+
+    // The split did not move a single default figure: the old totals were 640/690/760 €.
+    expect(
+      DEFAULT_APARTMENT_CASES.map(
+        (flat) => buildApartmentInputs(DEFAULT_INPUTS, flat).monthlyOwnershipCosts,
+      ),
+    ).toEqual([640, 690, 760]);
+  });
+
   it("calculates cash needed as down payment plus costs, renovation, and moving", () => {
     expect(calculateCashNeeded(600000, 10, 9, 15000, 5000)).toBe(134000);
   });
@@ -136,7 +149,7 @@ describe("calculation engine", () => {
           label: "Apartment A",
           purchasePrice: 600000,
           renovation: 0,
-          monthlyOwnershipCosts: 700,
+          hausgeld: 610,
           annualSpecialRepayments: [0, 0, 0],
         },
         {
@@ -144,7 +157,7 @@ describe("calculation engine", () => {
           label: "Apartment B",
           purchasePrice: 700000,
           renovation: 10000,
-          monthlyOwnershipCosts: 900,
+          hausgeld: 810,
           annualSpecialRepayments: [10000, 10000, 10000],
         },
       ],

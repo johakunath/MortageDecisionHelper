@@ -56,7 +56,7 @@ import {
 } from "./lib/storage";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
-type ApartmentNumericKey = "purchasePrice" | "renovation" | "monthlyOwnershipCosts";
+type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld";
 
 /**
  * Restored synchronously during the first render, not in an effect: loading in an
@@ -230,7 +230,7 @@ export default function App() {
         label: `Wohnung ${String.fromCharCode(65 + current.length)}`,
         purchasePrice: DEFAULT_APARTMENT_CASES[0].purchasePrice,
         renovation: 0,
-        monthlyOwnershipCosts: DEFAULT_APARTMENT_CASES[0].monthlyOwnershipCosts,
+        hausgeld: DEFAULT_APARTMENT_CASES[0].hausgeld,
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);
@@ -367,6 +367,7 @@ export default function App() {
             />
             <ApartmentFacts
               apartment={activeApartment}
+              ownerExtraMonthly={inputs.ownerExtraMonthly}
               onChange={(patch) => updateApartmentCase(activeApartmentId, patch)}
             />
             <ExecutiveSummary

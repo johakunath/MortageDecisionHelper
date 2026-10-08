@@ -39,7 +39,19 @@ export type MortgageInputs = {
   reserveTarget: number;
   renovation: number;
   moving: number;
+  /**
+   * Everything owning costs per month except the loan, on the same basis as the warm
+   * rent (heating and Nebenkosten in, electricity out). For an apartment it is built by
+   * `buildApartmentInputs` as `hausgeld + ownerExtraMonthly`; the QA presets set it
+   * directly. See docs/DECISIONS.md D35.
+   */
   monthlyOwnershipCosts: number;
+  /**
+   * What an owner pays on top of the Hausgeld: Grundsteuer (billed by the municipality,
+   * never part of the Hausgeld) and an own reserve for the inside of the flat, which the
+   * WEG's Erhaltungsrücklage does not cover. A flat estimate, not a per-flat figure.
+   */
+  ownerExtraMonthly: number;
   currentWarmRent: number;
   householdNetIncome: number;
   /** Max share of household net income the all-in monthly cost may take, in percent. Heuristic, not a bank rule. */
@@ -342,7 +354,13 @@ export type ApartmentCase = {
   label: string;
   purchasePrice: number;
   renovation: number;
-  monthlyOwnershipCosts: number;
+  /**
+   * The monthly Hausgeld as the Exposé or Wirtschaftsplan states it: WEG administration,
+   * building insurance, Betriebskosten, the WEG's Erhaltungsrücklage and, with central
+   * heating, heating. Not Grundsteuer, not repairs inside the flat: those come from
+   * `ownerExtraMonthly`. A number the couple can look up, which "Eigentumskosten" was not.
+   */
+  hausgeld: number;
   annualSpecialRepayments: number[];
 };
 
@@ -813,7 +831,7 @@ export function buildApartmentInputs(
     ...baseInputs,
     purchasePrice: apartment.purchasePrice,
     renovation: apartment.renovation,
-    monthlyOwnershipCosts: apartment.monthlyOwnershipCosts,
+    monthlyOwnershipCosts: apartment.hausgeld + baseInputs.ownerExtraMonthly,
     annualSpecialRepayment,
     annualSpecialRepayments: apartment.annualSpecialRepayments,
   };

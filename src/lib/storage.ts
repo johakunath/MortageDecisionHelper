@@ -141,7 +141,7 @@ function reviveRateRow(
  * the four values it is allowed to own — and keys from older shapes (`selectedScenarioId`)
  * do not ride along into the live state.
  */
-function reviveApartment(stored: unknown, index: number): ApartmentCase {
+function reviveApartment(stored: unknown, index: number, ownerExtra: number): ApartmentCase {
   const raw = (stored ?? {}) as Record<string, unknown>;
   const fallback =
     DEFAULT_APARTMENT_CASES[Math.min(index, DEFAULT_APARTMENT_CASES.length - 1)];
@@ -151,12 +151,22 @@ function reviveApartment(stored: unknown, index: number): ApartmentCase {
     label: typeof raw.label === "string" && raw.label.length > 0 ? raw.label : fallback.label,
     purchasePrice: reviveNumber(raw.purchasePrice, fallback.purchasePrice),
     renovation: reviveNumber(raw.renovation, fallback.renovation),
-    monthlyOwnershipCosts: reviveNumber(
-      raw.monthlyOwnershipCosts,
-      fallback.monthlyOwnershipCosts,
-    ),
+    hausgeld: reviveHausgeld(raw, fallback.hausgeld, ownerExtra),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
   };
+}
+
+/**
+ * Saves before D35 stored a total "monthlyOwnershipCosts" per apartment. It becomes the
+ * Hausgeld minus the extra that is now added on top, so the total the couple saw, and
+ * every figure built on it, stays exactly what it was.
+ */
+function reviveHausgeld(raw: Record<string, unknown>, fallback: number, ownerExtra: number): number {
+  if (raw.hausgeld !== undefined) return Math.max(0, reviveNumber(raw.hausgeld, fallback));
+  if (raw.monthlyOwnershipCosts !== undefined) {
+    return Math.max(0, reviveNumber(raw.monthlyOwnershipCosts, fallback + ownerExtra) - ownerExtra);
+  }
+  return fallback;
 }
 
 /** The EK level a v1 save was sitting on, read off its legacy id ("ek5" → 5). */
@@ -233,7 +243,10 @@ function reviveState(raw: string): PersistedState | null {
     const storedCases = parsed.apartmentCases;
     if (!Array.isArray(storedCases) || storedCases.length === 0) return null;
 
-    const apartmentCases: ApartmentCase[] = storedCases.map(reviveApartment);
+    const inputs = reviveInputs(parsed.inputs);
+    const apartmentCases: ApartmentCase[] = storedCases.map((stored, index) =>
+      reviveApartment(stored, index, inputs.ownerExtraMonthly),
+    );
     const activeApartmentId = apartmentCases.some((a) => a.id === parsed.activeApartmentId)
       ? (parsed.activeApartmentId as string)
       : apartmentCases[0].id;
@@ -241,7 +254,7 @@ function reviveState(raw: string): PersistedState | null {
 
     return {
       version: CURRENT_VERSION,
-      inputs: reviveInputs(parsed.inputs),
+      inputs,
       rates: {
         10: reviveRateRow(storedRates?.[10], DEFAULT_RATES[10]),
         15: reviveRateRow(storedRates?.[15], DEFAULT_RATES[15]),

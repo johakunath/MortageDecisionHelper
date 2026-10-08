@@ -221,6 +221,7 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 13. **The ledger invests all free capital at the ETF assumption**, the safety reserve included. A reserve held in Tagesgeld earns less; the effect is identical across EK levels only while their free capital is similar.
 14. **ETF tax in the ledger is linear** in the net gain and charged once, at the horizon. It may turn negative where withdrawals exceed growth; that is the after-tax growth those withdrawals gave up. No Vorabpauschale, no Sparerpauschbetrag.
 15. **The household budget is constant** (`waitSavingsMonthly + currentWarmRent`) for the whole horizon: no pay rises, no inflation.
+16. **"Grundsteuer + eigene Rücklage" is one flat amount** (default 90 €/Monat) for every apartment, not derived from size, Bundesland or building age. Grundsteuer differs by municipality, the needed reserve by the flat's condition ([D35](DECISIONS.md)).
 
 ## 5. Defect log
 

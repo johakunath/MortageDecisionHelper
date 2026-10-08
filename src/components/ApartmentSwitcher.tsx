@@ -1,8 +1,9 @@
 import type { ApartmentCase, ApartmentComparisonResult } from "../lib/calculations";
 import { formatEur } from "../lib/format";
+import { GLOSSARY } from "../lib/glossary";
 import { Button, InputField, StatusPill } from "./ui";
 
-type ApartmentNumericKey = "purchasePrice" | "renovation" | "monthlyOwnershipCosts";
+type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld";
 
 type ApartmentSwitcherProps = {
   results: ApartmentComparisonResult[];
@@ -13,6 +14,8 @@ type ApartmentSwitcherProps = {
 
 type ApartmentFactsProps = {
   apartment: ApartmentCase;
+  /** Grundsteuer + own reserve, added on top of the Hausgeld (D35). */
+  ownerExtraMonthly: number;
   onChange: (patch: Partial<Pick<ApartmentCase, ApartmentNumericKey>>) => void;
 };
 
@@ -68,7 +71,7 @@ export default function ApartmentSwitcher({
  * header's height variable, and everything sticking below it clears that height with
  * one constant rather than a runtime measurement.
  */
-export function ApartmentFacts({ apartment, onChange }: ApartmentFactsProps) {
+export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: ApartmentFactsProps) {
   return (
     <details className="apartment-facts">
       <summary>Fakten zu {apartment.label} bearbeiten</summary>
@@ -84,10 +87,17 @@ export function ApartmentFacts({ apartment, onChange }: ApartmentFactsProps) {
           value={apartment.renovation}
           onChange={(value) => onChange({ renovation: value })}
         />
+        {/*
+          The Hausgeld as the Exposé states it, a number the couple can look up. The old
+          "Eigentumskosten mtl." meant something nobody could reconstruct later (D35);
+          the hint shows the total the model actually uses.
+        */}
         <InputField
-          label="Eigentumskosten mtl."
-          value={apartment.monthlyOwnershipCosts}
-          onChange={(value) => onChange({ monthlyOwnershipCosts: value })}
+          label="Hausgeld mtl. (laut Exposé)"
+          value={apartment.hausgeld}
+          onChange={(value) => onChange({ hausgeld: value })}
+          info={GLOSSARY.hausgeld}
+          hint={`+ ${formatEur(ownerExtraMonthly)} Grundsteuer und eigene Rücklage = ${formatEur(apartment.hausgeld + ownerExtraMonthly)} im Monat`}
         />
       </div>
     </details>

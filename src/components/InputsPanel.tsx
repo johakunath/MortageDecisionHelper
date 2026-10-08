@@ -331,6 +331,16 @@ export default function InputsPanel({
               info={GLOSSARY.currentWarmRent}
             />
             <InputField
+              label="Grundsteuer + eigene Rücklage"
+              value={inputs.ownerExtraMonthly}
+              suffix="€/Monat"
+              step={10}
+              min={0}
+              onChange={(value) => onInputChange("ownerExtraMonthly", value)}
+              info={GLOSSARY.ownerExtraMonthly}
+              hint="zusätzlich zum Hausgeld jeder Wohnung · Schätzung"
+            />
+            <InputField
               label="Max. Haushaltsbelastung"
               value={inputs.maxBurdenRate}
               suffix="%"

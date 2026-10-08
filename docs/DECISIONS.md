@@ -538,3 +538,19 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **Rationale.** The runtime rests on today's rate holding for the whole term (ASSUMPTIONS §1), so it can warn but must not decide. A loan into retirement is a real risk and one of the two people reading this is the one who would be retiring.
 
 **Consequence.** The birth years are not stored anywhere in the repository, only the derived 26 years. On the defaults Wohnung B at 10% EK (29,6 years) is flagged. The QA presets pin `maxRuntimeYears: 35` so they keep testing tragbarkeit rather than the personal limit ([D12](#d12--kaufnebenkosten-two-presets-and-1157-as-default)).
+
+---
+
+## D35: "Eigentumskosten" becomes Hausgeld from the Exposé plus one owner's extra
+
+**Date:** 2026-10-08 · **Status:** accepted · **Refines** [D30](#d30-comparisons-are-made-on-one-common-date-from-one-ledger)
+
+**Context.** D30 required the apartment's monthly ownership costs to sit on the same basis as the warm rent. Asked what the stored 640 / 690 / 760 € contained, the owner could not say, and could not be expected to: the git history shows they were never taken from an Exposé. The initial commit carried the spec's 830 € placeholder for a 720k flat; a later cleanup scaled it with the purchase price. A field whose meaning cannot be reconstructed cannot be checked against a real offer.
+
+**Research.** An Exposé's Hausgeld is the WEG's Wirtschaftsplan share: administration, building insurance, Betriebskosten, the WEG's Erhaltungsrücklage and, with central heating, heating. It does **not** contain Grundsteuer, which the municipality bills each owner directly, nor repairs inside the owner's own flat, which the WEG reserve does not cover ([Finanztip](https://www.finanztip.de/eigentumswohnung/hausgeld/), [immowelt](https://www.immowelt.de/ratgeber/wohnen/hausgeld)). The owner's own guess matched this.
+
+**Decision.** The apartment field becomes **"Hausgeld mtl. (laut Exposé)"**, a number the couple can look up. One global input, **"Grundsteuer + eigene Rücklage"**, default 90 €/Monat, carries the rest: Grundsteuer for a flat roughly 300–500 €/Jahr after the 2025 reform (≈ 35 €/Monat; [Haus & Grund survey](https://www.hausundgrund.de/sites/default/files/downloads/grundsteuerreform-2025sonderauswertung.pdf): all residential property, median 654 €/Jahr) and an own reserve of ≈ 55 €/Monat (Peters'sche Formel puts ~30% of upkeep on the Sondereigentum). `buildApartmentInputs` sets `monthlyOwnershipCosts = hausgeld + ownerExtraMonthly`.
+
+**Best guess for the defaults.** The three totals are kept exactly (Hausgeld 550 / 600 / 670 € + 90 €), so no figure on screen moves; the golden snapshot proves it. They are probably on the **high** side: a typical Hausgeld including heating is 3–5 €/m² a month, and 550 € would mean a large flat or an expensive building. Erring high follows [D12](#d12--kaufnebenkosten-two-presets-and-1157-as-default): a decision tool must not make the purchase look cheaper than it is likely to be. It does not tilt the EK question at all: ownership costs are identical across the three EK levels and cancel in every EK comparison. They do move the burden check, the Warten comparison and the absolute Vermögen.
+
+**Consequence.** Saves from before D35 stored a total per apartment; they load as Hausgeld = old total − extra, so every figure the couple saw is unchanged. With a gas heater inside the flat, the heating costs belong in the Hausgeld field (the tooltip says so).
