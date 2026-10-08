@@ -58,9 +58,9 @@ describe("engine invariants", () => {
   it.each(apartments)("%s: waiting zero months is buying now", (_label, inputs) => {
     for (const base of EK_SCENARIOS) {
       const now = buildScenario(base, inputs, DEFAULT_RATES);
-      const wait = buildWaitScenario(base, now, inputs, DEFAULT_RATES, 0);
+      const wait = buildWaitScenario(base, inputs, DEFAULT_RATES, 0);
       expect(wait.scenario.mortgage.interestTotal).toBeCloseTo(now.mortgage.interestTotal, 6);
-      expect(wait.deltaTotalCost).toBeCloseTo(0, 6);
+      expect(wait.deltaWealth).toBe(0);
       expect(wait.cashLeftAfterPurchase).toBeCloseTo(now.cashLeft, 6);
     }
   });

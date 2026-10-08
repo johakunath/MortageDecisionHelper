@@ -105,3 +105,15 @@ export function formatSignedPct(value: number, digits = 1): string {
   if (value < 0) return `−${amount}`;
   return amount;
 }
+
+/** Percentage points with an explicit sign: "−0,2 Pkt.", "+1,5 Pkt.", "0 Pkt.". */
+export function formatSignedPoints(value: number, digits = 1): string {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+
+  const amount = formatNumber(Math.abs(value), digits);
+  if (amount === "0") return "0 Pkt.";
+  const sign = value > 0 ? "+" : "−";
+  return `${sign}${amount} Pkt.`;
+}

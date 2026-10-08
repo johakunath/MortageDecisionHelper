@@ -57,7 +57,7 @@ function headline(inputs: MortgageInputs, rates: InterestRates) {
   const low = scenarios[0];
   const high = scenarios[scenarios.length - 1];
   const tradeoff = compareEkScenarios(low, high, inputs);
-  const waits = buildWaitScenarios(EK_SCENARIOS[0], low, inputs, rates, waitPeriodsFor(inputs.waitMonths));
+  const waits = buildWaitScenarios(EK_SCENARIOS[0], inputs, rates, waitPeriodsFor(inputs.waitMonths));
   const special = compareSpecialScenarios(EK_SCENARIOS, low.id, inputs, rates);
 
   const wealthNow = EK_SCENARIOS.map((base) => wealthAtHorizon({ base, inputs, rates }));
@@ -91,8 +91,7 @@ function headline(inputs: MortgageInputs, rates: InterestRates) {
     },
     wait: waits.map((wait) => ({
       months: wait.waitMonths,
-      deltaInterest: euro(wait.deltaInterest),
-      deltaTotalCost: euro(wait.deltaTotalCost),
+      deltaWealth: euro(wait.deltaWealth),
       cashLeftAfterPurchase: euro(wait.cashLeftAfterPurchase),
     })),
     special: {

@@ -243,27 +243,29 @@ export type WaitScenario = {
   waitMonths: number;
   futurePrice: number;
   /**
-   * Rent paid over the waiting period. DISPLAY ONLY — deliberately not subtracted from
-   * `adjustedAvailableCapital`, because `waitSavingsMonthly` is already net of rent.
-   * See docs/DECISIONS.md D4.
+   * Rent paid over the waiting period. Never subtracted from `adjustedAvailableCapital`,
+   * because `waitSavingsMonthly` is already net of rent (D4). In the ledger it is paid
+   * out of the household budget, which is where it belongs.
    */
   rentPaid: number;
   saved: number;
   adjustedAvailableCapital: number;
   adjustedInterestRate: number;
   futureLoan: number;
+  /** Free capital right after the purchase, from the ledger: savings and their return included. */
   cashLeftAfterPurchase: number;
-  deltaInterest: number;
+  /** This path on the common date. */
+  wealth: WealthAtHorizon;
   /**
-   * The full extra cost of waiting: `deltaInterest + rentPaid`.
+   * Wealth minus buying now, both on the same date. Positive = waiting comes out ahead.
    *
-   * Interest alone understates it. While the waiting column pays rent for a home it
-   * does not own, the buy-now column is already paying interest over exactly those
-   * months — and that interest sits inside its `interestTotal`. So rent is the
-   * waiting side's counterpart to it, and adding the two is a comparison of like
-   * with like rather than a double count. See docs/ASSUMPTIONS.md §2 (Waiting).
+   * Replaces D27's "Δ gesamt" (full-term interest delta + rent). That sum left out the
+   * buy-now path's ownership costs and principal, the return on capital while waiting
+   * and the extra cash the later purchase leaves, and it extrapolated the assumed rate
+   * shift over 25+ years: on the offer flat it read "6.662 € teurer" where the ledger
+   * puts waiting 3.207 € ahead. See docs/DECISIONS.md D33.
    */
-  deltaTotalCost: number;
+  deltaWealth: number;
   years: number;
 };
 
@@ -1210,10 +1212,11 @@ function purchaseAfterWaiting(
 
 export function buildWaitScenario(
   selectedBase: ScenarioBase,
-  selectedNow: ScenarioResult,
   inputs: MortgageInputs,
   rates: InterestRates,
   waitMonths: number = inputs.waitMonths,
+  /** The common date. Pass one value for every column of a table. */
+  horizonMonths: number = Math.max(inputs.fixedRateYears * 12, waitMonths),
 ): WaitScenario {
   const years = waitMonths / 12;
   const { futurePrice, adjustedInterestRate, purchaseRates } = purchaseAfterWaiting(
@@ -1222,7 +1225,6 @@ export function buildWaitScenario(
     rates,
     waitMonths,
   );
-  // Zero for the buy-now column, so `deltaTotalCost` collapses to the interest delta there.
   const rentPaid = inputs.currentWarmRent * waitMonths;
   const saved = inputs.waitSavingsMonthly * waitMonths;
   // Rent is NOT subtracted: `waitSavingsMonthly` is already the net amount that reaches
@@ -1235,7 +1237,11 @@ export function buildWaitScenario(
     availableCapital: adjustedAvailableCapital,
   };
   const scenario = buildScenario(selectedBase, futureInputs, purchaseRates);
-  const deltaInterest = scenario.mortgage.interestTotal - selectedNow.mortgage.interestTotal;
+  const wealth = wealthAtHorizon({ base: selectedBase, inputs, rates, waitMonths, horizonMonths });
+  const now =
+    waitMonths === 0
+      ? wealth
+      : wealthAtHorizon({ base: selectedBase, inputs, rates, waitMonths: 0, horizonMonths });
 
   return {
     scenario,
@@ -1246,11 +1252,9 @@ export function buildWaitScenario(
     adjustedAvailableCapital,
     adjustedInterestRate,
     futureLoan: scenario.loan,
-    cashLeftAfterPurchase: scenario.cashLeft,
-    deltaInterest,
-    // Rent is added to the DELTA, never to `adjustedAvailableCapital` — D4 still holds.
-    // The two are different questions: what waiting costs, and what capital it leaves.
-    deltaTotalCost: deltaInterest + rentPaid,
+    cashLeftAfterPurchase: wealth.liquidAfterPurchase,
+    wealth,
+    deltaWealth: wealth.wealth - now.wealth,
     years,
   };
 }
@@ -1275,14 +1279,89 @@ export function waitPeriodsFor(waitMonths: number): number[] {
  */
 export function buildWaitScenarios(
   selectedBase: ScenarioBase,
-  selectedNow: ScenarioResult,
   inputs: MortgageInputs,
   rates: InterestRates,
   months: number[] = [0, 12, 24],
 ): WaitScenario[] {
+  // One date for every column, so the table compares like with like even if someone
+  // types a Wartezeit longer than the binding.
+  const horizonMonths = Math.max(inputs.fixedRateYears * 12, ...months);
   return months.map((waitMonths) =>
-    buildWaitScenario(selectedBase, selectedNow, inputs, rates, waitMonths),
+    buildWaitScenario(selectedBase, inputs, rates, waitMonths, horizonMonths),
   );
+}
+
+export type WaitAssumption = "waitRateShift" | "waitPropertyGrowthRate" | "etfReturnRate";
+
+export type WaitTippingPoint = {
+  assumption: WaitAssumption;
+  assumed: number;
+  /**
+   * The value at which waiting and buying now end level on the common date, the
+   * nearest one to `assumed`, with every other input unchanged. Null if there is none
+   * within a wide range.
+   */
+  flipsAt: number | null;
+};
+
+/** How far each assumption is searched, and in which steps, before giving up. */
+const TIPPING_SEARCH: Record<WaitAssumption, { step: number; reach: number }> = {
+  waitRateShift: { step: 0.25, reach: 5 },
+  waitPropertyGrowthRate: { step: 0.5, reach: 20 },
+  etfReturnRate: { step: 0.5, reach: 20 },
+};
+
+/**
+ * What would have to be different for waiting to stop (or start) beating buying now.
+ * PRODUCT_SPEC §2.3 asks exactly this: "what conditions would need to occur for waiting
+ * to beat buying now". Each assumption is moved on its own; the nearest value at which
+ * the wealth difference changes sign is reported.
+ *
+ * Searched outward from the assumed value in steps, then bisected, so the answer is the
+ * nearest tipping point even if the difference is not monotone over the whole range.
+ */
+export function waitTippingPoints(
+  base: ScenarioBase,
+  inputs: MortgageInputs,
+  rates: InterestRates,
+  waitMonths: number = inputs.waitMonths,
+): WaitTippingPoint[] {
+  const horizonMonths = Math.max(inputs.fixedRateYears * 12, waitMonths);
+  const delta = (assumption: WaitAssumption, value: number) => {
+    const varied = { ...inputs, [assumption]: value };
+    return (
+      wealthAtHorizon({ base, inputs: varied, rates, waitMonths, horizonMonths }).wealth -
+      wealthAtHorizon({ base, inputs: varied, rates, waitMonths: 0, horizonMonths }).wealth
+    );
+  };
+
+  return (Object.keys(TIPPING_SEARCH) as WaitAssumption[]).map((assumption) => {
+    const assumed = inputs[assumption];
+    const atAssumed = delta(assumption, assumed);
+    if (waitMonths <= 0) return { assumption, assumed, flipsAt: null };
+    if (atAssumed === 0) return { assumption, assumed, flipsAt: assumed };
+
+    const { step, reach } = TIPPING_SEARCH[assumption];
+    for (let distance = step; distance <= reach + 1e-9; distance += step) {
+      for (const direction of [-1, 1]) {
+        const inner = assumed + direction * (distance - step);
+        const outer = assumed + direction * distance;
+        const innerValue = distance === step ? atAssumed : delta(assumption, inner);
+        if (Math.sign(delta(assumption, outer)) === Math.sign(innerValue)) continue;
+
+        let lo = inner;
+        let hi = outer;
+        const loSign = Math.sign(innerValue);
+        for (let i = 0; i < 40; i += 1) {
+          const mid = (lo + hi) / 2;
+          if (Math.sign(delta(assumption, mid)) === loSign) lo = mid;
+          else hi = mid;
+        }
+        return { assumption, assumed, flipsAt: (lo + hi) / 2 };
+      }
+    }
+    return { assumption, assumed, flipsAt: null };
+  });
 }
 
 export type WealthPathParams = {
@@ -1320,6 +1399,8 @@ export type WealthAtHorizon = {
   liquidTax: number;
   /** propertyValue − debt + liquid − liquidTax. */
   wealth: number;
+  /** Free capital right after paying for the purchase. */
+  liquidAfterPurchase: number;
   /** Sondertilgung actually paid by the horizon, after the contractual cap. */
   specialPaid: number;
   /** Rent paid before the purchase. */
@@ -1378,6 +1459,7 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
     specialPlan,
   );
   move(-purchase.cashNeeded);
+  const liquidAfterPurchase = liquid;
 
   // Owning, until the horizon. Months after the loan is repaid carry no bank payment.
   const loanMonths = horizonMonths - waitMonths;
@@ -1420,6 +1502,7 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
     liquid,
     liquidTax,
     wealth: propertyValue - debt + liquid - liquidTax,
+    liquidAfterPurchase,
     specialPaid,
     rentPaid: inputs.currentWarmRent * waitMonths,
   };

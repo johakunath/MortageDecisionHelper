@@ -1,30 +1,54 @@
-import { BETTER_WHEN, type WaitScenario } from "../lib/calculations";
-import { formatEur, formatPct } from "../lib/format";
+import {
+  BETTER_WHEN,
+  type WaitAssumption,
+  type WaitScenario,
+  type WaitTippingPoint,
+} from "../lib/calculations";
+import { formatEur, formatNumber, formatPct, formatSignedPoints } from "../lib/format";
 import { Section, SignedValue } from "./ui";
 
 type WaitPanelProps = {
   scenarios: WaitScenario[];
+  /** Tipping points for the Wartezeit the couple entered; empty when it is 0. */
+  tippingPoints: WaitTippingPoint[];
+  waitMonths: number;
 };
 
 function columnLabel(waitMonths: number): string {
   return waitMonths === 0 ? "Jetzt kaufen" : `${waitMonths} Monate warten`;
 }
 
+/** One clause per assumption, in the couple's words, with what they assumed. */
+function describePoint(point: WaitTippingPoint): string | null {
+  if (point.flipsAt == null) return null;
+  const phrases: Record<WaitAssumption, (value: number) => string> = {
+    waitRateShift: (value) => `einer Zinsänderung von ${formatSignedPoints(value)}`,
+    waitPropertyGrowthRate: (value) => `einem Preisanstieg von ${formatPct(value)} p.a.`,
+    etfReturnRate: (value) => `einer Kapitalrendite von ${formatPct(value)} p.a.`,
+  };
+  const assumed =
+    point.assumption === "waitRateShift" ? formatSignedPoints(point.assumed) : formatPct(point.assumed);
+  return `${phrases[point.assumption](point.flipsAt)} (Annahme ${assumed})`;
+}
+
+function joinClauses(parts: string[]): string {
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} oder ${parts[parts.length - 1]}`;
+}
+
 /**
  * Buy-now against each waiting period (PRODUCT_SPEC §7.5), as a table with the metrics
- * as ROWS and the waiting periods as columns.
+ * as ROWS and the waiting periods as columns (D20).
  *
- * It used to be three stacked cards of up to eight readouts each — twenty-odd numbers
- * with no shared baseline, so comparing "Cash nach Kauf" across the options meant
- * hunting for the same label three times at three different heights. Reading across a
- * row is the entire job here, so the layout is a row.
- *
- * Rent is never subtracted from the adjusted capital (docs/DECISIONS.md D4) but it IS
- * part of what waiting costs, so it carries the bottom row: "Δ gesamt zu jetzt kaufen"
- * = Zinsdifferenz + Miete. The interest-only delta stays visible directly above it,
- * because a single combined figure would hide which half moved (D27).
+ * The bottom line is the wealth difference on one common date, from the same ledger as
+ * every other comparison (D30, D33). It replaces D27's "Δ gesamt", a full-term interest
+ * delta plus rent, which left out the buy-now path's ownership costs and principal and
+ * what capital earns while waiting, and read "6.662 € teurer" on the offer flat where
+ * waiting is in fact ahead at the default assumptions. Below the table, the values at
+ * which that verdict would flip: the question spec §2.3 actually asks.
  */
-export default function WaitPanel({ scenarios }: WaitPanelProps) {
+export default function WaitPanel({ scenarios, tippingPoints, waitMonths }: WaitPanelProps) {
+  const horizonYears = formatNumber((scenarios[0]?.wealth.horizonMonths ?? 0) / 12, 0);
   const rows: {
     label: string;
     note?: string;
@@ -33,15 +57,11 @@ export default function WaitPanel({ scenarios }: WaitPanelProps) {
     render: (wait: WaitScenario) => React.ReactNode;
   }[] = [
     { label: "Kaufpreis dann", render: (w) => formatEur(w.futurePrice) },
-    {
-      label: "Kapital dann",
-      note: "inkl. dem, was ihr bis dahin spart",
-      render: (w) => formatEur(w.adjustedAvailableCapital),
-    },
-    { label: "Zinssatz dann", render: (w) => formatPct(w.adjustedInterestRate) },
+    { label: "Zinssatz dann", render: (w) => formatPct(w.adjustedInterestRate, 2) },
     { label: "Darlehen dann", render: (w) => formatEur(w.futureLoan) },
     {
       label: "Cash nach Kauf",
+      note: "inkl. dem, was ihr bis dahin spart",
       render: (w) => (
         <span className={w.cashLeftAfterPurchase >= 0 ? "wait-ok" : "wait-bad"}>
           {formatEur(w.cashLeftAfterPurchase)}
@@ -49,38 +69,30 @@ export default function WaitPanel({ scenarios }: WaitPanelProps) {
       ),
     },
     {
-      label: "Zinsen gesamt",
-      note: "illustrativ, bei konstantem Zins",
-      render: (w) => formatEur(w.scenario.mortgage.interestTotal),
+      label: `Restschuld in ${horizonYears} Jahren`,
+      note: "am selben Stichtag für alle Spalten",
+      render: (w) => formatEur(w.wealth.debt),
     },
     {
-      label: "Δ Zinsen zu jetzt kaufen",
-      note: "nur die Zinsen — ohne die Miete aus der Zeile darunter",
-      render: (w) =>
-        w.waitMonths === 0 ? (
-          <span className="muted">—</span>
-        ) : (
-          <SignedValue value={w.deltaInterest} betterWhen={BETTER_WHEN.interestTotal} />
-        ),
+      label: `Freies Kapital in ${horizonYears} Jahren`,
+      note: "angelegt zur ETF-Annahme, nach Steuer",
+      render: (w) => formatEur(w.wealth.liquid - w.wealth.liquidTax),
     },
     {
-      label: "Miete in der Zwischenzeit",
-      note: "Kosten des Wartens — bewusst nicht vom Kapital abgezogen",
-      render: (w) =>
-        w.waitMonths === 0 ? <span className="muted">—</span> : formatEur(w.rentPaid),
-    },
-    {
-      label: "Δ gesamt zu jetzt kaufen",
-      note: "Zinsdifferenz + Miete in der Zwischenzeit",
+      label: "Δ Vermögen zu jetzt kaufen",
+      note: `Wohnung − Restschuld + freies Kapital, in ${horizonYears} Jahren`,
       emphasis: true,
       render: (w) =>
         w.waitMonths === 0 ? (
           <span className="muted">—</span>
         ) : (
-          <SignedValue value={w.deltaTotalCost} betterWhen={BETTER_WHEN.interestTotal} />
+          <SignedValue value={w.deltaWealth} betterWhen={BETTER_WHEN.wealth} />
         ),
     },
   ];
+
+  const entered = scenarios.find((wait) => wait.waitMonths === waitMonths && waitMonths > 0);
+  const clauses = tippingPoints.map(describePoint).filter((part): part is string => part !== null);
 
   return (
     <Section
@@ -116,14 +128,21 @@ export default function WaitPanel({ scenarios }: WaitPanelProps) {
           </tbody>
         </table>
       </div>
-      {/*
-        Says out loud why rent appears in one row and not in the other — otherwise the
-        two look like they contradict each other.
-      */}
+      {entered ? (
+        <p className="wait-verdict">
+          {waitMonths} Monate warten liegt bei euren Annahmen{" "}
+          <strong>{formatEur(Math.abs(entered.deltaWealth))}</strong>{" "}
+          {entered.deltaWealth >= 0 ? "vorn" : "hinten"}.{" "}
+          {clauses.length > 0
+            ? `Das dreht sich bei ${joinClauses(clauses)}, jeweils für sich genommen.`
+            : "Das dreht sich bei keiner der drei Annahmen in einem realistischen Bereich."}
+        </p>
+      ) : null}
       <p className="wait-footnote">
-        Die Miete zählt bei den Kosten mit, beim Kapital nicht: „Netto-Sparrate“ ist
-        bereits der Betrag, der <em>nach</em> der Miete übrig bleibt. Sie ein zweites Mal
-        vom Kapital abzuziehen würde sie doppelt zählen.
+        Gerechnet wird mit eurem Monatsbudget: Netto-Sparrate plus Warmmiete. Wartend
+        zahlt ihr davon die Miete, nach dem Kauf Rate und Eigentumskosten; der Rest wird
+        zur ETF-Annahme angelegt. Die Miete wird nicht zusätzlich vom Kapital abgezogen,
+        weil die Netto-Sparrate schon nach der Miete gerechnet ist.
       </p>
     </Section>
   );

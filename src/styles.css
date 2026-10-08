@@ -1144,7 +1144,7 @@ button {
 }
 
 /*
- * The bottom line of the Warten section — Zinsdifferenz plus the rent paid meanwhile.
+ * The bottom line of the Warten section: the wealth difference on the common date (D33).
  * Ruled off and weighted so it reads as a sum of the rows above it rather than as one
  * more metric among them.
  */
@@ -1155,6 +1155,18 @@ button {
 
 .wait-table .is-total-row td strong {
   font-weight: 700;
+}
+
+/* The tipping-point sentence under the Warten table (D33): the bottom line in words. */
+.wait-verdict {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--sage);
+  border-radius: 0 6px 6px 0;
+  background: rgba(94, 120, 97, 0.06);
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .wait-footnote {

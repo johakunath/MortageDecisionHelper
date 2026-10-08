@@ -27,6 +27,7 @@ import {
   specialPlanEffect,
   normaliseFixedPeriod,
   waitPeriodsFor,
+  waitTippingPoints,
   wealthAtHorizon,
   type ApartmentCase,
   type InterestRates,
@@ -140,8 +141,14 @@ export default function App() {
   );
 
   const waitScenarios = useMemo(
-    () => buildWaitScenarios(selected, selected, activeInputs, rates, waitPeriods),
+    () => buildWaitScenarios(selected, activeInputs, rates, waitPeriods),
     [selected, activeInputs, rates, waitPeriods],
+  );
+
+  // What would have to differ for the entered Wartezeit to flip (spec §2.3, D33).
+  const tippingPoints = useMemo(
+    () => waitTippingPoints(selected, activeInputs, rates, activeInputs.waitMonths),
+    [selected, activeInputs, rates],
   );
 
   // Headline trade-off: maximum contrast — least against most Eigenkapital, over one
@@ -484,7 +491,7 @@ export default function App() {
                     label="Netto-Sparrate"
                     value={inputs.waitSavingsMonthly}
                     onChange={(value) => updateInput("waitSavingsMonthly", value)}
-                    hint="Nach Miete — Miete wird separat gezeigt, nicht nochmal abgezogen"
+                    hint="Was nach Miete und Ausgaben übrig bleibt; Miete wird nicht nochmal abgezogen"
                   />
                   <InputField
                     label="Kaufpreiswachstum"
@@ -502,7 +509,11 @@ export default function App() {
                   />
                 </div>
               </Section>
-              <WaitPanel scenarios={waitScenarios} />
+              <WaitPanel
+                scenarios={waitScenarios}
+                tippingPoints={tippingPoints}
+                waitMonths={Math.max(0, Math.round(activeInputs.waitMonths))}
+              />
             </details>
           </section>
         </main>

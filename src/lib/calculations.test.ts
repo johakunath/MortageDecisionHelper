@@ -24,6 +24,7 @@ import {
   simulateMortgage,
   specialPlanEffect,
   waitPeriodsFor,
+  waitTippingPoints,
   wealthAtHorizon,
   type ScenarioId,
 } from "./calculations";
@@ -164,28 +165,51 @@ describe("calculation engine", () => {
 
   it("does not subtract rent from capital while waiting (D4)", () => {
     const inputs = { ...DEFAULT_INPUTS, waitMonths: 12, waitSavingsMonthly: 1500 };
-    const now = buildScenario(MIDDLE, inputs, DEFAULT_RATES);
-    const wait = buildWaitScenario(MIDDLE, now, inputs, DEFAULT_RATES);
+    const wait = buildWaitScenario(MIDDLE, inputs, DEFAULT_RATES);
 
     expect(wait.saved).toBe(18000);
     expect(wait.adjustedAvailableCapital).toBe(inputs.availableCapital + 18000);
-    // Rent is still reported, just never deducted.
+    // Rent is still reported, and paid inside the ledger out of the household budget,
+    // never deducted from capital a second time.
     expect(wait.rentPaid).toBe(23640);
-    // …but it IS part of what waiting costs. Capital and cost are separate questions:
-    // D4 governs the first, and only the first.
-    expect(wait.deltaTotalCost).toBeCloseTo(wait.deltaInterest + 23640, 6);
+    expect(wait.wealth.rentPaid).toBe(23640);
   });
 
-  it("counts the rent paid while waiting as part of the delta to buying now", () => {
-    const inputs = { ...DEFAULT_INPUTS, waitMonths: 24, currentWarmRent: 2000 };
-    const now = buildScenario(MIDDLE, inputs, DEFAULT_RATES);
-    const wait = buildWaitScenario(MIDDLE, now, inputs, DEFAULT_RATES);
+  it("values waiting against buying now on one common date (D33)", () => {
+    // The bottom line is a wealth difference on the same day, read off the ledger:
+    // not an interest delta over 25+ years plus rent, which left out ownership costs,
+    // principal, and what capital earns while waiting.
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const columns = buildWaitScenarios(LOWEST, inputs, DEFAULT_RATES, [0, 12, 24]);
+    const now = wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES });
 
-    // Whatever the interest delta does, 48.000 € of rent is 48.000 € more of it. The
-    // whole point of the field is that the two are never read as the same number.
-    expect(wait.rentPaid).toBe(48000);
-    expect(wait.deltaTotalCost - wait.deltaInterest).toBeCloseTo(48000, 6);
-    expect(wait.deltaTotalCost).toBeGreaterThan(wait.deltaInterest);
+    expect(new Set(columns.map((column) => column.wealth.horizonMonths)).size).toBe(1);
+    expect(columns[0].deltaWealth).toBe(0);
+    expect(columns[1].deltaWealth).toBeCloseTo(columns[1].wealth.wealth - now.wealth, 6);
+    // On the offer flat at the default assumptions: a year of waiting is ahead, two are not.
+    expect(Math.round(columns[1].deltaWealth)).toBe(3207);
+    expect(Math.round(columns[2].deltaWealth)).toBe(-5410);
+  });
+
+  it("names the assumption values at which waiting stops paying off (spec 2.3)", () => {
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const points = waitTippingPoints(LOWEST, inputs, DEFAULT_RATES, 12);
+    const byKey = Object.fromEntries(points.map((point) => [point.assumption, point]));
+
+    expect(byKey.waitRateShift.assumed).toBe(-0.3);
+    expect(byKey.waitRateShift.flipsAt).toBeCloseTo(-0.21, 2);
+    expect(byKey.waitPropertyGrowthRate.flipsAt).toBeCloseTo(2.46, 2);
+    expect(byKey.etfReturnRate.flipsAt).toBeCloseTo(3.85, 2);
+
+    // At each tipping point the two paths really do end level.
+    for (const point of points) {
+      const varied = { ...inputs, [point.assumption]: point.flipsAt as number };
+      const wait = buildWaitScenario(LOWEST, varied, DEFAULT_RATES, 12);
+      expect(Math.abs(wait.deltaWealth)).toBeLessThan(1);
+    }
+
+    // Buying now has nothing to tip.
+    expect(waitTippingPoints(LOWEST, inputs, DEFAULT_RATES, 0).every((p) => p.flipsAt === null)).toBe(true);
   });
 
   it("stops special repayments after the entered path ends (K2)", () => {
@@ -488,23 +512,15 @@ describe("calculation engine", () => {
   });
 
   it("builds buy-now and waiting periods side by side", () => {
-    const now = buildScenario(MIDDLE, DEFAULT_INPUTS, DEFAULT_RATES);
-    const columns = buildWaitScenarios(
-      MIDDLE,
-      now,
-      DEFAULT_INPUTS,
-      DEFAULT_RATES,
-      [0, 12, 24],
-    );
+    const columns = buildWaitScenarios(MIDDLE, DEFAULT_INPUTS, DEFAULT_RATES, [0, 12, 24]);
 
     expect(columns).toHaveLength(3);
     expect(columns[0].waitMonths).toBe(0);
     expect(columns[0].saved).toBe(0);
     expect(columns[0].rentPaid).toBe(0);
-    expect(columns[0].deltaInterest).toBeCloseTo(0, 6);
-    // The baseline column must read as a true zero in both delta rows, not as the
-    // rent of a wait that never happens.
-    expect(columns[0].deltaTotalCost).toBeCloseTo(0, 6);
+    // The baseline column must read as a true zero, not as the rent of a wait that
+    // never happens.
+    expect(columns[0].deltaWealth).toBe(0);
     expect(columns[2].adjustedAvailableCapital).toBeGreaterThan(
       columns[1].adjustedAvailableCapital,
     );
