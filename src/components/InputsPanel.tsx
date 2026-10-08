@@ -352,6 +352,16 @@ export default function InputsPanel({
               onChange={(value) => onInputChange("fixedRateYears", value)}
               info={GLOSSARY.fixedRateYears}
             />
+            <InputField
+              label="Max. Laufzeit"
+              value={inputs.maxRuntimeYears}
+              suffix="Jahre"
+              step={1}
+              min={1}
+              onChange={(value) => onInputChange("maxRuntimeYears", value)}
+              info={GLOSSARY.maxRuntimeYears}
+              hint="z. B. bis zur Rente des Älteren"
+            />
             <PaymentField
               inputs={inputs}
               rates={rates}

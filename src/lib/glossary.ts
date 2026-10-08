@@ -44,6 +44,8 @@ export const GLOSSARY = {
     "Was vom ETF-Gewinn beim Verkauf an Steuer abgeht. 18,46% gilt für Aktien-ETFs: 25% Abgeltungsteuer plus Soli, aber nur auf 70% des Gewinns (Teilfreistellung). Mit Kirchensteuer etwas mehr, mit ungenutztem Sparerpauschbetrag weniger. Die Zinsen, die ihr durch mehr Eigenkapital spart, sind steuerfrei. Deshalb gehört die Steuer in den Vergleich.",
   refiStressShift:
     "Um wie viele Prozentpunkte der Zins nach der Zinsbindung höher liegen könnte als heute. Kein Forecast, sondern ein Stresstest: Wie viel länger würde dieselbe Monatsrate dann brauchen, bis ihr schuldenfrei seid? Weniger Restschuld heißt weniger Risiko an dieser Stelle.",
+  maxRuntimeYears:
+    "Spätestens nach so vielen Jahren soll das Darlehen abbezahlt sein, zum Beispiel bis zum Renteneintritt des Älteren von euch. Varianten, die länger laufen, bleiben tragbar, werden aber gelb markiert: die Laufzeit hängt am heutigen Zins und ist deshalb eine Schätzung.",
   maxBurdenRate:
     "Wie viel eures Haushaltsnettos maximal in die Wohnung fließen darf. 40% ist eine verbreitete Faustregel, keine Bankregel — ihr könnt sie anpassen.",
   propertyGrowthRate: "Angenommene jährliche Wertsteigerung der Immobilie. Bewusst konservativ setzen.",

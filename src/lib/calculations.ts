@@ -82,6 +82,13 @@ export type MortgageInputs = {
    * it. See docs/DECISIONS.md D31.
    */
   refiStressShift: number;
+  /**
+   * Debt-free after at most this many years, e.g. by the older partner's retirement.
+   * A scenario that runs longer stays tragbar but is flagged: the runtime rests on
+   * today's rate holding for the whole term (ASSUMPTIONS §1), so it is a warning, not a
+   * failed constraint. See docs/DECISIONS.md D34.
+   */
+  maxRuntimeYears: number;
 };
 
 /**
@@ -225,6 +232,8 @@ export type ScenarioResult = ScenarioBase & {
    * UI has to say so. See docs/ASSUMPTIONS.md K14.
    */
   paymentSubstituted: boolean;
+  /** Runs past `maxRuntimeYears`. A warning shown in the status, never a failed check. */
+  runsPastLimit: boolean;
   feasible: boolean;
   diagnosis: ScenarioDiagnosis;
   status: string;
@@ -718,6 +727,7 @@ export function buildScenario(
   // worse subset of `reserve` and exists to tell the two failures apart in the UI.
   const feasible =
     amortises && cashLeft >= inputs.reserveTarget && burdenRatio <= maxBurdenRatio;
+  const runsPastLimit = mortgage.runtimeYears > inputs.maxRuntimeYears + 1e-9;
 
   // Plain-language labels: these are read aloud between two non-experts, so they say
   // what is wrong rather than naming an internal constraint.
@@ -734,6 +744,10 @@ export function buildScenario(
     statusTone = "red";
   } else if (failed.includes("burden")) {
     status = "Rate zu hoch";
+    statusTone = "amber";
+  } else if (runsPastLimit) {
+    // Tragbar, but not debt-free by the couple's own limit (D34).
+    status = "Läuft zu lange";
     statusTone = "amber";
   } else if (cashLeft < inputs.reserveTarget * 1.5) {
     status = "Gerade so tragbar";
@@ -755,6 +769,7 @@ export function buildScenario(
     rentDelta,
     mortgage,
     paymentSubstituted,
+    runsPastLimit,
     feasible,
     diagnosis,
     status,

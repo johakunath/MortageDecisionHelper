@@ -510,7 +510,7 @@ exports[`golden master > default apartment Wohnung B 1`] = `
       "loan": 450000,
       "remainingAfterFixed": 312538,
       "runtimeYears": 29.58,
-      "status": "Gerade so tragbar",
+      "status": "Läuft zu lange",
       "stressExtraYears": 8.33,
     },
     "ek15": {

@@ -41,6 +41,8 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   etfTaxRate: 18.4625,
   // Stresstest, keine Prognose: 2 Prozentpunkte über dem heutigen Sollzins.
   refiStressShift: 2,
+  // Persönliche Grenze: schuldenfrei bis zum Renteneintritt des Älteren. Im Feld änderbar.
+  maxRuntimeYears: 26,
 };
 
 /**
@@ -120,6 +122,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9000,
       monthlyPayment: 2400,
       fixedRateYears: 10,
+      // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
+      // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
+      maxRuntimeYears: 35,
     },
     // 10% EK tragbar, 15% reißt die Reserve, 20% reicht das Geld nicht.
     rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
@@ -137,6 +142,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9600,
       monthlyPayment: 2900,
       fixedRateYears: 10,
+      // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
+      // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
+      maxRuntimeYears: 35,
     },
     // Tragbar, aber mit sichtbaren Warnungen: 15% nur "gerade so", 20% scheitert.
     rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
@@ -157,6 +165,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       // Reserve und Belastung reißen und trotzdem niemand zum Sieger erklärt wird.
       monthlyPayment: 3400,
       fixedRateYears: 10,
+      // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
+      // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
+      maxRuntimeYears: 35,
     },
     rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
   },

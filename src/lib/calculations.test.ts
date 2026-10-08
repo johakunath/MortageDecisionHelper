@@ -494,6 +494,31 @@ describe("calculation engine", () => {
     expect(ekStepReturn(ek15, ek10, inputs).annualReturn).toBeNull();
   });
 
+  it("flags a tragbar scenario that runs past the couple's own limit (D34)", () => {
+    // The offer flat runs 24,1 / 21,7 / 19,2 years. With a 20-year limit the first two
+    // are flagged and stay tragbar: the runtime assumes today's rate for the whole term,
+    // so it warns rather than fails.
+    const inputs = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 20 };
+    const [ek10, ek15, ek20] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+
+    expect(ek10.runsPastLimit).toBe(true);
+    expect(ek10.feasible).toBe(true);
+    expect(ek10.status).toBe("Läuft zu lange");
+    expect(ek10.statusTone).toBe("amber");
+    expect(ek15.runsPastLimit).toBe(true);
+    expect(ek20.runsPastLimit).toBe(false);
+    // A failed constraint still names itself first.
+    expect(ek20.status).toBe("Reserve zu dünn");
+
+    // The default limit leaves the offer flat unflagged at every level.
+    const defaults = buildScenarios(
+      EK_SCENARIOS,
+      buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
+      DEFAULT_RATES,
+    );
+    expect(defaults.every((scenario) => !scenario.runsPastLimit)).toBe(true);
+  });
+
   it("gives the entered Wartezeit its own column", () => {
     // The default coincides with a reference period, so it must NOT add a duplicate.
     expect(waitPeriodsFor(12)).toEqual([0, 12, 24]);
