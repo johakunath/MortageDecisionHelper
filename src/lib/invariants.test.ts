@@ -5,6 +5,7 @@ import {
   buildScenarios,
   buildWaitScenario,
   compareEkScenarios,
+  ekStepReturn,
   interestForPlan,
   wealthAtHorizon,
 } from "./calculations";
@@ -126,4 +127,23 @@ describe("engine invariants", () => {
       expect(path.loan).toBeCloseTo(scenario.loan, 6);
     }
   });
+
+  it.each(apartments)(
+    "%s: a step's 'EK vorn' verdict always agrees with the after-tax trade-off",
+    (_label, inputs) => {
+      // Two readings of the same comparison (the matrix column and the statement) must
+      // never point opposite ways, at any ETF assumption.
+      const scenarios = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+      for (const etfReturnRate of [0, 2, 4, 4.5, 5, 6, 9]) {
+        const assumed = { ...inputs, etfReturnRate };
+        for (let i = 0; i < scenarios.length; i += 1) {
+          for (let j = i + 1; j < scenarios.length; j += 1) {
+            const step = ekStepReturn(scenarios[i], scenarios[j], assumed);
+            const tradeoff = compareEkScenarios(scenarios[i], scenarios[j], assumed);
+            expect(step.ekAhead).toBe(tradeoff.netAdvantageFixed > 0);
+          }
+        }
+      }
+    },
+  );
 });

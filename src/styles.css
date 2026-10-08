@@ -2038,6 +2038,31 @@ button {
   font-size: 0.74rem;
 }
 
+/* EK step chart (D32): one bar per step of extra Eigenkapital, one dashed ETF line. */
+.ek-step-chart {
+  margin-top: 18px;
+}
+
+.ek-step-bar {
+  fill: var(--sage);
+}
+
+.ek-step-bar.is-total {
+  opacity: 0.45;
+}
+
+.ek-step-etf {
+  stroke: var(--amber);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.ek-step-etf-label {
+  fill: var(--amber);
+  font-size: 0.74rem;
+  text-anchor: middle;
+}
+
 .chart-swatch-muted {
   background: rgba(94, 120, 97, 0.3);
 }

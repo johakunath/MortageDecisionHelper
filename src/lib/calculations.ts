@@ -933,6 +933,69 @@ export function compareEkScenarios(
   };
 }
 
+export type EkStepReturn = {
+  from: ScenarioResult;
+  to: ScenarioResult;
+  /** Extra cash `to` needs over `from`. */
+  extraCash: number;
+  /** How much lower `to`'s Restschuld is at the end of the binding. */
+  debtReduction: number;
+  /**
+   * What the extra Eigenkapital earns per year inside the binding, tax-free and without
+   * market risk: the rate at which `extraCash` grows into `debtReduction` over the
+   * binding. At one Monatsrate that is exactly extra EK plus interest saved (pinned in
+   * invariants.test.ts). Null when `to` needs no extra cash.
+   */
+  annualReturn: number | null;
+  /** The pre-tax ETF return at which keeping the money invested does exactly as well. */
+  breakEvenEtfReturn: number | null;
+  /** Whether the extra EK beats the ETF assumption, after its tax. Null without extra cash. */
+  ekAhead: boolean | null;
+};
+
+/**
+ * The return on one step of extra Eigenkapital, in the unit the couple's disagreement
+ * is actually about: a yearly rate, set against the ETF.
+ *
+ * The headline compares only the two ends (10% vs 20%). Per step the answer can differ
+ * because the bank's pricing is not monotone: on the offer, 10→15% earns about 4,1%
+ * a year and 15→20% about 5,0%, against roughly 4,2% for a 5% ETF after tax. See
+ * docs/DECISIONS.md D32.
+ */
+export function ekStepReturn(
+  from: ScenarioResult,
+  to: ScenarioResult,
+  inputs: MortgageInputs,
+): EkStepReturn {
+  const years = inputs.fixedRateYears;
+  const extraCash = to.cashNeeded - from.cashNeeded;
+  const debtReduction = from.mortgage.remainingAfterFixed - to.mortgage.remainingAfterFixed;
+  if (extraCash <= 0 || years <= 0) {
+    return { from, to, extraCash, debtReduction, annualReturn: null, breakEvenEtfReturn: null, ekAhead: null };
+  }
+
+  const multiple = debtReduction / extraCash;
+  const annualReturn = multiple > 0 ? (Math.pow(multiple, 1 / years) - 1) * 100 : -100;
+  const keep = 1 - clampRate(inputs.etfTaxRate) / 100;
+  // ETF gain needed so that, after tax, the kept money ends where the extra EK does.
+  const grossGrowth = keep > 0 ? 1 + (multiple - 1) / keep : Infinity;
+  const breakEvenEtfReturn =
+    grossGrowth > 0 && Number.isFinite(grossGrowth)
+      ? (Math.pow(grossGrowth, 1 / years) - 1) * 100
+      : null;
+  const etfEnd = 1 + (Math.pow(1 + inputs.etfReturnRate / 100, years) - 1) * keep;
+
+  return {
+    from,
+    to,
+    extraCash,
+    debtReduction,
+    annualReturn,
+    breakEvenEtfReturn,
+    ekAhead: multiple > etfEnd,
+  };
+}
+
 /**
  * Total interest for a scenario running a given Sondertilgung plan.
  * Use with `{ kind: "none" }` for the break-even target — an EK level making no

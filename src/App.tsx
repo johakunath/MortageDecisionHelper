@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ApartmentSwitcher, { ApartmentFacts } from "./components/ApartmentSwitcher";
 import CashBlock from "./components/CashBlock";
 import CompromiseFinder from "./components/CompromiseFinder";
+import EkStepChart from "./components/EkStepChart";
 import EkSwitch from "./components/EkSwitch";
 import ExecutiveSummary from "./components/ExecutiveSummary";
 import InputsPanel from "./components/InputsPanel";
@@ -428,7 +429,8 @@ export default function App() {
               subtitle="Was kaufen wir uns durch mehr Eigenkapital, und welchen Puffer geben wir dafür auf?"
               right={<span className="muted">Kaufnebenkosten: {formatEur(selected.closingCosts)}</span>}
             >
-              <TradeoffMatrix scenarios={scenarios} fixedRateYears={activeInputs.fixedRateYears} />
+              <TradeoffMatrix scenarios={scenarios} inputs={activeInputs} />
+              <EkStepChart scenarios={scenarios} inputs={activeInputs} />
             </Section>
           </section>
 

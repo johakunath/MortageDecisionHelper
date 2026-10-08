@@ -1,11 +1,16 @@
-import { BETTER_WHEN, type ScenarioResult } from "../lib/calculations";
-import { formatEur, formatSignedEur, formatSignedYears, formatYears } from "../lib/format";
+import {
+  BETTER_WHEN,
+  ekStepReturn,
+  type MortgageInputs,
+  type ScenarioResult,
+} from "../lib/calculations";
+import { formatEur, formatPct, formatSignedEur, formatSignedYears, formatYears } from "../lib/format";
 import { SignedValue } from "./ui";
 
 type TradeoffMatrixProps = {
   scenarios: ScenarioResult[];
-  /** Length of the Zinsbindung, for the column that is reliable. */
-  fixedRateYears: number;
+  /** Zinsbindung for the reliable column; ETF return and tax for the Rendite column. */
+  inputs: MortgageInputs;
 };
 
 /**
@@ -54,7 +59,8 @@ function interpret(
  * levels (docs/DECISIONS.md D14), so that column read zero everywhere; the runtime is
  * what more Eigenkapital actually moves.
  */
-export default function TradeoffMatrix({ scenarios, fixedRateYears }: TradeoffMatrixProps) {
+export default function TradeoffMatrix({ scenarios, inputs }: TradeoffMatrixProps) {
+  const { fixedRateYears } = inputs;
   const low = scenarios[0];
   const mid = scenarios[Math.floor(scenarios.length / 2)];
   const high = scenarios[scenarios.length - 1];
@@ -71,6 +77,10 @@ export default function TradeoffMatrix({ scenarios, fixedRateYears }: TradeoffMa
     const interest = to.mortgage.interestFixed - from.mortgage.interestFixed;
     const runtime = to.mortgage.runtimeYears - from.mortgage.runtimeYears;
     const remainingDebt = to.mortgage.remainingAfterFixed - from.mortgage.remainingAfterFixed;
+    // The return of the step itself, read from the lower to the higher EK level
+    // whichever way round the row is phrased (D32).
+    const [lower, higher] = from.ekRate < to.ekRate ? [from, to] : [to, from];
+    const step = ekStepReturn(lower, higher, inputs);
 
     return {
       label: `${to.ekRate}% statt ${from.ekRate}% EK`,
@@ -78,6 +88,7 @@ export default function TradeoffMatrix({ scenarios, fixedRateYears }: TradeoffMa
       interest,
       runtime,
       remainingDebt,
+      step,
       meaning: interpret(cash, interest, runtime, fixedRateYears),
     };
   });
@@ -92,6 +103,7 @@ export default function TradeoffMatrix({ scenarios, fixedRateYears }: TradeoffMa
             <th>Zinsen in {fixedRateYears} J.</th>
             <th>Laufzeit</th>
             <th>Restschuld n. Bindung</th>
+            <th>Rendite der Mehr-EK</th>
           </tr>
         </thead>
         <tbody>
@@ -121,6 +133,20 @@ export default function TradeoffMatrix({ scenarios, fixedRateYears }: TradeoffMa
                   betterWhen={BETTER_WHEN.remainingAfterFixed}
                   format={formatSignedEur}
                 />
+              </td>
+              <td>
+                {row.step.annualReturn == null ? (
+                  <span className="muted">—</span>
+                ) : (
+                  <>
+                    <strong>{formatPct(row.step.annualReturn)} p.a.</strong>
+                    <small>
+                      {row.step.breakEvenEtfReturn == null
+                        ? "steuerfrei"
+                        : `ETF lohnt ab ${formatPct(row.step.breakEvenEtfReturn)} vor Steuer`}
+                    </small>
+                  </>
+                )}
               </td>
             </tr>
           ))}

@@ -10,6 +10,7 @@ import {
   compareApartmentCases,
   compareEkScenarios,
   compareSpecialScenarios,
+  ekStepReturn,
   evaluateDecision,
   interestForPlan,
   monthlyAnnuity,
@@ -444,6 +445,29 @@ describe("calculation engine", () => {
     const repaid = refinanceStress(buildScenario(LOWEST, small, DEFAULT_RATES), small);
     expect(repaid.applies).toBe(false);
     expect(repaid.extraYears).toBe(0);
+  });
+
+  it("prices every step of extra EK as a yearly return against the ETF (D32)", () => {
+    // The offer: 10→15% buys almost nothing in rate (3,87 → 3,86), 15→20% buys the
+    // drop to 3,76 on the whole loan. Against a 5% ETF (≈4,2% after tax) the first step
+    // loses and the second wins, which a 10-vs-20 headline alone cannot show.
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const [ek10, ek15, ek20] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    const first = ekStepReturn(ek10, ek15, inputs);
+    const second = ekStepReturn(ek15, ek20, inputs);
+    const span = ekStepReturn(ek10, ek20, inputs);
+
+    expect(first.annualReturn).toBeCloseTo(4.06, 2);
+    expect(second.annualReturn).toBeCloseTo(4.97, 2);
+    expect(span.annualReturn).toBeCloseTo(4.52, 2);
+    expect(first.breakEvenEtfReturn).toBeCloseTo(4.81, 2);
+    expect(second.breakEvenEtfReturn).toBeCloseTo(5.84, 2);
+    expect(first.ekAhead).toBe(false);
+    expect(second.ekAhead).toBe(true);
+    expect(span.ekAhead).toBe(true);
+
+    // No extra cash, no return to speak of.
+    expect(ekStepReturn(ek15, ek10, inputs).annualReturn).toBeNull();
   });
 
   it("gives the entered Wartezeit its own column", () => {
