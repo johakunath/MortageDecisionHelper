@@ -130,26 +130,29 @@ Formula descriptions · assumptions · thresholds · validation status · known 
 
 ## 8. Defaults
 
+Mirrors `src/lib/defaults.ts` (amended 2026-10-08; the original table described a 720k case that no longer ships).
+
 | Input | Default |
 |---|---:|
-| Purchase price | 720.000 € |
-| Closing costs | 9% |
+| Purchase price | 450.000 € (the offer flat; apartments B and C: 500.000 / 600.000 €) |
+| Closing costs | 11,57% (with Makler; 8% without) |
 | Available capital | 145.000 € |
 | Safety reserve target | 20.000 € |
-| Renovation | 0 € |
-| Moving and furniture | 0 € |
-| Monthly ownership costs | 830 € |
+| Renovation · moving | 0 € · 0 € (per apartment) |
+| Monthly ownership costs | per apartment: 640 / 690 / 760 € |
 | Current warm rent | 1.970 € |
 | Household net income | 8.500 € |
-| Initial repayment rate | 2,4% |
+| Monatsrate | 1.900 € (identical for every EK level, D14) |
 | Fixed-rate period | 10 years |
-| Annual Sondertilgung | 6.000 € |
+| Sondertilgung plan | 6.000 € per year for ten years |
 | Max annual Sondertilgung | 5% of original loan |
 | Wait period | 12 months |
 | Net monthly savings while waiting | 1.500 € |
 | Property-price change | 2% p.a. |
 | Interest-rate change while waiting | −0,3 pp |
 | Expected ETF return | 5% p.a. |
+| Tax on ETF gains | 18,4625% (D29) |
+| Anschlusszins stress | +2 pp (D31) |
 
 **Sollzins by EK level × Zinsbindung** (from the Finanzierungsangebot 07.08.2026, entered by hand, *not* live market rates):
 
@@ -170,7 +173,7 @@ They are **not monotonic** in Eigenkapital — at a 15-year binding 10% and 15% 
 - **Eigenkapital %** — applies to the purchase price. 720.000 € at 10% → 72.000 € down payment. Purchase costs are *additional*.
 - **Available capital** — total liquid or liquidatable capital: cash, savings, sellable ETFs. Composition is tracked in the external EK tracker, not here.
 - **Safety reserve** — what must remain after down payment, purchase costs, renovation, moving and furniture. A personal threshold, **not** a bank requirement.
-- **Monthly ownership costs** — deliberately rough: non-recoverable Hausgeld, maintenance reserve, property tax, building insurance, utility differences vs. renting. Not a service-charge statement.
+- **Monthly ownership costs** — deliberately rough: everything an owner pays monthly for the flat except the loan, on the **same basis as the warm rent** (full Hausgeld incl. heating, Nebenkosten and reserve, Grundsteuer, own maintenance reserve; no electricity). Not a service-charge statement. Amended by [D30](DECISIONS.md): the earlier "non-recoverable Hausgeld" wording understated owning against a warm rent.
 - **Monthly savings while waiting** — **net**: what actually lands in Eigenkapital each month *after* rent and normal household expenses. **Therefore rent must NOT also be subtracted from future capital.** Rent is still displayed separately as a cost of waiting. This definition exists specifically to prevent double-counting.
 
 ---
@@ -211,7 +214,7 @@ A scenario is **clean/feasible** only when **both** hold:
 
 **If none qualify** → say "Keine der drei Varianten ist tragbar", and explain whether the problem is a monthly rate that does not amortise, insufficient upfront cash, a reserve violation, an excessive monthly burden, or a combination.
 
-**If several qualify** → prefer 10% EK as the default compromise; if 10% is not feasible, take the feasible scenario with the lowest total interest.
+**If several qualify** → list them all; the app names no preferred level ([D28](DECISIONS.md), which replaced "prefer 10% EK": since the move to 10/15/20 that rule named the lowest level, not the compromise).
 
 Always show separate winners for: **lowest cost · highest liquidity · lowest monthly payment · best compromise.**
 
@@ -235,7 +238,7 @@ Selling more ETFs to raise the down payment has a cost. Show **all four**:
 3. **mortgage interest saved**
 4. **the difference between 2 and 3**
 
-Values 2 and 3 must be measured over the **same horizon** or the difference is meaningless. The assumed ETF return is never treated as guaranteed. ETF sale taxes are out of scope unless entered manually.
+Values 2 and 3 must be measured over the **same horizon** or the difference is meaningless. The assumed ETF return is never treated as guaranteed. Value 2 is **after tax on the gain** (`etfTaxRate`, [D29](DECISIONS.md)): the interest saved is tax-free, so a pre-tax figure biases the comparison. Tax on ETFs sold to fund the purchase is not modelled; enter available capital after it.
 
 This is the single most important calculation in the app — it is the numerical form of the couple's disagreement.
 
@@ -249,17 +252,19 @@ Optionally three manual annual assumptions (bear / base / bull), ideally sourced
 
 ## 17. Test cases
 
-| Case | Inputs | Expected |
+Executed by `npm test` from `CASE_PRESETS` in `src/lib/defaults.ts`, which pin every input that decides their outcome (D12). Amended 2026-10-08 to match them.
+
+| Case | Inputs (pinned) | Expected |
 |---|---|---|
-| **600k machbar** | 600.000 € · capital 145.000 € · reserve 25.000 € · costs 760 € · rates 4,05/3,80/3,55 | At least one feasible scenario; 10% EK a plausible compromise; remaining buffer clearly shown |
-| **720k Base** | defaults | Borderline. Warnings visible. Reserve and burden understandable. Trade-offs **not** hidden behind a generic recommendation |
-| **850k Stress** | 850.000 € · capital 145.000 € · reserve 30.000 € · costs 950 € · rates 4,30/4,05/3,85 | **"Kein sauberes Szenario"**. Must NOT recommend 5% merely because it is the only one with positive cash. Must explain what would need to change |
+| **600k machbar** | 600.000 € · 8% Nebenkosten · capital 145.000 € · reserve 25.000 € · costs 760 € · net 9.000 € · rate 2.400 € · 10 J. | At least one level tragbar (10% EK, "gerade so"); the others named with their reason |
+| **720k grenzwertig** | 720.000 € · 8% · capital 200.000 € · reserve 25.000 € · costs 900 € · net 9.600 € · rate 2.900 € · 10 J. | Tragbar with visible warnings: 15% only "gerade so", 20% fails. Trade-offs **not** hidden behind a recommendation |
+| **850k Stress** | 850.000 € · 11,57% · capital 145.000 € · reserve 30.000 € · costs 950 € · net 8.500 € · rate 3.400 € · 10 J. | **"Keine der drei Varianten ist tragbar"**. No winner, not even the least-bad level. Must explain what would need to change |
 
 ---
 
 ## 18. Non-goals
 
-No full rent-vs-buy model · no household budgeting · no tax calculation · no cross-bank offer comparison · no automatic rate feeds · no account connections · no ETF portfolio management · no maintenance schedules · no investment-property ROI · no rental income · no auth · no database · no advisor chatbot · **no opaque AI-generated recommendations**.
+No full rent-vs-buy model · no household budgeting · no tax calculation (one deliberate exception: tax on ETF gains in comparisons, [D29](DECISIONS.md)) · no cross-bank offer comparison · no automatic rate feeds · no account connections · no ETF portfolio management · no maintenance schedules · no investment-property ROI · no rental income · no auth · no database · no advisor chatbot · **no opaque AI-generated recommendations**.
 
 ---
 
@@ -307,3 +312,5 @@ Rationale in [DECISIONS.md D6](DECISIONS.md). This is a deliberate narrowing tow
 **A4 — Desktop is the priority viewport.** See [DECISIONS.md D7](DECISIONS.md).
 
 **A5 — Default apartments are 600.000 € / 500.000 € / 450.000 €**, replacing the earlier 600/720/850k set, which mirrored the QA stress fixtures and left every scenario infeasible on first load.
+
+**A6: Calculation-integrity pass (2026-10-08).** Four decisions from [docs/REVIEW.md](REVIEW.md): no single recommendation ([D28](DECISIONS.md)), ETF comparisons after tax ([D29](DECISIONS.md)), every comparison on one common date from one ledger ([D30](DECISIONS.md)), and a refinancing stress line under the Restschuld ([D31](DECISIONS.md)).

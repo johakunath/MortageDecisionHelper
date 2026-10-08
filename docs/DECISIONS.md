@@ -435,3 +435,64 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **This does not reopen [D4](#d4--waitsavingsmonthly-is-net-of-rent).** D4 governs *capital*: `waitSavingsMonthly` is already net of rent, so subtracting `rentPaid` from `adjustedAvailableCapital` would count it twice. What waiting **costs** and what capital it **leaves** are different questions, and rent belongs to exactly one of them. The two rows looked contradictory side by side, so the table now says why in a footnote rather than leaving the reader to reconcile them.
 
 **Consequence.** Both deltas stay on screen — a single combined figure would hide which half moved, and the split is what makes the reversal legible. `deltaTotalCost` collapses to the interest delta in the buy-now column, where `rentPaid` is zero; a test pins that, and another pins that the difference between the two rows is exactly the rent.
+
+---
+
+## D28: The verdict lists every tragbar level; there is no single recommendation
+
+**Date:** 2026-10-08 · **Status:** accepted · **Amends** [PRODUCT_SPEC §13](PRODUCT_SPEC.md#13-decision-logic)
+
+**Context.** `evaluateDecision` preferred "10% EK when feasible", and the verdict headline printed that recommendation ("10% EK ist tragbar"). The rule dates from the 5/10/15 grid, where 10% was the compromise in the middle. [D15](#d15--the-ek-levels-are-10--15--20) moved the grid to 10/15/20 and fixed the middle *door* for exactly this reason, but not the engine. Since then the rule named the **lowest** level, the maximum-liquidity option: one spouse's side of the argument, chosen by code, in the first sentence on screen.
+
+**Decision.** `DecisionResult.recommendation` is removed. The headline lists the tragbar levels ("10% und 15% EK sind tragbar") and names the others with their status ("Nicht tragbar: 20% EK (Reserve zu dünn)"). When nothing is tragbar the existing "Keine der drei Varianten ist tragbar" state is unchanged.
+
+**Rationale.** The app's job is to make the trade-off measurable, not to settle it. A rule that prefers a level would have to be argued for on the merits, and no such argument exists in the spec beyond "the middle one", which 10% no longer is.
+
+**Consequence.** The tragbar definition in the verdict and in the glossary now states all three conditions the engine checks (Rate tilgt, Reserve, Belastung) and the 1,5× rule behind "Gerade so tragbar". Tests assert the feasible set, never a preferred level.
+
+---
+
+## D29: Every ETF comparison is after tax
+
+**Date:** 2026-10-08 · **Status:** accepted · **Amends** [PRODUCT_SPEC §15](PRODUCT_SPEC.md#15-etf-opportunity-cost) and §18 ("no tax calculation")
+
+**Context.** The trade-off statement netted pre-tax ETF growth against the mortgage interest saved. Interest an owner-occupier does not pay is not income, so that side is tax-free; ETF gains are taxed on realisation. On all three default apartments the statement read "für mehr Liquidität"; after tax it reads "für mehr Eigenkapital" (offer flat: −3.280 € → +1.945 €). K18.
+
+**Decision.** New input `etfTaxRate`, default 18,4625% (Abgeltungsteuer + Soli on 70% of the gain, equity ETF, no Kirchensteuer), editable under Markt. `compareEkScenarios` reports `etfForegoneGross` and the after-tax `etfForegone`; the statement shows the after-tax ETF rate next to the ETF chip.
+
+**Rationale.** Spec §15 calls this "the single most important calculation in the app". Leaving out a tax that applies to one side only is not a simplification, it is a bias.
+
+**Consequence.** §18's "no tax calculation" now has one deliberate exception: tax on ETF gains in comparisons. Tax on ETFs sold to fund the purchase is not modelled; `availableCapital` is entered after that tax (glossary).
+
+---
+
+## D30: Comparisons are made on one common date, from one ledger
+
+**Date:** 2026-10-08 · **Status:** accepted · **Supersedes** the Nettovermögen readout of [D9](#d9--capabilities-restored-from-the-original-prototype)
+
+**Context.** Each comparison in the app had its own basis: interest alone, interest plus rent, pre-tax ETF growth, full-term totals at each scenario's own payoff date. Several defects came from exactly that (K1, K10, K15, K18). "Nettovermögen" was valued at each scenario's own payoff year, so the same flat looked 67.000 € more valuable at 10% EK because that loan runs five years longer (K19). The trade-off matrix and the Sondertilgung headline led with full-term interest, the latter with no opportunity cost (K20).
+
+**Decision.**
+1. `wealthAtHorizon()`: one monthly ledger valuing a path (EK level, Sondertilgung plan, months of waiting) on one date, by default the end of the binding: flat − Restschuld + free capital after tax. It reuses `simulateMortgage` through a read-only `onMonth` hook. Formulas in [ASSUMPTIONS §2](ASSUMPTIONS.md).
+2. Verlauf: "Immobilienwert bei Abzahlung" and "Nettovermögen" (and their engine fields) are replaced by "Vermögen" and "Frei verfügbar" at the end of the binding.
+3. Trade-off matrix: "Zinsen gesamt" becomes "Zinsen in N J." (the reliable figure).
+4. Sondertilgung headline: paid in, Restschuld reduction (and the interest part of it), and the wealth difference against the same money kept in the ETF, all at the end of the binding. The full-term bar chart stays, labelled illustrative.
+5. The household budget in the ledger is `waitSavingsMonthly + currentWarmRent` (D4 read the other way round). For rent and ownership to be comparable, `currentWarmRent` and `monthlyOwnershipCosts` are now defined on the same basis: both include heating and Nebenkosten, both exclude electricity. The ownership-cost glossary used to say "nicht umlagefähiges Hausgeld", which against a warm rent understated owning.
+
+**Rationale.** One function at one date makes a difference between two calls a like-for-like difference by construction. Tests pin that the ledger reproduces the after-tax trade-off to the cent and that Sondertilgung is neutral when the ETF earns exactly the loan rate untaxed.
+
+**Consequence.** **Check the Eigentumskosten per apartment** against the Exposé's Hausgeld (incl. Heizung) plus Grundsteuer: the stored 640 / 690 / 760 € were entered under the old wording. The Warten table is not yet on the ledger: its replacement waits on a layout choice (REVIEW.md U5), and ASSUMPTIONS §5 lists its bottom line as open.
+
+---
+
+## D31: The Restschuld gets a refinancing stress line
+
+**Date:** 2026-10-08 · **Status:** accepted
+
+**Context.** The Restschuld after the binding was shown as the refinancing-risk indicator, but a balance does not say what it means, and the argument for more Eigenkapital that it carries stayed implicit.
+
+**Decision.** New input `refiStressShift` (default +2 %-Pkt., under Markt) and `refinanceStress()`: at the **same Monatsrate**, how many years longer the loan runs if the Anschlusszins is that much higher, or that the rate would no longer cover the interest. Shown as the subline of the existing "Restschuld danach" readout; the readout turns red when the rate would not cover the interest.
+
+**Rationale.** Holding the rate keeps D14's reading (the Monatsrate is the budget) and makes the risk comparable across EK levels. A stress, not a forecast: it says what a shock does, not that it will come. A single number, not an Anschlussfinanzierung model (spec §10).
+
+**Consequence.** No new readout: the panel stays at five and does not scroll at 1280×800 (D19). Verified at 1280 / 1000 / 820 / 560 px: the header still measures exactly 50 px. Offer flat: 10% EK +3,2 J., 20% EK +1,2 J.; Wohnung C at 10% and 15% EK: the 1.900 € rate would not cover the interest.

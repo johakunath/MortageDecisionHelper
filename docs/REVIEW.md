@@ -6,6 +6,18 @@ How the numbers below were produced: the engine itself, run on the default state
 
 ---
 
+## Status (2026-10-08)
+
+| Item | State |
+|---|---|
+| T1 snapshot, T2 invariants | Done (`golden.test.ts`, `invariants.test.ts`) |
+| C1 ETF tax · C2 neutral verdict · C3 Nettovermögen · C4 reliable-first matrix | Done: [D28](DECISIONS.md), [D29](DECISIONS.md), [D30](DECISIONS.md) |
+| C6/A1 common-horizon ledger (`wealthAtHorizon`) | Done: [D30](DECISIONS.md) |
+| C7 Sondertilgung on the same basis · C8 refinancing stress | Done: [D30](DECISIONS.md), [D31](DECISIONS.md) |
+| C11 rent / ownership-cost basis, C12, C13, U7 | Done (glossary, ASSUMPTIONS, spec) |
+| C5/U5 Warten bottom line · U2 marginal EK return | Engine ready; layout waits on the mockup choice |
+| C9 runtime warning | Waits on your ages (question 5) |
+
 ## 0. Bottom line
 
 | # | Finding | Why it matters |

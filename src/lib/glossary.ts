@@ -12,15 +12,15 @@ export const GLOSSARY = {
   closingCostRate:
     "Grunderwerbsteuer, Notar, Grundbuch und ggf. Maklerprovision — als Prozentsatz vom Kaufpreis. Diese Kosten musst du immer aus Eigenkapital bezahlen; keine Bank finanziert sie mit.",
   availableCapital:
-    "Alles, was ihr für den Kauf einsetzen könntet: Konto, Tagesgeld, Festgeld und ETFs, die ihr verkaufen würdet. Die genaue Aufteilung pflegt ihr im EK-Tracker.",
+    "Alles, was ihr für den Kauf einsetzen könntet: Konto, Tagesgeld, Festgeld und ETFs, die ihr verkaufen würdet. ETFs mit dem Betrag nach Steuer eintragen: beim Verkauf geht auf die Kursgewinne Abgeltungsteuer ab. Die genaue Aufteilung pflegt ihr im EK-Tracker.",
   reserveTarget:
     "Was nach dem Kauf übrig bleiben soll — für Notfälle, Reparaturen, Autowechsel. Eure persönliche Grenze, keine Bankvorgabe.",
   renovation: "Was direkt nach dem Kauf gemacht werden muss, bevor ihr einzieht.",
   moving: "Umzug, Küche, Möbel — einmalige Kosten rund um den Einzug.",
   currentWarmRent:
-    "Was ihr heute inklusive Nebenkosten für die Miete zahlt. Dient nur dem monatlichen Cashflow-Vergleich, nicht einer vollen Mieten-oder-Kaufen-Rechnung.",
+    "Was ihr heute für die Miete zahlt, inklusive Nebenkosten und Heizung, ohne Strom. Gleiche Basis wie die Eigentumskosten, damit Miete und Eigentum vergleichbar sind.",
   monthlyOwnershipCosts:
-    "Grobe Schätzung: nicht umlagefähiges Hausgeld, Instandhaltungsrücklage, Grundsteuer, Versicherung. Bewusst grob gehalten.",
+    "Alles, was ihr als Eigentümer monatlich für die Wohnung zahlt außer der Kreditrate: das komplette Hausgeld (mit Heizung, Nebenkosten und Rücklage), Grundsteuer und was ihr selbst für die Wohnung zurücklegt. Gleiche Basis wie eure Warmmiete, ohne Strom. Bewusst grob.",
 
   // --- Finanzierung ---
   householdNetIncome: "Was monatlich nach Steuern und Sozialabgaben bei euch beiden zusammen ankommt.",
