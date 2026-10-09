@@ -21,6 +21,7 @@ import {
   repaymentRateFromRuntimeYears,
   requiredSpecialToMatch,
   runtimeYearsFromRepaymentRate,
+  scenarioWealthAtHorizon,
   simulateMortgage,
   specialPlanEffect,
   waitPeriodsFor,
@@ -530,6 +531,57 @@ describe("calculation engine", () => {
       DEFAULT_RATES,
     );
     expect(defaults.every((scenario) => !scenario.runsPastLimit)).toBe(true);
+  });
+
+  it("values a step of EK in the ledger when the loans are repaid inside the binding (K23)", () => {
+    // A 150k flat at 1.900 €/Monat: every loan is gone after about five years, so the
+    // Restschuld is zero on both sides. Read off the Restschuld, the step reported a
+    // −100% return and "ETF vorn". In the ledger the earlier-finishing loan's freed
+    // payments keep earning, and the extra EK earns about what the loans cost.
+    const inputs = {
+      ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
+      purchasePrice: 150000,
+    };
+    const [ek10, , ek20] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    expect(ek10.mortgage.runtimeYears).toBeLessThan(inputs.fixedRateYears);
+    expect(ek20.mortgage.runtimeYears).toBeLessThan(inputs.fixedRateYears);
+
+    const step = ekStepReturn(ek10, ek20, inputs);
+    const tradeoff = compareEkScenarios(ek10, ek20, inputs);
+    const gap =
+      wealthAtHorizon({ base: HIGHEST, inputs, rates: DEFAULT_RATES }).wealth -
+      wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES }).wealth;
+
+    expect(step.debtReduction).toBe(0);
+    expect(step.annualReturn).toBeGreaterThan(3);
+    expect(step.annualReturn).toBeLessThan(5);
+    expect(step.ekAhead).toBe(gap > 0);
+    expect(tradeoff.netAdvantageFixed).toBeCloseTo(gap, 6);
+  });
+
+  it("values a built scenario exactly as the ledger values the same purchase", () => {
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[1]);
+    for (const base of EK_SCENARIOS) {
+      const built = buildScenario(base, inputs, DEFAULT_RATES);
+      expect(scenarioWealthAtHorizon(built, inputs).wealth).toBeCloseTo(
+        wealthAtHorizon({ base, inputs, rates: DEFAULT_RATES }).wealth,
+        6,
+      );
+    }
+  });
+
+  it("keeps the original loan's Sondertilgung cap in the refinancing stress run", () => {
+    // 15.000 €/Jahr for 25 years: inside 5% of the original 405.000 €, above 5% of the
+    // Restschuld after ten years. Capped against the Restschuld, the same-rate baseline
+    // ran 15,25 years where the scenario itself runs 14,00.
+    const inputs = {
+      ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
+      annualSpecialRepayments: Array(25).fill(15000),
+    };
+    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const stress = refinanceStress(scenario, inputs);
+    expect(stress.runtimeYearsAtSameRate).toBeCloseTo(scenario.mortgage.runtimeYears, 6);
+    expect(stress.extraYears).toBeGreaterThan(0);
   });
 
   it("gives the entered Wartezeit its own column", () => {

@@ -345,7 +345,12 @@ export type EkTradeoff = {
    * there to compare. The interest saved needs no such adjustment: it is tax-free.
    */
   etfForegone: number;
-  /** interestSavedFixed − etfForegone (after tax). Positive favours more Eigenkapital. */
+  /**
+   * Wealth with more EK minus wealth with less, at the end of the binding, from the
+   * ledger. Equals `interestSavedFixed − etfForegone` while both loans run through the
+   * binding; also counts freed payments once one is repaid earlier. Positive favours
+   * more Eigenkapital.
+   */
   netAdvantageFixed: number;
 };
 
@@ -953,6 +958,12 @@ export function compareEkScenarios(
   // interest is no income. Untaxed, this flipped the verdict on every default apartment
   // toward "mehr Liquidität" (K18).
   const etfForegone = etfForegoneGross * (1 - clampRate(inputs.etfTaxRate) / 100);
+  // The verdict comes from the ledger, not from `interestSavedFixed − etfForegone`.
+  // The two agree to the cent while both loans run through the binding (pinned in
+  // invariants.test.ts); once a loan is repaid earlier, only the ledger also counts
+  // the payments it no longer makes, which keep earning (K23).
+  const netAdvantageFixed =
+    scenarioWealthAtHorizon(to, inputs).wealth - scenarioWealthAtHorizon(from, inputs).wealth;
 
   return {
     from,
@@ -964,7 +975,7 @@ export function compareEkScenarios(
     interestSavedFixed,
     etfForegoneGross,
     etfForegone,
-    netAdvantageFixed: interestSavedFixed - etfForegone,
+    netAdvantageFixed,
   };
 }
 
@@ -977,9 +988,10 @@ export type EkStepReturn = {
   debtReduction: number;
   /**
    * What the extra Eigenkapital earns per year inside the binding, tax-free and without
-   * market risk: the rate at which `extraCash` grows into `debtReduction` over the
-   * binding. At one Monatsrate that is exactly extra EK plus interest saved (pinned in
-   * invariants.test.ts). Null when `to` needs no extra cash.
+   * market risk: the rate at which `extraCash` grows into what it is worth at the end of
+   * the binding in the ledger. While both loans run through the binding that is exactly
+   * `debtReduction` (extra EK plus interest saved); after an early payoff it includes
+   * the freed payments. Null when `to` needs no extra cash.
    */
   annualReturn: number | null;
   /** The pre-tax ETF return at which keeping the money invested does exactly as well. */
@@ -1009,16 +1021,22 @@ export function ekStepReturn(
     return { from, to, extraCash, debtReduction, annualReturn: null, breakEvenEtfReturn: null, ekAhead: null };
   }
 
-  const multiple = debtReduction / extraCash;
-  const annualReturn = multiple > 0 ? (Math.pow(multiple, 1 / years) - 1) * 100 : -100;
+  // Valued in the ledger, not read off the Restschuld: if a loan is repaid inside the
+  // binding, its freed payments keep earning, and a Restschuld of zero on both sides
+  // used to report a −100% return (K23).
+  const wealthGap = (etfReturnRate: number) => {
+    const assumed = { ...inputs, etfReturnRate };
+    return (
+      scenarioWealthAtHorizon(to, assumed).wealth - scenarioWealthAtHorizon(from, assumed).wealth
+    );
+  };
+  const gap = wealthGap(inputs.etfReturnRate);
   const keep = 1 - clampRate(inputs.etfTaxRate) / 100;
-  // ETF gain needed so that, after tax, the kept money ends where the extra EK does.
-  const grossGrowth = keep > 0 ? 1 + (multiple - 1) / keep : Infinity;
-  const breakEvenEtfReturn =
-    grossGrowth > 0 && Number.isFinite(grossGrowth)
-      ? (Math.pow(grossGrowth, 1 / years) - 1) * 100
-      : null;
-  const etfEnd = 1 + (Math.pow(1 + inputs.etfReturnRate / 100, years) - 1) * keep;
+  // What the extra cash grows to if it stays in the ETF, after tax at the horizon, and
+  // therefore what the extra EK grew to: that plus the wealth it is ahead or behind by.
+  const etfMultiple = 1 + (Math.pow(1 + inputs.etfReturnRate / 100, years) - 1) * keep;
+  const ekMultiple = (gap + extraCash * etfMultiple) / extraCash;
+  const annualReturn = ekMultiple > 0 ? (Math.pow(ekMultiple, 1 / years) - 1) * 100 : -100;
 
   return {
     from,
@@ -1026,8 +1044,8 @@ export function ekStepReturn(
     extraCash,
     debtReduction,
     annualReturn,
-    breakEvenEtfReturn,
-    ekAhead: multiple > etfEnd,
+    breakEvenEtfReturn: nearestRoot(wealthGap, inputs.etfReturnRate, 0.5, 30),
+    ekAhead: gap > 0,
   };
 }
 
@@ -1372,29 +1390,46 @@ export function waitTippingPoints(
     const assumed = inputs[assumption];
     const atAssumed = delta(assumption, assumed);
     if (waitMonths <= 0) return { assumption, assumed, flipsAt: null };
-    if (atAssumed === 0) return { assumption, assumed, flipsAt: assumed };
 
     const { step, reach } = TIPPING_SEARCH[assumption];
-    for (let distance = step; distance <= reach + 1e-9; distance += step) {
-      for (const direction of [-1, 1]) {
-        const inner = assumed + direction * (distance - step);
-        const outer = assumed + direction * distance;
-        const innerValue = distance === step ? atAssumed : delta(assumption, inner);
-        if (Math.sign(delta(assumption, outer)) === Math.sign(innerValue)) continue;
-
-        let lo = inner;
-        let hi = outer;
-        const loSign = Math.sign(innerValue);
-        for (let i = 0; i < 40; i += 1) {
-          const mid = (lo + hi) / 2;
-          if (Math.sign(delta(assumption, mid)) === loSign) lo = mid;
-          else hi = mid;
-        }
-        return { assumption, assumed, flipsAt: (lo + hi) / 2 };
-      }
-    }
-    return { assumption, assumed, flipsAt: null };
+    const flipsAt = nearestRoot((value) => delta(assumption, value), assumed, step, reach, atAssumed);
+    return { assumption, assumed, flipsAt };
   });
+}
+
+/**
+ * The value nearest to `start` at which `f` changes sign: searched outward in `step`s
+ * on both sides up to `reach`, then bisected. Null if there is none in range. Nearest,
+ * not first-found from one end, so a non-monotone `f` still yields the tipping point
+ * the reader is closest to.
+ */
+function nearestRoot(
+  f: (value: number) => number,
+  start: number,
+  step: number,
+  reach: number,
+  atStart: number = f(start),
+): number | null {
+  if (atStart === 0) return start;
+  for (let distance = step; distance <= reach + 1e-9; distance += step) {
+    for (const direction of [-1, 1]) {
+      const inner = start + direction * (distance - step);
+      const outer = start + direction * distance;
+      const innerValue = distance === step ? atStart : f(inner);
+      if (Math.sign(f(outer)) === Math.sign(innerValue)) continue;
+
+      let lo = inner;
+      let hi = outer;
+      const loSign = Math.sign(innerValue);
+      for (let i = 0; i < 40; i += 1) {
+        const mid = (lo + hi) / 2;
+        if (Math.sign(f(mid)) === loSign) lo = mid;
+        else hi = mid;
+      }
+      return (lo + hi) / 2;
+    }
+  }
+  return null;
 }
 
 export type WealthPathParams = {
@@ -1491,11 +1526,63 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
     purchaseRates,
     specialPlan,
   );
-  move(-purchase.cashNeeded);
+
+  return ownUntilHorizon(purchase, inputs, specialPlan, {
+    horizonMonths,
+    waitMonths,
+    purchasePrice: futurePrice,
+    liquid,
+    contributed,
+  });
+}
+
+/**
+ * `wealthAtHorizon` for a scenario that is already built, bought today. Comparisons
+ * that hold `ScenarioResult`s (the EK trade-off, the return per EK step) value them
+ * with this, so they need no rates and cannot drift from the scenarios on screen.
+ * Pass the Sondertilgung plan the scenario was built with.
+ */
+export function scenarioWealthAtHorizon(
+  scenario: ScenarioResult,
+  inputs: MortgageInputs,
+  specialPlan: SpecialPlan = planFromInputs(inputs),
+  horizonMonths: number = Math.round(inputs.fixedRateYears * 12),
+): WealthAtHorizon {
+  return ownUntilHorizon(scenario, inputs, specialPlan, {
+    horizonMonths,
+    waitMonths: 0,
+    purchasePrice: inputs.purchasePrice,
+    liquid: inputs.availableCapital,
+    contributed: inputs.availableCapital,
+  });
+}
+
+/**
+ * The owning half of the ledger: pay for the purchase, then month by month the
+ * Monatsrate, ownership costs and Sondertilgung out of the household budget, the rest
+ * invested, until the horizon. Months after the loan is repaid carry no bank payment,
+ * so a loan that finishes early leaves its freed payments invested, which is exactly
+ * what a Restschuld comparison alone cannot see.
+ */
+function ownUntilHorizon(
+  purchase: ScenarioResult,
+  inputs: MortgageInputs,
+  specialPlan: SpecialPlan,
+  start: {
+    horizonMonths: number;
+    waitMonths: number;
+    purchasePrice: number;
+    liquid: number;
+    contributed: number;
+  },
+): WealthAtHorizon {
+  const monthlyReturn = Math.pow(1 + inputs.etfReturnRate / 100, 1 / 12) - 1;
+  const budget = inputs.waitSavingsMonthly + inputs.currentWarmRent;
+  let liquid = start.liquid - purchase.cashNeeded;
+  let contributed = start.contributed - purchase.cashNeeded;
   const liquidAfterPurchase = liquid;
 
-  // Owning, until the horizon. Months after the loan is repaid carry no bank payment.
-  const loanMonths = horizonMonths - waitMonths;
+  const loanMonths = start.horizonMonths - start.waitMonths;
   const paidToBank = new Array<number>(loanMonths + 1).fill(0);
   const specialByMonth = new Array<number>(loanMonths + 1).fill(0);
   let debt = purchase.loan;
@@ -1518,17 +1605,20 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
   let specialPaid = 0;
   for (let month = 1; month <= loanMonths; month += 1) {
     liquid *= 1 + monthlyReturn;
-    move(budget - inputs.monthlyOwnershipCosts - paidToBank[month] - specialByMonth[month]);
+    const flow = budget - inputs.monthlyOwnershipCosts - paidToBank[month] - specialByMonth[month];
+    liquid += flow;
+    contributed += flow;
     specialPaid += specialByMonth[month];
   }
 
   const propertyValue =
-    inputs.purchasePrice * Math.pow(1 + inputs.propertyGrowthRate / 100, horizonMonths / 12);
+    inputs.purchasePrice *
+    Math.pow(1 + inputs.propertyGrowthRate / 100, start.horizonMonths / 12);
   const liquidTax = (liquid - contributed) * (clampRate(inputs.etfTaxRate) / 100);
 
   return {
-    horizonMonths,
-    purchasePrice: futurePrice,
+    horizonMonths: start.horizonMonths,
+    purchasePrice: start.purchasePrice,
     loan: purchase.loan,
     propertyValue,
     debt,
@@ -1537,7 +1627,7 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
     wealth: propertyValue - debt + liquid - liquidTax,
     liquidAfterPurchase,
     specialPaid,
-    rentPaid: inputs.currentWarmRent * waitMonths,
+    rentPaid: inputs.currentWarmRent * start.waitMonths,
   };
 }
 
@@ -1596,7 +1686,10 @@ export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs
       repaymentRatePct: repaymentRateFromMonthlyPayment(remaining, ratePct, payment),
       fixedRateYears: 0,
       specialPlan: laterPlan,
-      specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+      // The cap stays a share of the ORIGINAL loan, as everywhere else in the model.
+      // The follow-up runs on the Restschuld, so the rate is rescaled to the same € cap;
+      // otherwise even the same-rate baseline ran longer than the scenario itself.
+      specialRepaymentLimitRate: (inputs.specialRepaymentLimitRate * scenario.loan) / remaining,
     });
     return { covers, years: simulation.runtimeYears };
   };

@@ -90,7 +90,13 @@ describe("engine invariants", () => {
       for (let i = 0; i < scenarios.length; i += 1) {
         for (let j = i + 1; j < scenarios.length; j += 1) {
           const tradeoff = compareEkScenarios(scenarios[i], scenarios[j], inputs);
-          expect(wealth[j] - wealth[i]).toBeCloseTo(tradeoff.netAdvantageFixed, 4);
+          // Against the closed form, not against netAdvantageFixed, which now comes from
+          // the ledger itself (K23) and would make this check circular.
+          expect(wealth[j] - wealth[i]).toBeCloseTo(
+            tradeoff.interestSavedFixed - tradeoff.etfForegone,
+            4,
+          );
+          expect(tradeoff.netAdvantageFixed).toBeCloseTo(wealth[j] - wealth[i], 6);
         }
       }
     },

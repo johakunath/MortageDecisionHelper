@@ -144,12 +144,13 @@ At one Monatsrate, `remainingAfterFixed(less EK) − remainingAfterFixed(more EK
 ### Return of one EK step (`ekStepReturn`)
 ```
 extraCash        = cashNeeded(to) − cashNeeded(from)
-debtReduction    = remainingAfterFixed(from) − remainingAfterFixed(to)
-annualReturn     = (debtReduction ÷ extraCash)^(1/n) − 1          n = fixedRateYears, tax-free
-breakEvenEtf     = (1 + (debtReduction ÷ extraCash − 1) ÷ (1 − etfTaxRate%))^(1/n) − 1
-ekAhead          = debtReduction ÷ extraCash > 1 + ((1 + etf%)^n − 1) × (1 − etfTaxRate%)
+gap              = scenarioWealthAtHorizon(to) − scenarioWealthAtHorizon(from)    the ledger
+etfMultiple      = 1 + ((1 + etf%)^n − 1) × (1 − etfTaxRate%)                   n = fixedRateYears
+annualReturn     = ((gap + extraCash × etfMultiple) ÷ extraCash)^(1/n) − 1      tax-free
+breakEvenEtf     = the ETF return at which gap = 0 (nearest root, searched and bisected)
+ekAhead          = gap > 0
 ```
-At one Monatsrate `debtReduction = extraCash + interestSavedFixed` (the identity above), so `ekAhead` is the same verdict as `netAdvantage > 0`; an invariant test pins that the two never disagree. If the higher-EK loan were repaid inside the binding, its saved payments would not be counted; with today's inputs no scenario comes close ([D32](DECISIONS.md)).
+While both loans run through the binding, `gap + extraCash × etfMultiple = debtReduction = extraCash + interestSavedFixed` exactly, so the figures equal the closed form. Once a loan is repaid inside the binding, only the ledger also counts its freed payments, which keep earning; reading the Restschuld alone reported −100% when both reached zero (K23). `compareEkScenarios.netAdvantageFixed` comes from the same ledger, so the statement, the matrix column and the chart cannot disagree ([D32](DECISIONS.md)).
 
 ### Tilgung ↔ Laufzeit ↔ Monatsrate
 
@@ -225,7 +226,7 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 
 ## 5. Defect log
 
-K1 to K22 are resolved. Kept as history: each of these skewed a number the couple was arguing
+K1 to K23 are resolved. Kept as history: each of these skewed a number the couple was arguing
 over, and four of them happened to favour the same side.
 
 | # | Defect | Effect | Resolved by |
@@ -252,6 +253,7 @@ over, and four of them happened to favour the same side.
 | K20 | The trade-off matrix and the Sondertilgung headline led with **full-term** interest, the latter without any opportunity cost | 65.867 € "Zinsen gesamt" where the reliable figure is 25.021 €; "78.750 € gespart" for 60.000 € paid in, while §1 charged extra EK an ETF opportunity cost | Binding interest in the matrix; `specialPlanEffect`; [D30](DECISIONS.md) |
 | K21 | `evaluateDecision` preferred "10% EK", a rule from the 5/10/15 grid | Since D15 it named the **lowest** level in the verdict headline: one spouse's side, chosen by code | Recommendation removed; [D28](DECISIONS.md) |
 | K22 | The Warten bottom line added a full-term interest delta (the rate shift extrapolated over 25+ years) to rent, and left out the buy-now path's ownership costs and principal and the return on capital while waiting | Offer flat: "6.662 € teurer" for a year of waiting, where the ledger puts waiting 3.207 € ahead; Wohnung C: "79.374 € besser" where it is 15.866 € | `deltaWealth` from `wealthAtHorizon`; [D33](DECISIONS.md) |
+| K23 | The return per EK step and the EK trade-off read the Restschuld (or interest) alone; the refinancing stress capped later Sondertilgung against the Restschuld instead of the original loan | A 150k flat repaid within the binding showed "−100% · ETF vorn" where the ledger has 20% EK ahead; with 15.000 €/Jahr after the binding the same-rate baseline ran 15,25 years against the scenario's own 14,00. Found by the Codex review of PR #8 | Both comparisons valued by `scenarioWealthAtHorizon`; the stress run keeps the original € cap |
 
 
 ---
