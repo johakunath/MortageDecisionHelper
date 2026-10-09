@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ApartmentSwitcher, { ApartmentFacts } from "./components/ApartmentSwitcher";
 import CashBlock from "./components/CashBlock";
 import CompromiseFinder from "./components/CompromiseFinder";
+import EkStepChart from "./components/EkStepChart";
 import EkSwitch from "./components/EkSwitch";
 import ExecutiveSummary from "./components/ExecutiveSummary";
 import InputsPanel from "./components/InputsPanel";
@@ -22,8 +23,12 @@ import {
   compareEkScenarios,
   compareSpecialScenarios,
   evaluateDecision,
+  refinanceStress,
+  specialPlanEffect,
   normaliseFixedPeriod,
   waitPeriodsFor,
+  waitTippingPoints,
+  wealthAtHorizon,
   type ApartmentCase,
   type InterestRates,
   type MortgageInputs,
@@ -51,7 +56,7 @@ import {
 } from "./lib/storage";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
-type ApartmentNumericKey = "purchasePrice" | "renovation" | "monthlyOwnershipCosts";
+type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld";
 
 /**
  * Restored synchronously during the first render, not in an effect: loading in an
@@ -123,14 +128,27 @@ export default function App() {
     [selected.id, activeInputs, rates],
   );
 
+  const stress = useMemo(() => refinanceStress(selected, activeInputs), [selected, activeInputs]);
+
+  const planEffect = useMemo(() => {
+    const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
+    return specialPlanEffect(base, activeInputs, rates);
+  }, [selected.id, activeInputs, rates]);
+
   const waitPeriods = useMemo(
     () => waitPeriodsFor(activeInputs.waitMonths),
     [activeInputs.waitMonths],
   );
 
   const waitScenarios = useMemo(
-    () => buildWaitScenarios(selected, selected, activeInputs, rates, waitPeriods),
+    () => buildWaitScenarios(selected, activeInputs, rates, waitPeriods),
     [selected, activeInputs, rates, waitPeriods],
+  );
+
+  // What would have to differ for the entered Wartezeit to flip (spec §2.3, D33).
+  const tippingPoints = useMemo(
+    () => waitTippingPoints(selected, activeInputs, rates, activeInputs.waitMonths),
+    [selected, activeInputs, rates],
   );
 
   // Headline trade-off: maximum contrast — least against most Eigenkapital, over one
@@ -145,6 +163,13 @@ export default function App() {
   const selectedWithoutSpecial = useMemo(() => {
     const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
     return buildScenario(base, activeInputs, rates, { kind: "none" });
+  }, [selected.id, activeInputs, rates]);
+
+  // The selected scenario on one common date, the end of the binding: the same date
+  // for every EK level, so switching levels compares like with like (K19).
+  const selectedWealth = useMemo(() => {
+    const base = EK_SCENARIOS.find((entry) => entry.id === selected.id) ?? EK_SCENARIOS[1];
+    return wealthAtHorizon({ base, inputs: activeInputs, rates });
   }, [selected.id, activeInputs, rates]);
 
   function updateInput(key: NumericInputKey, value: number) {
@@ -205,7 +230,7 @@ export default function App() {
         label: `Wohnung ${String.fromCharCode(65 + current.length)}`,
         purchasePrice: DEFAULT_APARTMENT_CASES[0].purchasePrice,
         renovation: 0,
-        monthlyOwnershipCosts: DEFAULT_APARTMENT_CASES[0].monthlyOwnershipCosts,
+        hausgeld: DEFAULT_APARTMENT_CASES[0].hausgeld,
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);
@@ -342,12 +367,19 @@ export default function App() {
             />
             <ApartmentFacts
               apartment={activeApartment}
+              ownerExtraMonthly={inputs.ownerExtraMonthly}
               onChange={(patch) => updateApartmentCase(activeApartmentId, patch)}
             />
-            <ExecutiveSummary decision={decision} inputs={activeInputs} selected={selected} />
+            <ExecutiveSummary
+              scenarios={scenarios}
+              decision={decision}
+              inputs={activeInputs}
+              selected={selected}
+            />
             <TradeoffStatement
               tradeoff={headlineTradeoff}
               etfReturnRate={inputs.etfReturnRate}
+              etfTaxRate={inputs.etfTaxRate}
               onEtfReturnChange={(value) => updateInput("etfReturnRate", value)}
             />
             <CompromiseFinder
@@ -405,7 +437,8 @@ export default function App() {
               subtitle="Was kaufen wir uns durch mehr Eigenkapital, und welchen Puffer geben wir dafür auf?"
               right={<span className="muted">Kaufnebenkosten: {formatEur(selected.closingCosts)}</span>}
             >
-              <TradeoffMatrix scenarios={scenarios} />
+              <TradeoffMatrix scenarios={scenarios} inputs={activeInputs} />
+              <EkStepChart scenarios={scenarios} inputs={activeInputs} />
             </Section>
           </section>
 
@@ -415,6 +448,7 @@ export default function App() {
               scenarios={scenarios}
               selected={selected}
               selectedWithoutSpecial={selectedWithoutSpecial}
+              selectedWealth={selectedWealth}
               inputs={activeInputs}
             />
           </section>
@@ -425,6 +459,7 @@ export default function App() {
               inputs={activeInputs}
               selected={selected}
               comparison={specialComparison}
+              planEffect={planEffect}
               onSpecialRepaymentChange={(yearIndex, value) =>
                 updateApartmentSpecialRepayment(activeApartmentId, yearIndex, value)
               }
@@ -457,7 +492,7 @@ export default function App() {
                     label="Netto-Sparrate"
                     value={inputs.waitSavingsMonthly}
                     onChange={(value) => updateInput("waitSavingsMonthly", value)}
-                    hint="Nach Miete — Miete wird separat gezeigt, nicht nochmal abgezogen"
+                    hint="Was nach Miete und Ausgaben übrig bleibt; Miete wird nicht nochmal abgezogen"
                   />
                   <InputField
                     label="Kaufpreiswachstum"
@@ -475,12 +510,16 @@ export default function App() {
                   />
                 </div>
               </Section>
-              <WaitPanel scenarios={waitScenarios} />
+              <WaitPanel
+                scenarios={waitScenarios}
+                tippingPoints={tippingPoints}
+                waitMonths={Math.max(0, Math.round(activeInputs.waitMonths))}
+              />
             </details>
           </section>
         </main>
 
-        <RightPanel selected={selected} inputs={activeInputs} decision={decision} />
+        <RightPanel selected={selected} inputs={activeInputs} decision={decision} stress={stress} />
       </div>
     </div>
   );

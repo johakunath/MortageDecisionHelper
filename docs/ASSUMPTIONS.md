@@ -15,7 +15,7 @@ The most important distinction in the model. Two interest figures are produced a
 | Interest during the fixed-rate period | `mortgage.interestFixed` | **Reliable.** The rate is contractually fixed for this span |
 | Interest over the full term | `mortgage.interestTotal` | **Illustrative only.** Assumes today's rate holds for the entire repayment period — 20+ years. Nobody knows the refinancing rate |
 
-Anything derived from `interestTotal` inherits the caveat: `runtimeYears`, `netWorthAtPayoff`, `propertyValueAtPayoff`.
+Anything derived from `interestTotal` inherits the caveat, above all `runtimeYears`. Wealth is never compared at each scenario's own payoff date any more: `wealthAtHorizon` values every path on one date, the end of the binding (§2, [D30](DECISIONS.md)).
 
 **Rule for the UI:** never present a full-term figure with the same visual weight as a fixed-period one, and never compare a fixed-period figure against a full-term one in the same subtraction.
 
@@ -74,40 +74,83 @@ rentDelta    = allInMonthly − currentWarmRent     cash-flow only; NOT rent-vs-
 burdenRatio  = allInMonthly ÷ householdNetIncome
 ```
 
-### Property and net worth
+### Wealth on a common date (`wealthAtHorizon`)
+Every like-for-like comparison runs through one monthly ledger ([D30](DECISIONS.md)):
 ```
-propertyValueAtPayoff   = purchasePrice × (1 + propertyGrowthRate%)^runtimeYears
-realPropertyReturnRate  = propertyGrowthRate − inflationRate
-netWorthAtPayoff        = propertyValueAtPayoff − cashNeeded − interestTotal
+H        = horizon in months; default fixedRateYears × 12 (every rate in play is known)
+budget   = waitSavingsMonthly + currentWarmRent       per month, for housing plus saving
+r_m      = (1 + etfReturnRate%)^(1/12) − 1
+
+liquid₀  = availableCapital
+renting months:  liquid = liquid × (1 + r_m) + budget − currentWarmRent
+purchase month:  liquid −= cashNeeded (at the price after waiting)
+owning months:   liquid = liquid × (1 + r_m) + budget − monthlyOwnershipCosts
+                          − (interest + principal paid) − Sondertilgung paid
+liquidTax = (liquid_H − net contributions) × etfTaxRate%   linear, may be negative
+propertyValue = purchasePrice × (1 + propertyGrowthRate%)^(H/12)   same for every path
+wealth   = propertyValue − debt_H + liquid_H − liquidTax
+```
+The amortisation is `simulateMortgage` itself, observed through its read-only `onMonth` hook, so the offer-pinned schedule is reused.
+
+`budget` is D4 read the other way round: the net savings rate is what is left *after* rent, so rent plus savings is what the household has for housing at all. This only works if `currentWarmRent` and `monthlyOwnershipCosts` sit on the same basis (both including heating and Nebenkosten, both without electricity); the glossary says so ([D30](DECISIONS.md)).
+
+Properties pinned by tests: the wealth gap between two EK levels equals the after-tax `netAdvantageFixed` to the cent; Sondertilgung is neutral when the ETF earns exactly the loan's effective rate untaxed; the ledger's debt equals the simulated Restschuld.
+
+### Sondertilgung plan effect (`specialPlanEffect`)
+```
+paid           = Sondertilgung paid inside the binding (after the cap)
+debtReduction  = debt_H(no plan) − debt_H(plan)            reliable
+interestSaved  = debtReduction − paid
+wealthDelta    = wealth_H(plan) − wealth_H(no plan)         same money in the ETF, after tax
 ```
 
-> ⚠️ `netWorthAtPayoff` is evaluated at **each scenario's own payoff year**, and those years differ. Subtracting it between two scenarios therefore silently rewards whichever runs longest. Do not build cross-scenario comparisons on this field without first pinning a common horizon.
+### Refinancing stress (`refinanceStress`)
+```
+stressRate     = interestRate + refiStressShift
+coversInterest = monthlyPayment > Restschuld × stressRate ÷ 1200
+follow-up      = simulate(Restschuld, stressRate, same monthlyPayment, remaining plan years)
+extraYears     = runtime(stressRate) − runtime(interestRate)     both computed the same way
+```
+A stress test, not a forecast. It turns the Restschuld into one comparable number per EK level ([D31](DECISIONS.md)).
 
 ### Waiting
 ```
-years        = waitMonths ÷ 12
-futurePrice  = purchasePrice × (1 + waitPropertyGrowthRate%)^years
-saved        = waitSavingsMonthly × waitMonths
-rentPaid     = currentWarmRent × waitMonths        never subtracted from capital
-adjustedCapital = availableCapital + saved
-adjustedRate    = max(0.1, baseRate + waitRateShift)
+futurePrice  = purchasePrice × (1 + waitPropertyGrowthRate%)^(waitMonths ÷ 12)
+adjustedRate = max(0.1, baseRate + waitRateShift)            the binding in use only
+rentPaid     = currentWarmRent × waitMonths                  paid from the budget, never from capital
 
-deltaInterest  = interestTotal(wait) − interestTotal(now)
-deltaTotalCost = deltaInterest + rentPaid          what waiting costs, in full
+wait column  = wealthAtHorizon(waitMonths = W, horizon = H)
+buy now      = wealthAtHorizon(waitMonths = 0, horizon = H)
+deltaWealth  = wait − buy now                                 H shared by every column
 ```
-`waitSavingsMonthly` is **net of rent** by definition — see [DECISIONS.md D4](DECISIONS.md#d4--waitsavingsmonthly-is-net-of-rent). Subtracting `rentPaid` from *capital* as well would double-count it.
+`waitSavingsMonthly` is **net of rent** by definition ([D4](DECISIONS.md#d4--waitsavingsmonthly-is-net-of-rent)), which is why the ledger's budget is savings plus rent and rent is never taken from capital a second time.
 
-**Rent is a cost, but not a capital deduction.** Those are two different questions and rent belongs to exactly one of them, which is why it appears in `deltaTotalCost` and not in `adjustedCapital`. Adding it to an interest delta is a comparison of like with like: over the same months, the buy-now column pays interest, and that interest already sits inside its `interestTotal`. Rent is the waiting side's counterpart. Principal is excluded from both — it becomes equity, not cost.
-
-What the sum still does **not** capture: the two paths reach debt-free at different calendar dates, and waiting buys a more expensive property with a larger loan. Both are visible in the same table (`futurePrice`, `futureLoan`, `runtimeYears`), neither is folded into the delta. See [DECISIONS.md D27](DECISIONS.md).
+**Tipping points** (`waitTippingPoints`): for the entered Wartezeit, each of `waitRateShift`, `waitPropertyGrowthRate` and `etfReturnRate` is moved on its own, outward from the assumed value in steps (0,25 Pkt. / 0,5% / 0,5%) and then bisected, until `deltaWealth` changes sign. The nearest such value is reported; null if none within ±5 Pkt. / ±20% / ±20%. This is spec §2.3's "what would need to happen for waiting to win". [D33](DECISIONS.md) replaced D27's "Δ gesamt" (full-term interest delta + rent) with this.
 
 ### ETF opportunity cost
 ```
-etfForegone = extraCapital × ((1 + etfReturnPct%)^years − 1)
+etfForegoneGross = extraCapital × ((1 + etfReturnPct%)^years − 1)
+etfForegone      = etfForegoneGross × (1 − etfTaxRate%)
+netAdvantage     = interestSavedFixed − etfForegone
 ```
 Must be paired with the mortgage interest saved **over the same horizon** (`fixedRateYears`), and the difference reported. A foregone-growth number shown alone tells the reader nothing.
 
+**After tax, because the other side is tax-free.** The interest an owner-occupier does not pay is not income; ETF gains are taxed on realisation. Default `etfTaxRate` 18,4625% = 25% Abgeltungsteuer + 5,5% Soli on it, on 70% of the gain (Teilfreistellung for equity ETFs). Kirchensteuer raises it, an unused Sparerpauschbetrag lowers it. `afterTaxAnnualReturn` converts the ETF assumption into the after-tax rate per year that is comparable with a mortgage rate (5% → ≈4,23% over ten years). See K18.
+
+At one Monatsrate, `remainingAfterFixed(less EK) − remainingAfterFixed(more EK) = extraCapital + interestSavedFixed` exactly (pinned in `invariants.test.ts`). That identity is why `netAdvantage` is a true terminal-wealth difference.
+
 ---
+
+### Return of one EK step (`ekStepReturn`)
+```
+extraCash        = cashNeeded(to) − cashNeeded(from)
+gap              = scenarioWealthAtHorizon(to) − scenarioWealthAtHorizon(from)    the ledger
+etfMultiple      = 1 + ((1 + etf%)^n − 1) × (1 − etfTaxRate%)                   n = fixedRateYears
+annualReturn     = ((gap + extraCash × etfMultiple) ÷ extraCash)^(1/n) − 1      tax-free
+breakEvenEtf     = the ETF return at which gap = 0 (nearest root, searched and bisected)
+ekAhead          = gap > 0
+```
+While both loans run through the binding, `gap + extraCash × etfMultiple = debtReduction = extraCash + interestSavedFixed` exactly, so the figures equal the closed form. Once a loan is repaid inside the binding, only the ledger also counts its freed payments, which keep earning; reading the Restschuld alone reported −100% when both reached zero (K23). `compareEkScenarios.netAdvantageFixed` comes from the same ledger, so the statement, the matrix column and the chart cannot disagree ([D32](DECISIONS.md)).
 
 ### Tilgung ↔ Laufzeit ↔ Monatsrate
 
@@ -141,7 +184,11 @@ all three at once and only `cash`/`reserve` discriminate. That is a consequence 
 D14, and it is the honest reading: the rate is the couple's decision, not a result of
 the EK choice.
 
-**Recommendation precedence:** prefer 10% EK when feasible → otherwise the feasible scenario with the lowest total interest → otherwise none, and say so.
+**No single recommendation.** The verdict lists every tragbar level and names the others with their status ([D28](DECISIONS.md)). The old precedence ("prefer 10% EK") dated from the 5/10/15 grid, where 10% was the middle; since D15 it named the lowest level.
+
+**"Gerade so tragbar"** = tragbar, but `cashLeft < 1,5 × reserveTarget`. A heuristic, amber, never a failed constraint.
+
+**"Läuft zu lange"** = tragbar, but `runtimeYears > maxRuntimeYears` (default 26: debt-free by the older partner's retirement). Amber, never a failed constraint, because the runtime assumes today's rate for the whole term ([D34](DECISIONS.md)). It takes precedence over "Gerade so".
 
 **Kaufnebenkosten are never financed.** The loan is always `Kaufpreis − Anzahlung`; closing costs, renovation and moving are paid from cash and appear in `cashNeeded`. Every scenario is therefore "X% EK **+ Nebenkosten**", and the UI labels it that way — "10% EK" alone is ambiguous about precisely the point German first-time buyers most often misjudge.
 
@@ -159,10 +206,10 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 
 1. **Constant interest rate for the full term.** No Anschlussfinanzierung model. See §1.
 2. **Sondertilgung once per year**, at the year boundary, capped against the *original* loan. Real contracts vary in timing, cap basis and carry-over rules.
-3. **No tax.** Not on ETF sales, not on the property, not on anything.
+3. **Tax only on ETF gains** (`etfTaxRate`), applied linearly at the horizon. No property tax effects, no §10f, no tax on ETFs sold to fund the purchase: `availableCapital` is entered after that tax.
 4. **Monthly ownership costs are flat** — no escalation, no inflation, no maintenance-reserve growth.
 5. **Property growth is a flat compound rate.** No cycles, no regional variation, no bear/base/bull triple (spec §16 allows one but it is not implemented).
-6. **`rentDelta` is a cash-flow comparison only.** It is not a rent-vs-buy analysis — no imputed rent, no equity build, no transaction costs on exit. Use the Gerd Kommer calculator for that.
+6. **`rentDelta` is a cash-flow comparison only.** Because `allInMonthly` includes Tilgung, a positive `rentDelta` is partly saving, not cost. It is not a rent-vs-buy analysis — no imputed rent, no equity build, no transaction costs on exit. Use the Gerd Kommer calculator for that.
 7. **Closing costs are a single percentage.** No split into Grunderwerbsteuer / Notar / Makler. The 11,57% default is the offer's own split (2% Notar/Grundbuch + 6% Grunderwerbsteuer + 3,57% Maklercourtage) collapsed into one number.
 8. **The six Sollzinsen are user assumptions**, entered by hand. Nothing is fetched.
 9. **The model uses the Sollzins, not the Effektivzins.** Nominal rate, compounded monthly: 3,87% nominal is 3,94% effective, while the offer states 3,97% under PAngV (which also carries fees and disbursement timing). The app therefore understates the true cost very slightly. It never displays an Effektivzins, so it never claims otherwise.
@@ -172,9 +219,14 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 
 ---
 
+13. **The ledger invests all free capital at the ETF assumption**, the safety reserve included. A reserve held in Tagesgeld earns less; the effect is identical across EK levels only while their free capital is similar.
+14. **ETF tax in the ledger is linear** in the net gain and charged once, at the horizon. It may turn negative where withdrawals exceed growth; that is the after-tax growth those withdrawals gave up. No Vorabpauschale, no Sparerpauschbetrag.
+15. **The household budget is constant** (`waitSavingsMonthly + currentWarmRent`) for the whole horizon: no pay rises, no inflation.
+16. **"Grundsteuer + eigene Rücklage" is one flat amount** (default 90 €/Monat) for every apartment, not derived from size, Bundesland or building age. Grundsteuer differs by municipality, the needed reserve by the flat's condition ([D35](DECISIONS.md)).
+
 ## 5. Defect log
 
-All resolved. Kept as history — each of these skewed a number the couple was arguing
+K1 to K23 are resolved. Kept as history: each of these skewed a number the couple was arguing
 over, and four of them happened to favour the same side.
 
 | # | Defect | Effect | Resolved by |
@@ -196,6 +248,13 @@ over, and four of them happened to favour the same side.
 | K15 | "Δ zu jetzt kaufen" carried the interest delta alone, with the rent paid while waiting two rows below and never added in | On the defaults, twelve months of waiting read **−16.978 € besser** on the row that looks like the bottom line, while 23.640 € of rent went uncounted. Including it, waiting is 6.662 € *more* expensive — the **sign** was wrong, not just the size. Favoured the "warten und weiter sparen" side | [D27](DECISIONS.md) |
 | K16 | `migrateV1` derives the replacement Monatsrate from the stale global `inputs.purchasePrice`, a hardcoded 90% loan and today's default Sollzins | A v1 save whose active flat was 600k at the old 5% EK level loaded at 3.390 €/Monat instead of 3.111 € — **+279 €/Monat** of silently added burden, moving every affordability and interest figure | Rebuilt from the active apartment, its EK level and the stored legacy rate |
 | K17 | The `payment` check reports its shortfall against the interest-only payment while failing on the 60-year horizon | A rate that clears the interest but needs 80 years produced a **positive** gap, which the UI printed as "es fehlen 6 €" — the loan does amortise, and the real shortfall was 137 € | `required` is the 60-year annuity, derived under the running Sondertilgung plan (`minimumPaymentForLifetime`) — a bar computed without the plan overstated 41 € as 99 € |
+| K18 | The ETF opportunity cost netted **pre-tax** ETF growth against tax-free interest saved | On all three default apartments the headline read "für mehr Liquidität"; after Abgeltungsteuer it reads "für mehr Eigenkapital" (offer flat: −3.280 € → +1.945 €). **Favoured the liquidity side** | `etfTaxRate`; [D29](DECISIONS.md) |
+| K19 | "Nettovermögen" and "Immobilienwert bei Abzahlung" were valued at each scenario's **own** payoff year | The same flat was worth 67.000 € more at 10% EK than at 20% because that loan runs five years longer; Nettovermögen showed 46.000 € more. **Favoured the liquidity side** | Fields removed; `wealthAtHorizon` on one date; [D30](DECISIONS.md) |
+| K20 | The trade-off matrix and the Sondertilgung headline led with **full-term** interest, the latter without any opportunity cost | 65.867 € "Zinsen gesamt" where the reliable figure is 25.021 €; "78.750 € gespart" for 60.000 € paid in, while §1 charged extra EK an ETF opportunity cost | Binding interest in the matrix; `specialPlanEffect`; [D30](DECISIONS.md) |
+| K21 | `evaluateDecision` preferred "10% EK", a rule from the 5/10/15 grid | Since D15 it named the **lowest** level in the verdict headline: one spouse's side, chosen by code | Recommendation removed; [D28](DECISIONS.md) |
+| K22 | The Warten bottom line added a full-term interest delta (the rate shift extrapolated over 25+ years) to rent, and left out the buy-now path's ownership costs and principal and the return on capital while waiting | Offer flat: "6.662 € teurer" for a year of waiting, where the ledger puts waiting 3.207 € ahead; Wohnung C: "79.374 € besser" where it is 15.866 € | `deltaWealth` from `wealthAtHorizon`; [D33](DECISIONS.md) |
+| K23 | The return per EK step and the EK trade-off read the Restschuld (or interest) alone; the refinancing stress capped later Sondertilgung against the Restschuld instead of the original loan | A 150k flat repaid within the binding showed "−100% · ETF vorn" where the ledger has 20% EK ahead; with 15.000 €/Jahr after the binding the same-rate baseline ran 15,25 years against the scenario's own 14,00. Found by the Codex review of PR #8 | Both comparisons valued by `scenarioWealthAtHorizon`; the stress run keeps the original € cap |
+
 
 ---
 

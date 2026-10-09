@@ -1,11 +1,11 @@
 import {
-  BETTER_WHEN,
   type MortgageInputs,
   type ScenarioResult,
   type SpecialComparison,
   type SpecialMatchRow,
+  type SpecialPlanEffect,
 } from "../lib/calculations";
-import { formatCompactEur, formatEur } from "../lib/format";
+import { formatCompactEur, formatEur, formatNumber, formatPct, formatSignedEur } from "../lib/format";
 import BarChart, { type BarGroup } from "./BarChart";
 import { Button, Readout, Section, SignedValue, useNumericDraft } from "./ui";
 
@@ -13,6 +13,8 @@ type SondertilgungPanelProps = {
   inputs: MortgageInputs;
   selected: ScenarioResult;
   comparison: SpecialComparison;
+  /** The plan inside the binding, against the same money kept in the ETF. */
+  planEffect: SpecialPlanEffect;
   onSpecialRepaymentChange: (yearIndex: number, value: number) => void;
   onLevelSpecialRepayments: (value: number) => void;
 };
@@ -131,6 +133,7 @@ export default function SondertilgungPanel({
   inputs,
   selected,
   comparison,
+  planEffect,
   onSpecialRepaymentChange,
   onLevelSpecialRepayments,
 }: SondertilgungPanelProps) {
@@ -153,6 +156,7 @@ export default function SondertilgungPanel({
   }
 
   const otherRows = comparison.rows.filter((row) => !row.isSelected);
+  const years = formatNumber(planEffect.horizonMonths / 12, 0);
   const groups: BarGroup[] = comparison.rows.map((row) => ({
     id: row.base.id,
     label: row.base.label,
@@ -173,29 +177,34 @@ export default function SondertilgungPanel({
           <div className="eyebrow">Deine Wahl</div>
           <h3>{selected.label} + Nebenkosten</h3>
         </div>
+        {/*
+          Inside the binding, against the same money kept in the ETF, after tax: the basis
+          section 1 uses for extra Eigenkapital. These used to be full-term interest totals
+          with no opportunity cost ("78.750 € gespart" for 60.000 € paid in), so the two
+          sections answered the same question in two frames (K20). The full-term picture
+          stays in the chart below, labelled illustrative.
+        */}
         <div className="readout-grid three">
           <Readout
-            label="Zinsen ohne Sondertilgung"
-            value={formatEur(comparison.selectionInterestNoSpecial)}
-            sub="gesamte Laufzeit · illustrativ"
+            label="Eingezahlt"
+            value={formatEur(planEffect.paid)}
+            sub={`in ${years} Jahren · Ø ${formatEur(configured)}/Jahr laut Plan`}
           />
           <Readout
-            label="Zinsen mit eurem Plan"
-            value={formatEur(comparison.selectionInterestWithPlan)}
-            sub={`Ø ${formatEur(configured)}/Jahr`}
+            label="Weniger Schuld"
+            value={formatEur(planEffect.debtReduction)}
+            sub={`nach ${years} J. · davon ${formatEur(planEffect.interestSaved)} Zinsen gespart`}
             tone="amber"
           />
+          {/*
+            The sign carries the number, the words carry the verdict: hard rule 4, never
+            colour alone. A SignedValue with its verdict word did not fit the column.
+          */}
           <Readout
-            label="Das bringt der Plan"
-            value={
-              <SignedValue
-                value={comparison.planSaving}
-                betterWhen={BETTER_WHEN.interestTotal}
-                verdictLabels={{ better: "gespart", worse: "teurer" }}
-              />
-            }
-            sub="über die gesamte Laufzeit"
-            tone={comparison.planSaving < 0 ? "green" : "slate"}
+            label="Gegenüber ETF"
+            value={formatSignedEur(planEffect.wealthDelta)}
+            sub={`${planEffect.wealthDelta >= 0 ? "Plan liegt vorn" : "ETF liegt vorn"} · gleiches Geld zu ${formatPct(inputs.etfReturnRate)}, nach Steuer`}
+            tone={planEffect.wealthDelta >= 0 ? "green" : "slate"}
           />
         </div>
       </div>

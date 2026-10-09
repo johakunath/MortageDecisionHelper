@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import type { MortgageInputs, ScenarioResult } from "../lib/calculations";
+import type { MortgageInputs, ScenarioResult, WealthAtHorizon } from "../lib/calculations";
 import { GLOSSARY } from "../lib/glossary";
-import { formatCompactEur, formatEur, formatPct, formatYears } from "../lib/format";
+import { formatCompactEur, formatEur, formatNumber, formatPct, formatYears } from "../lib/format";
 import LineChart, { type ChartSeries } from "./LineChart";
 import { Button, Readout, Section } from "./ui";
 
@@ -10,6 +10,8 @@ type ProgressSectionProps = {
   selected: ScenarioResult;
   /** The same scenario simulated with no Sondertilgung, for the comparison line. */
   selectedWithoutSpecial: ScenarioResult;
+  /** The selected scenario valued at the end of the binding (`wealthAtHorizon`). */
+  selectedWealth: WealthAtHorizon;
   inputs: MortgageInputs;
 };
 
@@ -39,6 +41,7 @@ export default function ProgressSection({
   scenarios,
   selected,
   selectedWithoutSpecial,
+  selectedWealth,
   inputs,
 }: ProgressSectionProps) {
   const [view, setView] = useState<ViewId>("balance");
@@ -121,24 +124,29 @@ export default function ProgressSection({
           sub={`bis zur vollständigen Abzahlung · ${selected.label}`}
           info={GLOSSARY.runtimeYears}
         />
+        {/*
+          These two replaced "Immobilienwert bei Abzahlung" and "Nettovermögen", which were
+          valued at each scenario's own payoff year: the same flat was worth 67.000 € more
+          at 10% EK than at 20% only because that loan runs five years longer (K19). Both
+          figures now sit on one date, the end of the binding, for every EK level.
+        */}
         <Readout
-          label="Immobilienwert bei Abzahlung"
-          value={formatEur(selected.propertyValueAtPayoff)}
-          sub={`${formatPct(inputs.propertyGrowthRate)} p.a. angenommen · real ${formatPct(selected.realPropertyReturnRate)}`}
-          tone="orange"
-          info={GLOSSARY.propertyValueAtPayoff}
+          label="Vermögen"
+          value={formatEur(selectedWealth.wealth)}
+          sub={`nach ${formatNumber(selectedWealth.horizonMonths / 12, 0)} J.: Wohnung − Restschuld + freies Kapital nach Steuer · gleicher Stichtag für alle Stufen`}
+          info={GLOSSARY.wealthAtHorizon}
         />
         <Readout
-          label="Nettovermögen"
-          value={formatEur(selected.netWorthAtPayoff)}
-          sub="Immobilienwert − Cash beim Kauf − Zinsen · illustrativ"
-          tone={selected.netWorthAtPayoff >= 0 ? "green" : "red"}
-          info={GLOSSARY.netWorthAtPayoff}
+          label="Frei verfügbar"
+          value={formatEur(selectedWealth.liquid - selectedWealth.liquidTax)}
+          sub={`davon nicht in der Wohnung · angelegt zu ${formatPct(inputs.etfReturnRate)} p.a., inkl. Netto-Sparrate`}
+          info={GLOSSARY.liquidAtHorizon}
         />
       </div>
       <p className="progress-caveat">
-        Alle drei Werte hängen an der vollen Laufzeit und setzen einen konstanten Zins
-        voraus — belastbar ist nur die Zinsbindung.
+        Die Laufzeit setzt einen konstanten Zins bis zum Ende voraus. Die beiden
+        Vermögenswerte gelten für das Ende der Zinsbindung, nehmen aber eure Wertsteigerung
+        und ETF-Rendite an.
       </p>
     </Section>
   );

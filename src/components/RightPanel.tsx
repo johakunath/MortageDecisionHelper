@@ -1,13 +1,33 @@
-import type { DecisionResult, MortgageInputs, ScenarioResult } from "../lib/calculations";
+import type {
+  DecisionResult,
+  MortgageInputs,
+  RefinanceStress,
+  ScenarioResult,
+} from "../lib/calculations";
 import { GLOSSARY } from "../lib/glossary";
-import { formatEur, formatPct } from "../lib/format";
+import { formatEur, formatNumber, formatPct } from "../lib/format";
 import { Readout, StatusPill } from "./ui";
 
 type RightPanelProps = {
   selected: ScenarioResult;
   inputs: MortgageInputs;
   decision: DecisionResult;
+  stress: RefinanceStress;
 };
+
+/**
+ * What the Restschuld means, in one line under it: the same Monatsrate at a stressed
+ * Anschlusszins. Kept inside the existing readout so the panel stays at five figures
+ * and never scrolls (D19).
+ */
+function describeStress(stress: RefinanceStress, inputs: MortgageInputs): string {
+  // One line at 1280 px, even in the red state: a second line pushed the panel's own
+  // warning box over it (D19).
+  if (!stress.applies) return `in den ${inputs.fixedRateYears} Jahren abbezahlt`;
+  const shift = `bei +${formatNumber(inputs.refiStressShift)} Pkt. Zins`;
+  if (!stress.coversInterest) return `${shift}: Rate reicht nicht`;
+  return `${shift}: ${formatNumber(stress.extraYears)} J. länger`;
+}
 
 /**
  * Five numbers, sized to fit the viewport without an internal scrollbar — "always
@@ -18,7 +38,7 @@ type RightPanelProps = {
  * it fired on apartment switches too, and it cost every readout its explanation to
  * report a delta nobody had asked for.
  */
-export default function RightPanel({ selected, inputs, decision }: RightPanelProps) {
+export default function RightPanel({ selected, inputs, decision, stress }: RightPanelProps) {
   return (
     <aside className="right-panel">
       <div className="result-panel" aria-live="polite">
@@ -60,7 +80,8 @@ export default function RightPanel({ selected, inputs, decision }: RightPanelPro
           <Readout
             label="Restschuld danach"
             value={formatEur(selected.mortgage.remainingAfterFixed)}
-            sub={`nach ${inputs.fixedRateYears} Jahren Zinsbindung`}
+            sub={describeStress(stress, inputs)}
+            tone={stress.coversInterest ? "default" : "red"}
             info={GLOSSARY.remainingAfterFixed}
           />
         </div>

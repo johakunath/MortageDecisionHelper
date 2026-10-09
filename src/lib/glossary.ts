@@ -12,15 +12,17 @@ export const GLOSSARY = {
   closingCostRate:
     "Grunderwerbsteuer, Notar, Grundbuch und ggf. Maklerprovision — als Prozentsatz vom Kaufpreis. Diese Kosten musst du immer aus Eigenkapital bezahlen; keine Bank finanziert sie mit.",
   availableCapital:
-    "Alles, was ihr für den Kauf einsetzen könntet: Konto, Tagesgeld, Festgeld und ETFs, die ihr verkaufen würdet. Die genaue Aufteilung pflegt ihr im EK-Tracker.",
+    "Alles, was ihr für den Kauf einsetzen könntet: Konto, Tagesgeld, Festgeld und ETFs, die ihr verkaufen würdet. ETFs mit dem Betrag nach Steuer eintragen: beim Verkauf geht auf die Kursgewinne Abgeltungsteuer ab. Die genaue Aufteilung pflegt ihr im EK-Tracker.",
   reserveTarget:
     "Was nach dem Kauf übrig bleiben soll — für Notfälle, Reparaturen, Autowechsel. Eure persönliche Grenze, keine Bankvorgabe.",
   renovation: "Was direkt nach dem Kauf gemacht werden muss, bevor ihr einzieht.",
   moving: "Umzug, Küche, Möbel — einmalige Kosten rund um den Einzug.",
   currentWarmRent:
-    "Was ihr heute inklusive Nebenkosten für die Miete zahlt. Dient nur dem monatlichen Cashflow-Vergleich, nicht einer vollen Mieten-oder-Kaufen-Rechnung.",
-  monthlyOwnershipCosts:
-    "Grobe Schätzung: nicht umlagefähiges Hausgeld, Instandhaltungsrücklage, Grundsteuer, Versicherung. Bewusst grob gehalten.",
+    "Was ihr heute für die Miete zahlt, inklusive Nebenkosten und Heizung, ohne Strom. Gleiche Basis wie Hausgeld plus Grundsteuer und eigene Rücklage, damit Miete und Eigentum vergleichbar sind.",
+  hausgeld:
+    "Was ihr monatlich an die Eigentümergemeinschaft zahlt, so wie es im Exposé oder im Wirtschaftsplan steht. Darin stecken Verwaltung, Gebäudeversicherung, Hausreinigung, Wasser, Müll, die Rücklage der Gemeinschaft und bei einer Zentralheizung auch die Heizung. Nicht darin: die Grundsteuer und Reparaturen in eurer eigenen Wohnung, die kommen über „Grundsteuer + eigene Rücklage“ dazu. Habt ihr eine eigene Gasetagenheizung, rechnet die Heizkosten hier mit ein.",
+  ownerExtraMonthly:
+    "Was ein Eigentümer zusätzlich zum Hausgeld trägt: die Grundsteuer, die ihr direkt an die Gemeinde zahlt (für eine Wohnung grob 300 bis 500 € im Jahr), und eine eigene Rücklage für Bad, Böden, Fenster und Geräte in eurer Wohnung, die die Rücklage der Gemeinschaft nicht abdeckt. Die 90 € sind eine Schätzung: etwa 35 € Grundsteuer und 55 € Rücklage.",
 
   // --- Finanzierung ---
   householdNetIncome: "Was monatlich nach Steuern und Sozialabgaben bei euch beiden zusammen ankommt.",
@@ -40,6 +42,12 @@ export const GLOSSARY = {
   // --- Erweitert ---
   etfReturnRate:
     "Womit ihr rechnet, wenn das Geld statt in die Immobilie im ETF bliebe. Reine Annahme — sie entscheidet mit darüber, ob mehr Eigenkapital sich lohnt.",
+  etfTaxRate:
+    "Was vom ETF-Gewinn beim Verkauf an Steuer abgeht. 18,46% gilt für Aktien-ETFs: 25% Abgeltungsteuer plus Soli, aber nur auf 70% des Gewinns (Teilfreistellung). Mit Kirchensteuer etwas mehr, mit ungenutztem Sparerpauschbetrag weniger. Die Zinsen, die ihr durch mehr Eigenkapital spart, sind steuerfrei. Deshalb gehört die Steuer in den Vergleich.",
+  refiStressShift:
+    "Um wie viele Prozentpunkte der Zins nach der Zinsbindung höher liegen könnte als heute. Kein Forecast, sondern ein Stresstest: Wie viel länger würde dieselbe Monatsrate dann brauchen, bis ihr schuldenfrei seid? Weniger Restschuld heißt weniger Risiko an dieser Stelle.",
+  maxRuntimeYears:
+    "Spätestens nach so vielen Jahren soll das Darlehen abbezahlt sein, zum Beispiel bis zum Renteneintritt des Älteren von euch. Varianten, die länger laufen, bleiben tragbar, werden aber gelb markiert: die Laufzeit hängt am heutigen Zins und ist deshalb eine Schätzung.",
   maxBurdenRate:
     "Wie viel eures Haushaltsnettos maximal in die Wohnung fließen darf. 40% ist eine verbreitete Faustregel, keine Bankregel — ihr könnt sie anpassen.",
   propertyGrowthRate: "Angenommene jährliche Wertsteigerung der Immobilie. Bewusst konservativ setzen.",
@@ -64,17 +72,17 @@ export const GLOSSARY = {
   interestTotal:
     "Zinsen über die gesamte Laufzeit, unter der Annahme, dass der heutige Zins für immer gilt. Das ist eine Illustration, keine Prognose: den Zins der Anschlussfinanzierung kennt heute niemand.",
   remainingAfterFixed:
-    "Was am Ende der Zinsbindung noch offen ist und neu finanziert werden muss. Die wichtigste Zahl für das Zinsänderungsrisiko.",
-  propertyValueAtPayoff:
-    "Was die Wohnung bei vollständiger Abzahlung wert wäre, wenn die angenommene Wertsteigerung eintritt. Illustrativ.",
-  netWorthAtPayoff:
-    "Immobilienwert minus eingesetztem Cash minus allen gezahlten Zinsen. Grobe Orientierung, keine Vermögensrechnung.",
+    "Was am Ende der Zinsbindung noch offen ist und neu finanziert werden muss. Die wichtigste Zahl für das Zinsänderungsrisiko. Darunter steht, wie viel länger dieselbe Monatsrate bräuchte, wenn der Anschlusszins um den Stresswert (unter Markt einstellbar) höher liegt als heute, oder ob sie dann nicht einmal mehr die Zinsen deckt.",
+  wealthAtHorizon:
+    "Was euch am Ende der Zinsbindung gehört: der Wert der Wohnung minus Restschuld, plus euer freies Kapital nach Steuer. Für jede EK-Stufe am selben Stichtag gerechnet und deshalb direkt vergleichbar. Enthält, was ihr monatlich übrig habt (Netto-Sparrate plus Miete, minus Rate und Eigentumskosten), angelegt zur ETF-Annahme.",
+  liquidAtHorizon:
+    "Der Teil davon, an den ihr ohne Verkauf der Wohnung kommt: was nach dem Kauf übrig bleibt, plus das laufende Sparen, minus Sondertilgungen, angelegt zur ETF-Annahme und nach Steuer.",
   specialRepayment:
     "Zusätzliche Zahlung ans Darlehen, meist einmal im Jahr möglich. Sie geht komplett in die Tilgung und verkürzt die Laufzeit spürbar.",
 
   // --- Regeln ---
   cleanScenario:
-    "Ein Weg gilt als tragbar, wenn beides gleichzeitig stimmt: nach dem Kauf bleibt mindestens eure Reserve übrig, und die Monatsbelastung bleibt unter eurer selbstgesetzten Grenze.",
+    "Ein Weg gilt als tragbar, wenn drei Dinge gleichzeitig stimmen: die Monatsrate zahlt das Darlehen in einem Leben ab, nach dem Kauf bleibt mindestens eure Reserve übrig, und die Monatsbelastung bleibt unter eurer selbstgesetzten Grenze. „Gerade so tragbar“ heißt: tragbar, aber es bleibt weniger als das Anderthalbfache eurer Reserve übrig.",
   waitSavings:
     "Was monatlich wirklich zusätzlich aufs Konto wandert — nach Miete und normalen Ausgaben. Die Miete wird separat ausgewiesen und nicht noch einmal abgezogen.",
 } as const;

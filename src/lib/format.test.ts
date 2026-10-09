@@ -4,6 +4,7 @@ import {
   formatNumber,
   formatSignedEur,
   formatSignedPct,
+  formatSignedPoints,
   formatSignedYears,
   formatYears,
 } from "./format";
@@ -74,5 +75,11 @@ describe("year and compact formatting", () => {
     expect(formatCompactEur(6000)).toBe("6k");
     expect(formatCompactEur(6000, true)).toBe("6k €");
     expect(formatCompactEur(820, true)).toBe(formatSignedEur(820).replace("+", ""));
+  });
+
+  it("formats signed percentage points with a typographic minus", () => {
+    expect(formatSignedPoints(-0.214)).toBe("−0,2 Pkt.");
+    expect(formatSignedPoints(1.5)).toBe("+1,5 Pkt.");
+    expect(formatSignedPoints(0.01)).toBe("0 Pkt.");
   });
 });

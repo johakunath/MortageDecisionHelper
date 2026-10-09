@@ -21,7 +21,7 @@ export type MetricKey =
   | "interestFixed"
   | "allInMonthly"
   | "remainingAfterFixed"
-  | "netWorthAtPayoff";
+  | "wealth";
 
 export const BETTER_WHEN: Record<MetricKey, "higher" | "lower"> = {
   cashLeft: "higher",
@@ -29,7 +29,7 @@ export const BETTER_WHEN: Record<MetricKey, "higher" | "lower"> = {
   interestFixed: "lower",
   allInMonthly: "lower",
   remainingAfterFixed: "lower",
-  netWorthAtPayoff: "higher",
+  wealth: "higher",
 };
 
 export type MortgageInputs = {
@@ -39,7 +39,19 @@ export type MortgageInputs = {
   reserveTarget: number;
   renovation: number;
   moving: number;
+  /**
+   * Everything owning costs per month except the loan, on the same basis as the warm
+   * rent (heating and Nebenkosten in, electricity out). For an apartment it is built by
+   * `buildApartmentInputs` as `hausgeld + ownerExtraMonthly`; the QA presets set it
+   * directly. See docs/DECISIONS.md D35.
+   */
   monthlyOwnershipCosts: number;
+  /**
+   * What an owner pays on top of the Hausgeld: Grundsteuer (billed by the municipality,
+   * never part of the Hausgeld) and an own reserve for the inside of the flat, which the
+   * WEG's Erhaltungsrücklage does not cover. A flat estimate, not a per-flat figure.
+   */
+  ownerExtraMonthly: number;
   currentWarmRent: number;
   householdNetIncome: number;
   /** Max share of household net income the all-in monthly cost may take, in percent. Heuristic, not a bank rule. */
@@ -63,6 +75,32 @@ export type MortgageInputs = {
   waitPropertyGrowthRate: number;
   waitRateShift: number;
   etfReturnRate: number;
+  /**
+   * Tax on ETF gains when they are realised, in percent of the gain. The default
+   * 18,4625% is Abgeltungsteuer 25% plus Soli 5,5% on it, applied to 70% of the gain
+   * (Teilfreistellung for equity ETFs): 26,375% × 0,7. Kirchensteuer raises it, an
+   * unused Sparerpauschbetrag lowers it.
+   *
+   * It belongs in every ETF comparison because the other side of it is tax-free: the
+   * interest an owner-occupier does not pay is not income. Comparing pre-tax ETF growth
+   * against tax-free interest saved flipped the headline verdict on all three default
+   * apartments. See docs/ASSUMPTIONS.md K18.
+   */
+  etfTaxRate: number;
+  /**
+   * How much higher the Anschlusszins might be than today's Sollzins, in percentage
+   * points. A stress test, not a forecast: nobody knows the rate in ten years, but the
+   * Restschuld that has to be refinanced at it is known, and so is what a shock does to
+   * it. See docs/DECISIONS.md D31.
+   */
+  refiStressShift: number;
+  /**
+   * Debt-free after at most this many years, e.g. by the older partner's retirement.
+   * A scenario that runs longer stays tragbar but is flagged: the runtime rests on
+   * today's rate holding for the whole term (ASSUMPTIONS §1), so it is a warning, not a
+   * failed constraint. See docs/DECISIONS.md D34.
+   */
+  maxRuntimeYears: number;
 };
 
 /**
@@ -116,6 +154,22 @@ export type MortgageSimulationParams = {
   fixedRateYears: number;
   specialPlan: SpecialPlan;
   specialRepaymentLimitRate: number;
+  /**
+   * Called once per simulated month with what was paid. Read-only: it observes the
+   * schedule and cannot change it, so the offer-pinned amortisation stays exactly as
+   * it is. Used by `wealthAtHorizon` to follow the cash month by month.
+   */
+  onMonth?: (entry: MortgageMonth) => void;
+};
+
+export type MortgageMonth = {
+  /** 1 = the first month after disbursement. */
+  month: number;
+  interest: number;
+  principal: number;
+  /** Sondertilgung applied at the end of this month (only at loan-year ends). */
+  special: number;
+  balance: number;
 };
 
 export type YearlyMortgagePoint = {
@@ -182,9 +236,6 @@ export type ScenarioResult = ScenarioBase & {
   allInMonthly: number;
   burdenRatio: number;
   rentDelta: number;
-  propertyValueAtPayoff: number;
-  realPropertyReturnRate: number;
-  netWorthAtPayoff: number;
   mortgage: MortgageSimulation;
   /**
    * True when the entered Monatsrate cannot amortise the loan and the model simulated
@@ -193,6 +244,8 @@ export type ScenarioResult = ScenarioBase & {
    * UI has to say so. See docs/ASSUMPTIONS.md K14.
    */
   paymentSubstituted: boolean;
+  /** Runs past `maxRuntimeYears`. A warning shown in the status, never a failed check. */
+  runsPastLimit: boolean;
   feasible: boolean;
   diagnosis: ScenarioDiagnosis;
   status: string;
@@ -211,27 +264,29 @@ export type WaitScenario = {
   waitMonths: number;
   futurePrice: number;
   /**
-   * Rent paid over the waiting period. DISPLAY ONLY — deliberately not subtracted from
-   * `adjustedAvailableCapital`, because `waitSavingsMonthly` is already net of rent.
-   * See docs/DECISIONS.md D4.
+   * Rent paid over the waiting period. Never subtracted from `adjustedAvailableCapital`,
+   * because `waitSavingsMonthly` is already net of rent (D4). In the ledger it is paid
+   * out of the household budget, which is where it belongs.
    */
   rentPaid: number;
   saved: number;
   adjustedAvailableCapital: number;
   adjustedInterestRate: number;
   futureLoan: number;
+  /** Free capital right after the purchase, from the ledger: savings and their return included. */
   cashLeftAfterPurchase: number;
-  deltaInterest: number;
+  /** This path on the common date. */
+  wealth: WealthAtHorizon;
   /**
-   * The full extra cost of waiting: `deltaInterest + rentPaid`.
+   * Wealth minus buying now, both on the same date. Positive = waiting comes out ahead.
    *
-   * Interest alone understates it. While the waiting column pays rent for a home it
-   * does not own, the buy-now column is already paying interest over exactly those
-   * months — and that interest sits inside its `interestTotal`. So rent is the
-   * waiting side's counterpart to it, and adding the two is a comparison of like
-   * with like rather than a double count. See docs/ASSUMPTIONS.md §2 (Waiting).
+   * Replaces D27's "Δ gesamt" (full-term interest delta + rent). That sum left out the
+   * buy-now path's ownership costs and principal, the return on capital while waiting
+   * and the extra cash the later purchase leaves, and it extrapolated the assumed rate
+   * shift over 25+ years: on the offer flat it read "6.662 € teurer" where the ledger
+   * puts waiting 3.207 € ahead. See docs/DECISIONS.md D33.
    */
-  deltaTotalCost: number;
+  deltaWealth: number;
   years: number;
 };
 
@@ -245,11 +300,16 @@ export type DecisionDiagnosis = {
 /**
  * Winners are drawn ONLY from feasible scenarios and are `null` when nothing is clean.
  * PRODUCT_SPEC §5.3: never present the least-bad option as though it were safe.
+ *
+ * There is deliberately no single `recommendation`. It used to prefer "10% EK", a rule
+ * written when 10% was the middle of 5/10/15. Since D15 it is the lowest level, so the
+ * rule named the maximum-liquidity option in the verdict headline, which is one side of
+ * the couple's disagreement chosen by code. The verdict now lists `feasibleScenarios`
+ * and leaves the choice to the two people reading it. See docs/DECISIONS.md D28.
  */
 export type DecisionResult = {
   feasibleScenarios: ScenarioResult[];
   noSafeScenario: boolean;
-  recommendation: ScenarioResult | null;
   costMinimum: ScenarioResult | null;
   liquidityMaximum: ScenarioResult | null;
   monthlyMinimum: ScenarioResult | null;
@@ -278,8 +338,19 @@ export type EkTradeoff = {
   horizonYears: number;
   /** Reliable: both sides are inside the fixed-rate period. */
   interestSavedFixed: number;
+  /** Growth the extra capital would have earned in the ETF over the horizon, before tax. */
+  etfForegoneGross: number;
+  /**
+   * The same growth after tax on realising it at the horizon: what would actually be
+   * there to compare. The interest saved needs no such adjustment: it is tax-free.
+   */
   etfForegone: number;
-  /** interestSavedFixed − etfForegone. Positive favours more Eigenkapital. */
+  /**
+   * Wealth with more EK minus wealth with less, at the end of the binding, from the
+   * ledger. Equals `interestSavedFixed − etfForegone` while both loans run through the
+   * binding; also counts freed payments once one is repaid earlier. Positive favours
+   * more Eigenkapital.
+   */
   netAdvantageFixed: number;
 };
 
@@ -288,7 +359,13 @@ export type ApartmentCase = {
   label: string;
   purchasePrice: number;
   renovation: number;
-  monthlyOwnershipCosts: number;
+  /**
+   * The monthly Hausgeld as the Exposé or Wirtschaftsplan states it: WEG administration,
+   * building insurance, Betriebskosten, the WEG's Erhaltungsrücklage and, with central
+   * heating, heating. Not Grundsteuer, not repairs inside the flat: those come from
+   * `ownerExtraMonthly`. A number the couple can look up, which "Eigentumskosten" was not.
+   */
+  hausgeld: number;
   annualSpecialRepayments: number[];
 };
 
@@ -394,6 +471,7 @@ export function simulateMortgage({
   fixedRateYears,
   specialPlan,
   specialRepaymentLimitRate,
+  onMonth,
 }: MortgageSimulationParams): MortgageSimulation {
   const safePrincipal = Math.max(0, principal);
   if (safePrincipal === 0) {
@@ -448,6 +526,7 @@ export function simulateMortgage({
       interestFixed += interest;
     }
 
+    let appliedSpecial = 0;
     if (months % 12 === 0 && balance > 0.01) {
       const yearIndex = months / 12 - 1;
       const requestedSpecial = requestedSpecialForYear(specialPlan, yearIndex);
@@ -455,9 +534,18 @@ export function simulateMortgage({
       usedAnnualSpecialRepayments[yearIndex] = cappedSpecial;
 
       if (cappedSpecial > 0) {
-        balance -= Math.min(balance, cappedSpecial);
+        appliedSpecial = Math.min(balance, cappedSpecial);
+        balance -= appliedSpecial;
       }
     }
+
+    onMonth?.({
+      month: months,
+      interest,
+      principal: principalPart,
+      special: appliedSpecial,
+      balance: Math.max(0, balance),
+    });
 
     if (months === fixedRateYears * 12) {
       remainingAfterFixed = Math.max(0, balance);
@@ -601,11 +689,10 @@ export function buildScenario(
   const allInMonthly = mortgage.regularMonthlyPayment + inputs.monthlyOwnershipCosts;
   const burdenRatio = allInMonthly / Math.max(1, inputs.householdNetIncome);
   const rentDelta = allInMonthly - inputs.currentWarmRent;
-  const propertyValueAtPayoff =
-    inputs.purchasePrice *
-    Math.pow(1 + inputs.propertyGrowthRate / 100, mortgage.runtimeYears);
-  const realPropertyReturnRate = inputs.propertyGrowthRate - inputs.inflationRate;
-  const netWorthAtPayoff = propertyValueAtPayoff - cashNeeded - mortgage.interestTotal;
+  // No "net worth at payoff" here any more. It was valued at each scenario's own payoff
+  // year, so the same flat was worth 67.000 € more at 10% EK than at 20% purely because
+  // that loan runs five years longer. Wealth is compared on one common date by
+  // `wealthAtHorizon` instead (K19).
   const maxBurdenRatio = inputs.maxBurdenRate / 100;
   // Interest-only floor: below this the balance never falls, whatever the plan says.
   const interestOnlyPayment = (loan * interestRate) / 1200;
@@ -663,6 +750,7 @@ export function buildScenario(
   // worse subset of `reserve` and exists to tell the two failures apart in the UI.
   const feasible =
     amortises && cashLeft >= inputs.reserveTarget && burdenRatio <= maxBurdenRatio;
+  const runsPastLimit = mortgage.runtimeYears > inputs.maxRuntimeYears + 1e-9;
 
   // Plain-language labels: these are read aloud between two non-experts, so they say
   // what is wrong rather than naming an internal constraint.
@@ -679,6 +767,10 @@ export function buildScenario(
     statusTone = "red";
   } else if (failed.includes("burden")) {
     status = "Rate zu hoch";
+    statusTone = "amber";
+  } else if (runsPastLimit) {
+    // Tragbar, but not debt-free by the couple's own limit (D34).
+    status = "Läuft zu lange";
     statusTone = "amber";
   } else if (cashLeft < inputs.reserveTarget * 1.5) {
     status = "Gerade so tragbar";
@@ -698,11 +790,9 @@ export function buildScenario(
     allInMonthly,
     burdenRatio,
     rentDelta,
-    propertyValueAtPayoff,
-    realPropertyReturnRate,
-    netWorthAtPayoff,
     mortgage,
     paymentSubstituted,
+    runsPastLimit,
     feasible,
     diagnosis,
     status,
@@ -746,7 +836,7 @@ export function buildApartmentInputs(
     ...baseInputs,
     purchasePrice: apartment.purchasePrice,
     renovation: apartment.renovation,
-    monthlyOwnershipCosts: apartment.monthlyOwnershipCosts,
+    monthlyOwnershipCosts: apartment.hausgeld + baseInputs.ownerExtraMonthly,
     annualSpecialRepayment,
     annualSpecialRepayments: apartment.annualSpecialRepayments,
   };
@@ -831,16 +921,10 @@ function findNarrowestMiss(scenarios: ScenarioResult[]): DecisionDiagnosis["narr
 export function evaluateDecision(scenarios: ScenarioResult[]): DecisionResult {
   const feasibleScenarios = scenarios.filter((scenario) => scenario.feasible);
   const noSafeScenario = feasibleScenarios.length === 0;
-  const preferred10 = feasibleScenarios.find((scenario) => scenario.id === "ek10");
-  const lowestInterestFeasible = pickBest(
-    feasibleScenarios,
-    (scenario) => scenario.mortgage.interestTotal,
-  );
 
   return {
     feasibleScenarios,
     noSafeScenario,
-    recommendation: noSafeScenario ? null : preferred10 ?? lowestInterestFeasible,
     // Winners come only from feasible scenarios: naming a "winner" while nothing is
     // clean would present the least-bad option as safe. PRODUCT_SPEC §5.3.
     costMinimum: pickBest(feasibleScenarios, (scenario) => scenario.mortgage.interestTotal),
@@ -865,11 +949,21 @@ export function compareEkScenarios(
   const extraCashRequired = to.cashNeeded - from.cashNeeded;
   const horizonYears = inputs.fixedRateYears;
   const interestSavedFixed = from.mortgage.interestFixed - to.mortgage.interestFixed;
-  const etfForegone = opportunityCost(
+  const etfForegoneGross = opportunityCost(
     Math.max(0, extraCashRequired),
     inputs.etfReturnRate,
     horizonYears,
   );
+  // Taxed, because the interest it is set against is not: an owner-occupier's saved
+  // interest is no income. Untaxed, this flipped the verdict on every default apartment
+  // toward "mehr Liquidität" (K18).
+  const etfForegone = etfForegoneGross * (1 - clampRate(inputs.etfTaxRate) / 100);
+  // The verdict comes from the ledger, not from `interestSavedFixed − etfForegone`.
+  // The two agree to the cent while both loans run through the binding (pinned in
+  // invariants.test.ts); once a loan is repaid earlier, only the ledger also counts
+  // the payments it no longer makes, which keep earning (K23).
+  const netAdvantageFixed =
+    scenarioWealthAtHorizon(to, inputs).wealth - scenarioWealthAtHorizon(from, inputs).wealth;
 
   return {
     from,
@@ -879,8 +973,79 @@ export function compareEkScenarios(
     runtimeDelta: to.mortgage.runtimeYears - from.mortgage.runtimeYears,
     horizonYears,
     interestSavedFixed,
+    etfForegoneGross,
     etfForegone,
-    netAdvantageFixed: interestSavedFixed - etfForegone,
+    netAdvantageFixed,
+  };
+}
+
+export type EkStepReturn = {
+  from: ScenarioResult;
+  to: ScenarioResult;
+  /** Extra cash `to` needs over `from`. */
+  extraCash: number;
+  /** How much lower `to`'s Restschuld is at the end of the binding. */
+  debtReduction: number;
+  /**
+   * What the extra Eigenkapital earns per year inside the binding, tax-free and without
+   * market risk: the rate at which `extraCash` grows into what it is worth at the end of
+   * the binding in the ledger. While both loans run through the binding that is exactly
+   * `debtReduction` (extra EK plus interest saved); after an early payoff it includes
+   * the freed payments. Null when `to` needs no extra cash.
+   */
+  annualReturn: number | null;
+  /** The pre-tax ETF return at which keeping the money invested does exactly as well. */
+  breakEvenEtfReturn: number | null;
+  /** Whether the extra EK beats the ETF assumption, after its tax. Null without extra cash. */
+  ekAhead: boolean | null;
+};
+
+/**
+ * The return on one step of extra Eigenkapital, in the unit the couple's disagreement
+ * is actually about: a yearly rate, set against the ETF.
+ *
+ * The headline compares only the two ends (10% vs 20%). Per step the answer can differ
+ * because the bank's pricing is not monotone: on the offer, 10→15% earns about 4,1%
+ * a year and 15→20% about 5,0%, against roughly 4,2% for a 5% ETF after tax. See
+ * docs/DECISIONS.md D32.
+ */
+export function ekStepReturn(
+  from: ScenarioResult,
+  to: ScenarioResult,
+  inputs: MortgageInputs,
+): EkStepReturn {
+  const years = inputs.fixedRateYears;
+  const extraCash = to.cashNeeded - from.cashNeeded;
+  const debtReduction = from.mortgage.remainingAfterFixed - to.mortgage.remainingAfterFixed;
+  if (extraCash <= 0 || years <= 0) {
+    return { from, to, extraCash, debtReduction, annualReturn: null, breakEvenEtfReturn: null, ekAhead: null };
+  }
+
+  // Valued in the ledger, not read off the Restschuld: if a loan is repaid inside the
+  // binding, its freed payments keep earning, and a Restschuld of zero on both sides
+  // used to report a −100% return (K23).
+  const wealthGap = (etfReturnRate: number) => {
+    const assumed = { ...inputs, etfReturnRate };
+    return (
+      scenarioWealthAtHorizon(to, assumed).wealth - scenarioWealthAtHorizon(from, assumed).wealth
+    );
+  };
+  const gap = wealthGap(inputs.etfReturnRate);
+  const keep = 1 - clampRate(inputs.etfTaxRate) / 100;
+  // What the extra cash grows to if it stays in the ETF, after tax at the horizon, and
+  // therefore what the extra EK grew to: that plus the wealth it is ahead or behind by.
+  const etfMultiple = 1 + (Math.pow(1 + inputs.etfReturnRate / 100, years) - 1) * keep;
+  const ekMultiple = (gap + extraCash * etfMultiple) / extraCash;
+  const annualReturn = ekMultiple > 0 ? (Math.pow(ekMultiple, 1 / years) - 1) * 100 : -100;
+
+  return {
+    from,
+    to,
+    extraCash,
+    debtReduction,
+    annualReturn,
+    breakEvenEtfReturn: nearestRoot(wealthGap, inputs.etfReturnRate, 0.5, 30),
+    ekAhead: gap > 0,
   };
 }
 
@@ -1069,42 +1234,65 @@ export function compareSpecialScenarios(
   };
 }
 
+/**
+ * The price and the Sollzins a purchase after `waitMonths` would meet: the price grown
+ * at the waiting assumption, the rate moved by the assumed shift. Shared by the Warten
+ * table and `wealthAtHorizon`, so the two can never disagree about what waiting buys.
+ */
+function purchaseAfterWaiting(
+  base: ScenarioBase,
+  inputs: MortgageInputs,
+  rates: InterestRates,
+  waitMonths: number,
+): { futurePrice: number; adjustedInterestRate: number; purchaseRates: InterestRates } {
+  const futurePrice =
+    inputs.purchasePrice * Math.pow(1 + inputs.waitPropertyGrowthRate / 100, waitMonths / 12);
+  const adjustedInterestRate = Math.max(
+    0.1,
+    rateFor(rates, inputs.fixedRateYears, base.id) + (waitMonths > 0 ? inputs.waitRateShift : 0),
+  );
+  // Only the column actually in use is shifted: the other binding's rates are not a
+  // forecast this function has any basis to move.
+  const period = normaliseFixedPeriod(inputs.fixedRateYears);
+  const purchaseRates: InterestRates = {
+    ...rates,
+    [period]: { ...rates[period], [base.id]: adjustedInterestRate },
+  };
+  return { futurePrice, adjustedInterestRate, purchaseRates };
+}
+
 export function buildWaitScenario(
   selectedBase: ScenarioBase,
-  selectedNow: ScenarioResult,
   inputs: MortgageInputs,
   rates: InterestRates,
   waitMonths: number = inputs.waitMonths,
+  /** The common date. Pass one value for every column of a table. */
+  horizonMonths: number = Math.max(inputs.fixedRateYears * 12, waitMonths),
 ): WaitScenario {
   const years = waitMonths / 12;
-  const futurePrice =
-    inputs.purchasePrice * Math.pow(1 + inputs.waitPropertyGrowthRate / 100, years);
-  // Zero for the buy-now column, so `deltaTotalCost` collapses to the interest delta there.
+  const { futurePrice, adjustedInterestRate, purchaseRates } = purchaseAfterWaiting(
+    selectedBase,
+    inputs,
+    rates,
+    waitMonths,
+  );
   const rentPaid = inputs.currentWarmRent * waitMonths;
   const saved = inputs.waitSavingsMonthly * waitMonths;
   // Rent is NOT subtracted: `waitSavingsMonthly` is already the net amount that reaches
   // Eigenkapital after rent. Subtracting it here as well double-counted it and made
   // waiting look far worse than it is. See docs/DECISIONS.md D4.
   const adjustedAvailableCapital = inputs.availableCapital + saved;
-  const adjustedInterestRate = Math.max(
-    0.1,
-    rateFor(rates, inputs.fixedRateYears, selectedBase.id) +
-      (waitMonths > 0 ? inputs.waitRateShift : 0),
-  );
   const futureInputs: MortgageInputs = {
     ...inputs,
     purchasePrice: futurePrice,
     availableCapital: adjustedAvailableCapital,
   };
-  // Only the column actually in use is shifted — the other binding's rates are not
-  // a forecast this function has any basis to move.
-  const period = normaliseFixedPeriod(inputs.fixedRateYears);
-  const futureRates: InterestRates = {
-    ...rates,
-    [period]: { ...rates[period], [selectedBase.id]: adjustedInterestRate },
-  };
-  const scenario = buildScenario(selectedBase, futureInputs, futureRates);
-  const deltaInterest = scenario.mortgage.interestTotal - selectedNow.mortgage.interestTotal;
+  const scenario = buildScenario(selectedBase, futureInputs, purchaseRates);
+  const wealth = wealthAtHorizon({ base: selectedBase, inputs, rates, waitMonths, horizonMonths });
+  const now =
+    waitMonths === 0
+      ? wealth
+      : wealthAtHorizon({ base: selectedBase, inputs, rates, waitMonths: 0, horizonMonths });
 
   return {
     scenario,
@@ -1115,11 +1303,9 @@ export function buildWaitScenario(
     adjustedAvailableCapital,
     adjustedInterestRate,
     futureLoan: scenario.loan,
-    cashLeftAfterPurchase: scenario.cashLeft,
-    deltaInterest,
-    // Rent is added to the DELTA, never to `adjustedAvailableCapital` — D4 still holds.
-    // The two are different questions: what waiting costs, and what capital it leaves.
-    deltaTotalCost: deltaInterest + rentPaid,
+    cashLeftAfterPurchase: wealth.liquidAfterPurchase,
+    wealth,
+    deltaWealth: wealth.wealth - now.wealth,
     years,
   };
 }
@@ -1144,14 +1330,450 @@ export function waitPeriodsFor(waitMonths: number): number[] {
  */
 export function buildWaitScenarios(
   selectedBase: ScenarioBase,
-  selectedNow: ScenarioResult,
   inputs: MortgageInputs,
   rates: InterestRates,
   months: number[] = [0, 12, 24],
 ): WaitScenario[] {
+  // One date for every column, so the table compares like with like even if someone
+  // types a Wartezeit longer than the binding.
+  const horizonMonths = Math.max(inputs.fixedRateYears * 12, ...months);
   return months.map((waitMonths) =>
-    buildWaitScenario(selectedBase, selectedNow, inputs, rates, waitMonths),
+    buildWaitScenario(selectedBase, inputs, rates, waitMonths, horizonMonths),
   );
+}
+
+export type WaitAssumption = "waitRateShift" | "waitPropertyGrowthRate" | "etfReturnRate";
+
+export type WaitTippingPoint = {
+  assumption: WaitAssumption;
+  assumed: number;
+  /**
+   * The value at which waiting and buying now end level on the common date, the
+   * nearest one to `assumed`, with every other input unchanged. Null if there is none
+   * within a wide range.
+   */
+  flipsAt: number | null;
+};
+
+/** How far each assumption is searched, and in which steps, before giving up. */
+const TIPPING_SEARCH: Record<WaitAssumption, { step: number; reach: number }> = {
+  waitRateShift: { step: 0.25, reach: 5 },
+  waitPropertyGrowthRate: { step: 0.5, reach: 20 },
+  etfReturnRate: { step: 0.5, reach: 20 },
+};
+
+/**
+ * What would have to be different for waiting to stop (or start) beating buying now.
+ * PRODUCT_SPEC §2.3 asks exactly this: "what conditions would need to occur for waiting
+ * to beat buying now". Each assumption is moved on its own; the nearest value at which
+ * the wealth difference changes sign is reported.
+ *
+ * Searched outward from the assumed value in steps, then bisected, so the answer is the
+ * nearest tipping point even if the difference is not monotone over the whole range.
+ */
+export function waitTippingPoints(
+  base: ScenarioBase,
+  inputs: MortgageInputs,
+  rates: InterestRates,
+  waitMonths: number = inputs.waitMonths,
+): WaitTippingPoint[] {
+  const horizonMonths = Math.max(inputs.fixedRateYears * 12, waitMonths);
+  const delta = (assumption: WaitAssumption, value: number) => {
+    const varied = { ...inputs, [assumption]: value };
+    return (
+      wealthAtHorizon({ base, inputs: varied, rates, waitMonths, horizonMonths }).wealth -
+      wealthAtHorizon({ base, inputs: varied, rates, waitMonths: 0, horizonMonths }).wealth
+    );
+  };
+
+  return (Object.keys(TIPPING_SEARCH) as WaitAssumption[]).map((assumption) => {
+    const assumed = inputs[assumption];
+    const atAssumed = delta(assumption, assumed);
+    if (waitMonths <= 0) return { assumption, assumed, flipsAt: null };
+
+    const { step, reach } = TIPPING_SEARCH[assumption];
+    const flipsAt = nearestRoot((value) => delta(assumption, value), assumed, step, reach, atAssumed);
+    return { assumption, assumed, flipsAt };
+  });
+}
+
+/**
+ * The value nearest to `start` at which `f` changes sign: searched outward in `step`s
+ * on both sides up to `reach`, then bisected. Null if there is none in range. Nearest,
+ * not first-found from one end, so a non-monotone `f` still yields the tipping point
+ * the reader is closest to.
+ */
+function nearestRoot(
+  f: (value: number) => number,
+  start: number,
+  step: number,
+  reach: number,
+  atStart: number = f(start),
+): number | null {
+  if (atStart === 0) return start;
+  for (let distance = step; distance <= reach + 1e-9; distance += step) {
+    for (const direction of [-1, 1]) {
+      const inner = start + direction * (distance - step);
+      const outer = start + direction * distance;
+      const innerValue = distance === step ? atStart : f(inner);
+      if (Math.sign(f(outer)) === Math.sign(innerValue)) continue;
+
+      let lo = inner;
+      let hi = outer;
+      const loSign = Math.sign(innerValue);
+      for (let i = 0; i < 40; i += 1) {
+        const mid = (lo + hi) / 2;
+        if (Math.sign(f(mid)) === loSign) lo = mid;
+        else hi = mid;
+      }
+      return (lo + hi) / 2;
+    }
+  }
+  return null;
+}
+
+export type WealthPathParams = {
+  base: ScenarioBase;
+  inputs: MortgageInputs;
+  rates: InterestRates;
+  /** Months of renting before the purchase. 0 = buy now. */
+  waitMonths?: number;
+  /** Defaults to the yearly plan in `inputs`. */
+  specialPlan?: SpecialPlan;
+  /**
+   * The common date every path is valued at, in months from today. Defaults to the
+   * Zinsbindung: the longest span over which every rate in play is contractually known
+   * (a later purchase is still inside its own binding then). Beyond it the figure
+   * inherits the constant-rate assumption of ASSUMPTIONS §1.
+   */
+  horizonMonths?: number;
+};
+
+export type WealthAtHorizon = {
+  horizonMonths: number;
+  /** What was paid for the flat, at the month of purchase. */
+  purchasePrice: number;
+  loan: number;
+  /** Market value of the flat at the horizon. Identical across every path for one flat. */
+  propertyValue: number;
+  debt: number;
+  /** Free capital at the horizon, before tax on its gains. */
+  liquid: number;
+  /**
+   * Tax on that capital's gains if realised at the horizon. Linear in the gain, so it
+   * turns negative where withdrawals (a down payment, Sondertilgung) leave the pot below
+   * what was put in: that is the after-tax growth those withdrawals gave up.
+   */
+  liquidTax: number;
+  /** propertyValue − debt + liquid − liquidTax. */
+  wealth: number;
+  /** Free capital right after paying for the purchase. */
+  liquidAfterPurchase: number;
+  /** Sondertilgung actually paid by the horizon, after the contractual cap. */
+  specialPaid: number;
+  /** Rent paid before the purchase. */
+  rentPaid: number;
+};
+
+/**
+ * Everything the household owns at one common date: the flat, minus what is still owed,
+ * plus the free capital, after tax on its gains. Followed month by month.
+ *
+ * This is the comparison every other one in the app approximates. Each of them used to
+ * compare on its own basis: interest alone, interest plus rent, pre-tax ETF growth, a
+ * full-term total at each path's own payoff date. Several defects came from exactly
+ * that (K1, K10, K15, K18, the old Nettovermögen). Here every path pays the same
+ * household out of the same budget and is valued on the same day, so a difference
+ * between two calls is a like-for-like difference and nothing else.
+ *
+ * The household budget for housing plus saving is `waitSavingsMonthly + currentWarmRent`.
+ * That is D4's definition read the other way round: the net savings rate is what is left
+ * after rent, so rent plus savings is what is available for housing at all. Before the
+ * purchase the household pays rent from it; after, the Monatsrate and the ownership
+ * costs. Whatever is left, and the starting capital not spent on the purchase, is
+ * invested at the ETF assumption; Sondertilgung is drawn from it. The amortisation
+ * itself is `simulateMortgage`, observed through `onMonth`, so the offer-pinned schedule
+ * is reused, not re-implemented.
+ */
+export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
+  const { base, inputs, rates } = params;
+  const waitMonths = Math.max(0, Math.round(params.waitMonths ?? 0));
+  const horizonMonths = Math.max(
+    waitMonths,
+    Math.round(params.horizonMonths ?? inputs.fixedRateYears * 12),
+  );
+  const specialPlan = params.specialPlan ?? planFromInputs(inputs);
+  const monthlyReturn = Math.pow(1 + inputs.etfReturnRate / 100, 1 / 12) - 1;
+  const budget = inputs.waitSavingsMonthly + inputs.currentWarmRent;
+
+  let liquid = inputs.availableCapital;
+  let contributed = liquid;
+  const move = (amount: number) => {
+    liquid += amount;
+    contributed += amount;
+  };
+
+  // Renting until the purchase.
+  for (let month = 1; month <= waitMonths; month += 1) {
+    liquid *= 1 + monthlyReturn;
+    move(budget - inputs.currentWarmRent);
+  }
+
+  const { futurePrice, purchaseRates } = purchaseAfterWaiting(base, inputs, rates, waitMonths);
+  const purchase = buildScenario(
+    base,
+    { ...inputs, purchasePrice: futurePrice },
+    purchaseRates,
+    specialPlan,
+  );
+
+  return ownUntilHorizon(purchase, inputs, specialPlan, {
+    horizonMonths,
+    waitMonths,
+    purchasePrice: futurePrice,
+    liquid,
+    contributed,
+  });
+}
+
+/**
+ * `wealthAtHorizon` for a scenario that is already built, bought today. Comparisons
+ * that hold `ScenarioResult`s (the EK trade-off, the return per EK step) value them
+ * with this, so they need no rates and cannot drift from the scenarios on screen.
+ * Pass the Sondertilgung plan the scenario was built with.
+ */
+export function scenarioWealthAtHorizon(
+  scenario: ScenarioResult,
+  inputs: MortgageInputs,
+  specialPlan: SpecialPlan = planFromInputs(inputs),
+  horizonMonths: number = Math.round(inputs.fixedRateYears * 12),
+): WealthAtHorizon {
+  return ownUntilHorizon(scenario, inputs, specialPlan, {
+    horizonMonths,
+    waitMonths: 0,
+    purchasePrice: inputs.purchasePrice,
+    liquid: inputs.availableCapital,
+    contributed: inputs.availableCapital,
+  });
+}
+
+/**
+ * The owning half of the ledger: pay for the purchase, then month by month the
+ * Monatsrate, ownership costs and Sondertilgung out of the household budget, the rest
+ * invested, until the horizon. Months after the loan is repaid carry no bank payment,
+ * so a loan that finishes early leaves its freed payments invested, which is exactly
+ * what a Restschuld comparison alone cannot see.
+ */
+function ownUntilHorizon(
+  purchase: ScenarioResult,
+  inputs: MortgageInputs,
+  specialPlan: SpecialPlan,
+  start: {
+    horizonMonths: number;
+    waitMonths: number;
+    purchasePrice: number;
+    liquid: number;
+    contributed: number;
+  },
+): WealthAtHorizon {
+  const monthlyReturn = Math.pow(1 + inputs.etfReturnRate / 100, 1 / 12) - 1;
+  const budget = inputs.waitSavingsMonthly + inputs.currentWarmRent;
+  let liquid = start.liquid - purchase.cashNeeded;
+  let contributed = start.contributed - purchase.cashNeeded;
+  const liquidAfterPurchase = liquid;
+
+  const loanMonths = start.horizonMonths - start.waitMonths;
+  const paidToBank = new Array<number>(loanMonths + 1).fill(0);
+  const specialByMonth = new Array<number>(loanMonths + 1).fill(0);
+  let debt = purchase.loan;
+  simulateMortgage({
+    principal: purchase.loan,
+    interestRatePct: purchase.interestRate,
+    repaymentRatePct: purchase.repaymentRate,
+    fixedRateYears: inputs.fixedRateYears,
+    specialPlan,
+    specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+    onMonth: (entry) => {
+      if (entry.month > loanMonths) return;
+      paidToBank[entry.month] = entry.interest + entry.principal;
+      specialByMonth[entry.month] = entry.special;
+      debt = entry.balance;
+    },
+  });
+  if (loanMonths === 0) debt = purchase.loan;
+
+  let specialPaid = 0;
+  for (let month = 1; month <= loanMonths; month += 1) {
+    liquid *= 1 + monthlyReturn;
+    const flow = budget - inputs.monthlyOwnershipCosts - paidToBank[month] - specialByMonth[month];
+    liquid += flow;
+    contributed += flow;
+    specialPaid += specialByMonth[month];
+  }
+
+  const propertyValue =
+    inputs.purchasePrice *
+    Math.pow(1 + inputs.propertyGrowthRate / 100, start.horizonMonths / 12);
+  const liquidTax = (liquid - contributed) * (clampRate(inputs.etfTaxRate) / 100);
+
+  return {
+    horizonMonths: start.horizonMonths,
+    purchasePrice: start.purchasePrice,
+    loan: purchase.loan,
+    propertyValue,
+    debt,
+    liquid,
+    liquidTax,
+    wealth: propertyValue - debt + liquid - liquidTax,
+    liquidAfterPurchase,
+    specialPaid,
+    rentPaid: inputs.currentWarmRent * start.waitMonths,
+  };
+}
+
+export type RefinanceStress = {
+  /** False when the loan is repaid inside the binding: there is nothing to refinance. */
+  applies: boolean;
+  stressRate: number;
+  /** Whether the same Monatsrate still covers the interest on the Restschuld at that rate. */
+  coversInterest: boolean;
+  /** Years to debt-free in total, at today's rate after the binding (the usual assumption). */
+  runtimeYearsAtSameRate: number;
+  /** Years to debt-free in total if the rate after the binding is `stressRate`. Infinity if never. */
+  runtimeYearsStressed: number;
+  /** `runtimeYearsStressed − runtimeYearsAtSameRate`. */
+  extraYears: number;
+};
+
+/**
+ * The refinancing risk as one number: at the same Monatsrate, how much longer the loan
+ * runs if the Anschlusszins is `refiStressShift` points above today's.
+ *
+ * The Restschuld after the binding was already on screen, but a balance does not say
+ * what it means. Holding the rate constant keeps D14's reading (the Monatsrate is the
+ * budget) and makes the risk comparable across EK levels: more Eigenkapital leaves less
+ * debt exposed to the new rate. Both runtimes are computed the same way, from the
+ * Restschuld onward with the rest of the yearly plan, so only the rate differs.
+ */
+export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs): RefinanceStress {
+  const fixedYears = inputs.fixedRateYears;
+  const remaining = scenario.mortgage.remainingAfterFixed;
+  const stressRate = Math.max(0, scenario.interestRate + inputs.refiStressShift);
+  const payment = scenario.mortgage.regularMonthlyPayment;
+  const laterPlan: SpecialPlan = {
+    kind: "path",
+    years: inputs.annualSpecialRepayments.slice(Math.round(fixedYears)),
+  };
+
+  if (remaining <= 0.01 || !Number.isFinite(remaining)) {
+    const runtime = scenario.mortgage.runtimeYears;
+    return {
+      applies: false,
+      stressRate,
+      coversInterest: true,
+      runtimeYearsAtSameRate: runtime,
+      runtimeYearsStressed: runtime,
+      extraYears: 0,
+    };
+  }
+
+  const followUp = (ratePct: number): { covers: boolean; years: number } => {
+    const covers = payment > (remaining * ratePct) / 1200;
+    if (!covers) return { covers, years: Infinity };
+    const simulation = simulateMortgage({
+      principal: remaining,
+      interestRatePct: ratePct,
+      repaymentRatePct: repaymentRateFromMonthlyPayment(remaining, ratePct, payment),
+      fixedRateYears: 0,
+      specialPlan: laterPlan,
+      // The cap stays a share of the ORIGINAL loan, as everywhere else in the model.
+      // The follow-up runs on the Restschuld, so the rate is rescaled to the same € cap;
+      // otherwise even the same-rate baseline ran longer than the scenario itself.
+      specialRepaymentLimitRate: (inputs.specialRepaymentLimitRate * scenario.loan) / remaining,
+    });
+    return { covers, years: simulation.runtimeYears };
+  };
+
+  const same = followUp(scenario.interestRate);
+  const stressed = followUp(stressRate);
+  const runtimeYearsAtSameRate = fixedYears + same.years;
+  const runtimeYearsStressed = fixedYears + stressed.years;
+
+  return {
+    applies: true,
+    stressRate,
+    coversInterest: stressed.covers,
+    runtimeYearsAtSameRate,
+    runtimeYearsStressed,
+    extraYears: runtimeYearsStressed - runtimeYearsAtSameRate,
+  };
+}
+
+export type SpecialPlanEffect = {
+  horizonMonths: number;
+  /** Sondertilgung actually paid by the end of the binding, after the cap. */
+  paid: number;
+  /** How much lower the Restschuld is at the end of the binding. Reliable. */
+  debtReduction: number;
+  /** `debtReduction − paid`: interest not paid inside the binding thanks to the plan. */
+  interestSaved: number;
+  /**
+   * Wealth with the plan minus wealth without it, on the same date and from the same
+   * budget: the plan's money kept invested at the ETF assumption instead, after tax.
+   * Positive = the plan beats keeping the money in the ETF.
+   */
+  wealthDelta: number;
+};
+
+/**
+ * What the yearly plan buys inside the binding, measured the same way the EK trade-off
+ * is: against the same money kept invested, after tax, on one date.
+ *
+ * The section used to lead with "Das bringt der Plan: 78.750 € gespart", a full-term
+ * interest total at a rate nobody can know for 24 years, and with no opportunity cost,
+ * while section 1 charged extra Eigenkapital an ETF opportunity cost. Two frames for
+ * the same decision (K20).
+ */
+export function specialPlanEffect(
+  base: ScenarioBase,
+  inputs: MortgageInputs,
+  rates: InterestRates,
+): SpecialPlanEffect {
+  const withPlan = wealthAtHorizon({ base, inputs, rates });
+  const without = wealthAtHorizon({ base, inputs, rates, specialPlan: { kind: "none" } });
+  const debtReduction = without.debt - withPlan.debt;
+
+  return {
+    horizonMonths: withPlan.horizonMonths,
+    paid: withPlan.specialPaid,
+    debtReduction,
+    interestSaved: debtReduction - withPlan.specialPaid,
+    wealthDelta: withPlan.wealth - without.wealth,
+  };
+}
+
+/** A tax rate in percent, kept inside 0–100 so a stray input cannot invert a gain. */
+function clampRate(ratePct: number): number {
+  return Number.isFinite(ratePct) ? Math.min(100, Math.max(0, ratePct)) : 0;
+}
+
+/**
+ * The ETF return per year that is left after tax on realising the gain at the end of
+ * `years`: the figure that is comparable with a tax-free mortgage rate. Tax is paid
+ * once, on the whole gain, so the after-tax rate depends on the holding period.
+ */
+export function afterTaxAnnualReturn(
+  annualReturnPct: number,
+  taxRatePct: number,
+  years: number,
+): number {
+  if (years <= 0) {
+    return annualReturnPct * (1 - clampRate(taxRatePct) / 100);
+  }
+
+  const gain = Math.pow(1 + annualReturnPct / 100, years) - 1;
+  const netGrowth = 1 + gain * (1 - clampRate(taxRatePct) / 100);
+  return netGrowth > 0 ? (Math.pow(netGrowth, 1 / years) - 1) * 100 : -100;
 }
 
 export function opportunityCost(

@@ -331,6 +331,16 @@ export default function InputsPanel({
               info={GLOSSARY.currentWarmRent}
             />
             <InputField
+              label="Grundsteuer + eigene Rücklage"
+              value={inputs.ownerExtraMonthly}
+              suffix="€/Monat"
+              step={10}
+              min={0}
+              onChange={(value) => onInputChange("ownerExtraMonthly", value)}
+              info={GLOSSARY.ownerExtraMonthly}
+              hint="zusätzlich zum Hausgeld jeder Wohnung · Schätzung"
+            />
+            <InputField
               label="Max. Haushaltsbelastung"
               value={inputs.maxBurdenRate}
               suffix="%"
@@ -351,6 +361,16 @@ export default function InputsPanel({
               options={FIXED_RATE_OPTIONS}
               onChange={(value) => onInputChange("fixedRateYears", value)}
               info={GLOSSARY.fixedRateYears}
+            />
+            <InputField
+              label="Max. Laufzeit"
+              value={inputs.maxRuntimeYears}
+              suffix="Jahre"
+              step={1}
+              min={1}
+              onChange={(value) => onInputChange("maxRuntimeYears", value)}
+              info={GLOSSARY.maxRuntimeYears}
+              hint="z. B. bis zur Rente des Älteren"
             />
             <PaymentField
               inputs={inputs}
@@ -417,6 +437,26 @@ export default function InputsPanel({
               min={0}
               onChange={(value) => onInputChange("etfReturnRate", value)}
               info={GLOSSARY.etfReturnRate}
+            />
+            <InputField
+              label="Steuer auf ETF-Gewinne"
+              value={inputs.etfTaxRate}
+              suffix="%"
+              step={0.1}
+              min={0}
+              onChange={(value) => onInputChange("etfTaxRate", value)}
+              info={GLOSSARY.etfTaxRate}
+              hint="18,46% = Abgeltungsteuer + Soli, Aktien-ETF"
+            />
+            <InputField
+              label="Anschlusszins-Stress"
+              value={inputs.refiStressShift}
+              suffix="%-Pkt."
+              step={0.5}
+              min={0}
+              onChange={(value) => onInputChange("refiStressShift", value)}
+              info={GLOSSARY.refiStressShift}
+              hint="über dem heutigen Sollzins · kein Forecast"
             />
           </div>
         </InputBox>

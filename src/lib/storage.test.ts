@@ -124,7 +124,7 @@ describe("persistence", () => {
     const apartment = loaded.apartmentCases[0];
     expect(Number.isFinite(apartment.purchasePrice)).toBe(true);
     expect(Number.isFinite(apartment.renovation)).toBe(true);
-    expect(Number.isFinite(apartment.monthlyOwnershipCosts)).toBe(true);
+    expect(Number.isFinite(apartment.hausgeld)).toBe(true);
     expect(apartment.annualSpecialRepayments).toEqual([]);
   });
 
@@ -164,5 +164,24 @@ describe("persistence", () => {
   it("rejects a save from an unknown future version", () => {
     window.localStorage.setItem("mdh:save:future", JSON.stringify({ version: 99, apartmentCases: [] }));
     expect(loadNamed("future")).toBeNull();
+  });
+
+  it("turns a stored total 'Eigentumskosten' into Hausgeld without moving the total (D35)", () => {
+    const state = defaultState();
+    const stored = {
+      ...state,
+      apartmentCases: state.apartmentCases.map(({ hausgeld: _hausgeld, ...rest }, index) => ({
+        ...rest,
+        monthlyOwnershipCosts: [700, 50, 640][index],
+      })),
+    };
+    window.localStorage.setItem("mdh:save:pre-d35", JSON.stringify(stored));
+
+    const loaded = loadNamed("pre-d35")!;
+    const extra = loaded.inputs.ownerExtraMonthly;
+    expect(loaded.apartmentCases[0].hausgeld + extra).toBe(700);
+    // Never a negative Hausgeld, even if the old total was below the new extra.
+    expect(loaded.apartmentCases[1].hausgeld).toBe(0);
+    expect(loaded.apartmentCases[2].hausgeld).toBe(550);
   });
 });

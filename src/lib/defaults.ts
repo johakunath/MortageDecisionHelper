@@ -17,7 +17,10 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   reserveTarget: 20000,
   renovation: 0,
   moving: 0,
+  // Nur für die QA-Presets ohne Wohnung. Wohnungen bilden den Wert aus Hausgeld + Zuschlag.
   monthlyOwnershipCosts: 830,
+  // Schätzung (D35): Grundsteuer ≈ 35 € + eigene Rücklage für Bad, Böden, Geräte ≈ 55 €.
+  ownerExtraMonthly: 90,
   currentWarmRent: 1970,
   householdNetIncome: 8500,
   maxBurdenRate: 40,
@@ -36,6 +39,13 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   waitPropertyGrowthRate: 2,
   waitRateShift: -0.3,
   etfReturnRate: 5,
+  // Abgeltungsteuer + Soli auf 70% des Gewinns (Teilfreistellung Aktien-ETF), ohne
+  // Kirchensteuer. Die gesparten Kreditzinsen sind steuerfrei, die ETF-Gewinne nicht.
+  etfTaxRate: 18.4625,
+  // Stresstest, keine Prognose: 2 Prozentpunkte über dem heutigen Sollzins.
+  refiStressShift: 2,
+  // Persönliche Grenze: schuldenfrei bis zum Renteneintritt des Älteren. Im Feld änderbar.
+  maxRuntimeYears: 26,
 };
 
 /**
@@ -57,6 +67,11 @@ export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek20", ekRate: 20, label: "20% EK" },
 ];
 
+/**
+ * Hausgeld values are placeholders, not Exposé figures: they are the old "Eigentumskosten"
+ * estimates (640 / 690 / 760 €) minus the 90 € now carried by `ownerExtraMonthly`, so the
+ * totals on screen did not move (D35). Replace them with the Exposé's Hausgeld.
+ */
 export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
   {
     // Das Objekt aus dem Finanzierungsangebot. Bewusst der erste Fall: die App soll
@@ -65,7 +80,7 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     label: "Angebot 450k",
     purchasePrice: 450000,
     renovation: 0,
-    monthlyOwnershipCosts: 640,
+    hausgeld: 550,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -73,7 +88,7 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     label: "Wohnung B",
     purchasePrice: 500000,
     renovation: 10000,
-    monthlyOwnershipCosts: 690,
+    hausgeld: 600,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -81,7 +96,7 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     label: "Wohnung C",
     purchasePrice: 600000,
     renovation: 5000,
-    monthlyOwnershipCosts: 760,
+    hausgeld: 670,
     annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
   },
 ];
@@ -115,6 +130,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9000,
       monthlyPayment: 2400,
       fixedRateYears: 10,
+      // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
+      // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
+      maxRuntimeYears: 35,
     },
     // 10% EK tragbar, 15% reißt die Reserve, 20% reicht das Geld nicht.
     rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
@@ -132,6 +150,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9600,
       monthlyPayment: 2900,
       fixedRateYears: 10,
+      // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
+      // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
+      maxRuntimeYears: 35,
     },
     // Tragbar, aber mit sichtbaren Warnungen: 15% nur "gerade so", 20% scheitert.
     rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
@@ -152,6 +173,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       // Reserve und Belastung reißen und trotzdem niemand zum Sieger erklärt wird.
       monthlyPayment: 3400,
       fixedRateYears: 10,
+      // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
+      // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
+      maxRuntimeYears: 35,
     },
     rates: { 10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 }, 15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 } },
   },
