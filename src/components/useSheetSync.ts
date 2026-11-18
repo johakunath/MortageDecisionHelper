@@ -93,6 +93,9 @@ export function useSheetSync({ buildExport, onImport, fingerprint }: Options) {
     } else if (result.kind === "conflict") {
       setConflictAt(result.savedAt);
     } else {
+      // The conflict prompt would otherwise stay up and hide why "Trotzdem
+      // überschreiben" did not work.
+      setConflictAt(null);
       setMessage(result.message);
     }
   }

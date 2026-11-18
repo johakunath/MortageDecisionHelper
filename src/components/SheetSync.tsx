@@ -14,7 +14,7 @@ export function SyncControls({ sync, onSetup }: { sync: SheetSync; onSetup: () =
   if (!sync.config) {
     return (
       <div className="sync-controls">
-        <button type="button" className="sync-button" onClick={onSetup}>
+        <button type="button" className="sync-button" onClick={onSetup} aria-label="Google Sheet verbinden">
           <Icon name="cloud" />
           <span className="sync-button-label">Sheet verbinden</span>
         </button>
