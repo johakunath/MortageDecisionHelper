@@ -61,6 +61,13 @@ export const DEFAULT_RATES: InterestRates = {
   15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 },
 };
 
+/**
+ * Where the Sollzinsen came from and when, as free text. Rates drift weekly; a figure
+ * without a date reads as current when it may be months old. Free text rather than a
+ * date field because one grid can mix quotes from several sources and days (D36).
+ */
+export const DEFAULT_RATES_NOTE = "Finanzierungsangebot vom 07.08.2026 (Varianten 1A–3B)";
+
 export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek10", ekRate: 10, label: "10% EK" },
   { id: "ek15", ekRate: 15, label: "15% EK" },
@@ -215,7 +222,7 @@ export const INPUT_BOXES = [
   { id: "capital", label: "Eigenkapital & Kaufkosten" },
   { id: "household", label: "Haushalt" },
   { id: "loan", label: "Darlehen" },
-  { id: "rates", label: "Sollzinsen laut Angebot" },
+  { id: "rates", label: "Sollzinsen" },
   { id: "market", label: "Markt" },
 ] as const;
 

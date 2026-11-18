@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatTimestamp,
   formatCompactEur,
   formatNumber,
   formatSignedEur,
@@ -81,5 +82,12 @@ describe("year and compact formatting", () => {
     expect(formatSignedPoints(-0.214)).toBe("−0,2 Pkt.");
     expect(formatSignedPoints(1.5)).toBe("+1,5 Pkt.");
     expect(formatSignedPoints(0.01)).toBe("0 Pkt.");
+  });
+});
+
+describe("formatTimestamp", () => {
+  it("prints a German date and time, and admits an unreadable one", () => {
+    expect(formatTimestamp("2026-11-18T12:00:00Z")).toMatch(/^18\.11\.2026, \d{2}:00$/);
+    expect(formatTimestamp("gestern")).toBe("unbekannt");
   });
 });

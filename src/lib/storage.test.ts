@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { defaultState, loadNamed, saveExists, saveNamed, storageAvailable } from "./storage";
-import { DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
+import {
+  buildBundle,
+  defaultState,
+  listSaves,
+  loadNamed,
+  parseBundle,
+  saveExists,
+  saveNamed,
+  storageAvailable,
+  writeBundleSaves,
+} from "./storage";
+import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -183,5 +193,56 @@ describe("persistence", () => {
     // Never a negative Hausgeld, even if the old total was below the new extra.
     expect(loaded.apartmentCases[1].hausgeld).toBe(0);
     expect(loaded.apartmentCases[2].hausgeld).toBe(550);
+  });
+
+  it("keeps the free-text Stand und Quelle of the rates (D36)", () => {
+    const note = "10 J.: Interhyp vom 18.11.26 · 15 J.: Hausbank vom 20.11.26";
+    saveNamed("neu", { ...defaultState(), ratesNote: note });
+    expect(loadNamed("neu")!.ratesNote).toBe(note);
+  });
+
+  it("gives an undated save the default note only if its rates are the defaults (D36)", () => {
+    const { ratesNote: _note, ...untouched } = defaultState();
+    window.localStorage.setItem("mdh:save:alt-default", JSON.stringify(untouched));
+    expect(loadNamed("alt-default")!.ratesNote).toBe(DEFAULT_RATES_NOTE);
+
+    const edited = { ...untouched, rates: { ...untouched.rates, 10: { ...untouched.rates[10], ek10: 4.2 } } };
+    window.localStorage.setItem("mdh:save:alt-edited", JSON.stringify(edited));
+    // Nobody recorded where 4,2% came from; inventing a source would be worse than none.
+    expect(loadNamed("alt-edited")!.ratesNote).toBe("");
+  });
+
+  it("keeps an apartment's name and note", () => {
+    const state = defaultState();
+    state.apartmentCases[0] = { ...state.apartmentCases[0], label: "Altbau Lindenstraße", note: "3. OG, Makler Weber" };
+    saveNamed("namen", state);
+    const loaded = loadNamed("namen")!;
+    expect(loaded.apartmentCases[0].label).toBe("Altbau Lindenstraße");
+    expect(loaded.apartmentCases[0].note).toBe("3. OG, Makler Weber");
+  });
+
+  it("exports and re-imports the screen and every named save", () => {
+    const current = { ...defaultState(), ratesNote: "Interhyp vom 18.11.26" };
+    current.inputs = { ...current.inputs, householdNetIncome: 9100 };
+    saveNamed("Angebot 1A", defaultState());
+    saveNamed("Wohnung B neu", current);
+
+    const text = JSON.stringify(buildBundle(current, new Date("2026-11-18T12:00:00Z")));
+    installStorage();
+    const bundle = parseBundle(text)!;
+    expect(bundle.savedAt).toBe("2026-11-18T12:00:00.000Z");
+    expect(bundle.current.inputs.householdNetIncome).toBe(9100);
+    expect(bundle.current.ratesNote).toBe("Interhyp vom 18.11.26");
+    expect(writeBundleSaves(bundle.saves)).toBe(2);
+    expect(listSaves()).toEqual(["Angebot 1A", "Wohnung B neu"]);
+  });
+
+  it("refuses a file that is not a bundle, and skips a broken save inside one", () => {
+    expect(parseBundle("kein json")).toBeNull();
+    expect(parseBundle(JSON.stringify({ app: "other", bundleVersion: 1 }))).toBeNull();
+
+    const bundle = { ...buildBundle(defaultState()), saves: { gut: defaultState(), kaputt: { version: 2 } } };
+    const parsed = parseBundle(JSON.stringify(bundle))!;
+    expect(Object.keys(parsed.saves)).toEqual(["gut"]);
   });
 });

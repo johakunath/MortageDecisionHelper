@@ -367,6 +367,8 @@ export type ApartmentCase = {
    */
   hausgeld: number;
   annualSpecialRepayments: number[];
+  /** Free text: address, Makler, link to the Exposé. Never read by the model. */
+  note?: string;
 };
 
 export type ApartmentComparisonResult = {

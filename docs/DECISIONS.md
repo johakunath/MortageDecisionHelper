@@ -554,3 +554,43 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **Best guess for the defaults.** The three totals are kept exactly (Hausgeld 550 / 600 / 670 € + 90 €), so no figure on screen moves; the golden snapshot proves it. They are probably on the **high** side: a typical Hausgeld including heating is 3–5 €/m² a month, and 550 € would mean a large flat or an expensive building. Erring high follows [D12](#d12--kaufnebenkosten-two-presets-and-1157-as-default): a decision tool must not make the purchase look cheaper than it is likely to be. It does not tilt the EK question at all: ownership costs are identical across the three EK levels and cancel in every EK comparison. They do move the burden check, the Warten comparison and the absolute Vermögen.
 
 **Consequence.** Saves from before D35 stored a total per apartment; they load as Hausgeld = old total − extra, so every figure the couple saw is unchanged. With a gas heater inside the flat, the heating costs belong in the Hausgeld field (the tooltip says so).
+
+---
+
+## D36: The Sollzinsen carry their Stand und Quelle; apartments can be named
+
+**Date:** 2026-11-18 · **Status:** accepted
+
+**Context.** Rates had risen since the offer of 07.08.2026. The six numbers on screen gave no hint how old they were, and a stale rate reads exactly like a current one. Apartment names were fixed at "Wohnung B/C".
+
+**Decision.** The persisted state gains `ratesNote`, one free-text field "Stand und Quelle" under the Sollzins grid. Free text rather than a date field because one grid can mix quotes from several sources and days ("10 J.: Interhyp vom 18.11.26 · 15 J.: Hausbank …"). Typing any rate clears the shipped default note and marks the field as missing; a note the couple wrote stays. Each apartment gets an editable name and a free-text note in "Fakten bearbeiten". The model reads neither.
+
+**Consequence.** Saves without `ratesNote` get the default note only if their rates still equal the defaults; otherwise the field is empty and marked. Storage stays at version 2: both fields are additive and revived defensively. The box is renamed "Sollzinsen", since later rates need not come from that offer.
+
+---
+
+## D37: Higher contrast through a dark frame; repeated explanations fold away
+
+**Date:** 2026-11-18 · **Status:** accepted · **Refines** [D6](#d6--aggressive-deletion-the-same-comparison-was-rendered-five-times), [D19](#d19--the-right-panel-holds-as-many-readouts-as-fit-without-scrolling-today-that-is-five)
+
+**Context.** On the owner's screen the beige, grey and white blocks were hard to tell apart (page `#f7f3ec`, cards `#fbf8f1`, rules `#e6dfce`), and the first screen was still dense.
+
+**Decision.** Of three mockups the owner chose a dark frame: header and step rail on `--frame` (#3a3631), white cards on a tinted page, darker rules, text and accent tones. Fonts unchanged. The verdict shrinks to headline plus what is not tragbar; the definition of tragbar folds into "Was heißt tragbar?". The trade-off sentence folds to its net figure with the full text under "Details". The selected door is sage instead of black. Status pills gain a glyph (✓ / ! / ✕), so they no longer rely on colour (rule 4).
+
+**Consequence.** Header still measures `--header-height` at 1280 / 1000 / 820 / 560px, and the right panel still does not scroll at 1280×800.
+
+---
+
+## D38: Export as a file and an optional, manual Google Sheet sync
+
+**Date:** 2026-11-18 · **Status:** accepted
+
+**Context.** Everything lived in one browser's localStorage. The owner enters assumptions on the PC and the phone and wants apartments and rates kept without retyping.
+
+**Decision.** Two ways out of the browser, both carrying the same `Bundle` (screen state plus every named save) and both passing through `reviveState`:
+1. **JSON export / import.** Works offline, including in the standalone file. Import shows what it will load and asks first.
+2. **Google Sheet via Apps Script** (`docs/google-sheet-sync/`). The Sheet is in the owner's Drive; a container-bound script, deployed as a web app, stores the bundle and writes read-only overview tabs. A token in Script Properties guards it. Load and save are **manual buttons**: an automatic pull would replace numbers while someone reads them. A save is refused if the Sheet holds a state this device has not seen; the couple then chooses "Erst laden" or "Trotzdem überschreiben".
+
+A database service (Supabase, Firebase) was rejected: a new dependency, an account and auth for two people and a few dozen records, with nothing gained over a Sheet they already own.
+
+**Consequence.** CLAUDE.md's "no network call" rule for the standalone build still holds by default: no request is made until a device is connected and a button pressed. URL and token live in `mdh:sync` in that browser only, never in a bundle. The web app is reachable by anyone with URL and token; that is the protection, not Google sign-in. The Apps Script itself is not covered by CI; `sync.test.ts` tests the client against a fake that mirrors `Code.gs`.

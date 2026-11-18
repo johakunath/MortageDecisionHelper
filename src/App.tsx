@@ -37,6 +37,7 @@ import {
 import {
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
+  DEFAULT_RATES_NOTE,
   EK_SCENARIOS,
   SECTIONS,
   type SectionId,
@@ -44,6 +45,7 @@ import {
 import { formatEur } from "./lib/format";
 import {
   defaultState,
+  buildBundle,
   deleteNamed,
   listSaves,
   loadAutosave,
@@ -52,6 +54,7 @@ import {
   saveNamed,
   storageAvailable,
   writeAutosave,
+  writeBundleSaves,
   type PersistedState,
 } from "./lib/storage";
 
@@ -68,6 +71,7 @@ const INITIAL_STATE: PersistedState = loadAutosave() ?? defaultState();
 export default function App() {
   const [inputs, setInputs] = useState<MortgageInputs>(INITIAL_STATE.inputs);
   const [rates, setRates] = useState<InterestRates>(INITIAL_STATE.rates);
+  const [ratesNote, setRatesNote] = useState<string>(INITIAL_STATE.ratesNote);
   const [apartmentCases, setApartmentCases] = useState<ApartmentCase[]>(INITIAL_STATE.apartmentCases);
   const [activeApartmentId, setActiveApartmentId] = useState<string>(INITIAL_STATE.activeApartmentId);
   const [selectedId, setSelectedId] = useState<ScenarioId>(INITIAL_STATE.selectedId);
@@ -79,8 +83,8 @@ export default function App() {
   const storageWorks = useMemo(() => storageAvailable(), []);
 
   const snapshot = useMemo<PersistedState>(
-    () => ({ version: 2, inputs, rates, apartmentCases, activeApartmentId, selectedId }),
-    [inputs, rates, apartmentCases, activeApartmentId, selectedId],
+    () => ({ version: 2, inputs, rates, ratesNote, apartmentCases, activeApartmentId, selectedId }),
+    [inputs, rates, ratesNote, apartmentCases, activeApartmentId, selectedId],
   );
 
   // Autosave, so an accidental reload never costs a session's worth of assumptions.
@@ -91,6 +95,7 @@ export default function App() {
   function applyState(state: PersistedState) {
     setInputs(state.inputs);
     setRates(state.rates);
+    setRatesNote(state.ratesNote);
     setApartmentCases(state.apartmentCases);
     setActiveApartmentId(state.activeApartmentId);
     setSelectedId(state.selectedId);
@@ -181,9 +186,16 @@ export default function App() {
   function updateRate(period: number, key: ScenarioId, value: number) {
     const column = normaliseFixedPeriod(period);
     setRates((current) => ({ ...current, [column]: { ...current[column], [key]: value } }));
+    // A typed rate is a new quote. The shipped note no longer describes it, so it is
+    // cleared and the field asks for Stand und Quelle (D36). A note the couple wrote
+    // themselves is left alone: they may be adding one quote to several.
+    setRatesNote((current) => (current === DEFAULT_RATES_NOTE ? "" : current));
   }
 
-  function updateApartmentCase(apartmentId: string, patch: Partial<Pick<ApartmentCase, ApartmentNumericKey>>) {
+  function updateApartmentCase(
+    apartmentId: string,
+    patch: Partial<Pick<ApartmentCase, ApartmentNumericKey | "label" | "note">>,
+  ) {
     setApartmentCases((current) =>
       current.map((apartment) => (apartment.id === apartmentId ? { ...apartment, ...patch } : apartment)),
     );
@@ -400,6 +412,8 @@ export default function App() {
               selectedId={selected.id}
               onInputChange={updateInput}
               onRateChange={updateRate}
+              ratesNote={ratesNote}
+              onRatesNoteChange={setRatesNote}
               onReset={() => applyPreset("reset")}
               onSafetyFocus={() => applyPreset("safety")}
               onMoreSpecial={() => applyPreset("special")}
@@ -426,6 +440,13 @@ export default function App() {
                 deleteNamed(name);
                 setSaves(listSaves());
                 if (activeSaveName === name) setActiveSaveName(null);
+              }}
+              buildExport={() => buildBundle(snapshot)}
+              onImport={(bundle) => {
+                writeBundleSaves(bundle.saves);
+                applyState(bundle.current);
+                setSaves(listSaves());
+                setActiveSaveName(null);
               }}
             />
           </section>

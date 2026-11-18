@@ -117,3 +117,10 @@ export function formatSignedPoints(value: number, digits = 1): string {
   const sign = value > 0 ? "+" : "−";
   return `${sign}${amount} Pkt.`;
 }
+
+/** An ISO timestamp as "18.11.2026, 13:00" in the reader's own time zone. */
+export function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "unbekannt";
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}

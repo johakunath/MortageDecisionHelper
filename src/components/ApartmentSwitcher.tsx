@@ -3,7 +3,7 @@ import { formatEur } from "../lib/format";
 import { GLOSSARY } from "../lib/glossary";
 import { Button, InputField, StatusPill } from "./ui";
 
-type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld";
+type ApartmentEditableKey = "label" | "note" | "purchasePrice" | "renovation" | "hausgeld";
 
 type ApartmentSwitcherProps = {
   results: ApartmentComparisonResult[];
@@ -16,7 +16,7 @@ type ApartmentFactsProps = {
   apartment: ApartmentCase;
   /** Grundsteuer + own reserve, added on top of the Hausgeld (D35). */
   ownerExtraMonthly: number;
-  onChange: (patch: Partial<Pick<ApartmentCase, ApartmentNumericKey>>) => void;
+  onChange: (patch: Partial<Pick<ApartmentCase, ApartmentEditableKey>>) => void;
 };
 
 /**
@@ -75,6 +75,27 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
   return (
     <details className="apartment-facts">
       <summary>Fakten zu {apartment.label} bearbeiten</summary>
+      <div className="apartment-facts-text">
+        <label className="save-field">
+          <span>Name</span>
+          <input
+            type="text"
+            value={apartment.label}
+            maxLength={60}
+            placeholder="z.B. Altbau Lindenstraße"
+            onChange={(event) => onChange({ label: event.target.value })}
+          />
+        </label>
+        <label className="save-field">
+          <span>Notiz</span>
+          <textarea
+            rows={2}
+            value={apartment.note ?? ""}
+            placeholder="z.B. Adresse, Makler, Link zum Exposé"
+            onChange={(event) => onChange({ note: event.target.value })}
+          />
+        </label>
+      </div>
       <div className="apartment-facts-grid">
         <InputField
           label="Kaufpreis"

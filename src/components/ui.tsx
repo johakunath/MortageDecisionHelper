@@ -123,8 +123,22 @@ type StatusPillProps = {
   children: ReactNode;
 };
 
+/** A glyph per tone, so the pill never carries its meaning by colour alone (rule 4). */
+const STATUS_GLYPHS: Partial<Record<Tone, string>> = {
+  green: "✓",
+  amber: "!",
+  orange: "!",
+  red: "✕",
+};
+
 export function StatusPill({ tone, children }: StatusPillProps) {
-  return <span className={`status status-${tone}`}>{children}</span>;
+  const glyph = STATUS_GLYPHS[tone];
+  return (
+    <span className={`status status-${tone}`}>
+      {glyph ? <span className="status-glyph" aria-hidden="true">{glyph}</span> : null}
+      {children}
+    </span>
+  );
 }
 
 type InputFieldProps = {

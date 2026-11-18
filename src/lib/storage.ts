@@ -1,5 +1,5 @@
 import { normaliseFixedPeriod, type ApartmentCase, type InterestRates, type MortgageInputs, type ScenarioId } from "./calculations";
-import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
+import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
 
 /**
  * Everything the user can change, in one serialisable shape.
@@ -10,6 +10,8 @@ export type PersistedState = {
   version: 2;
   inputs: MortgageInputs;
   rates: InterestRates;
+  /** Stand und Quelle der Sollzinsen, free text (D36). */
+  ratesNote: string;
   apartmentCases: ApartmentCase[];
   activeApartmentId: string;
   selectedId: ScenarioId;
@@ -153,6 +155,7 @@ function reviveApartment(stored: unknown, index: number, ownerExtra: number): Ap
     renovation: reviveNumber(raw.renovation, fallback.renovation),
     hausgeld: reviveHausgeld(raw, fallback.hausgeld, ownerExtra),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
+    ...(typeof raw.note === "string" && raw.note.length > 0 ? { note: raw.note } : {}),
   };
 }
 
@@ -167,6 +170,22 @@ function reviveHausgeld(raw: Record<string, unknown>, fallback: number, ownerExt
     return Math.max(0, reviveNumber(raw.monthlyOwnershipCosts, fallback + ownerExtra) - ownerExtra);
   }
   return fallback;
+}
+
+function ratesEqual(a: InterestRates, b: InterestRates): boolean {
+  return ([10, 15] as const).every((period) =>
+    EK_SCENARIOS.every((scenario) => a[period][scenario.id] === b[period][scenario.id]),
+  );
+}
+
+/**
+ * Saves from before D36 carry no note. If their rates are still the shipped defaults,
+ * the default provenance is true for them; otherwise nobody knows where they came
+ * from, and the screen says so rather than inventing a source.
+ */
+function reviveRatesNote(stored: unknown, rates: InterestRates): string {
+  if (typeof stored === "string") return stored;
+  return ratesEqual(rates, DEFAULT_RATES) ? DEFAULT_RATES_NOTE : "";
 }
 
 /** The EK level a v1 save was sitting on, read off its legacy id ("ek5" → 5). */
@@ -251,14 +270,16 @@ function reviveState(raw: string): PersistedState | null {
       ? (parsed.activeApartmentId as string)
       : apartmentCases[0].id;
     const storedRates = parsed.rates as InterestRates | undefined;
+    const rates: InterestRates = {
+      10: reviveRateRow(storedRates?.[10], DEFAULT_RATES[10]),
+      15: reviveRateRow(storedRates?.[15], DEFAULT_RATES[15]),
+    };
 
     return {
       version: CURRENT_VERSION,
       inputs,
-      rates: {
-        10: reviveRateRow(storedRates?.[10], DEFAULT_RATES[10]),
-        15: reviveRateRow(storedRates?.[15], DEFAULT_RATES[15]),
-      },
+      rates,
+      ratesNote: reviveRatesNote(parsed.ratesNote, rates),
       apartmentCases,
       activeApartmentId,
       selectedId: reviveScenarioId(parsed.selectedId),
@@ -318,6 +339,7 @@ export function defaultState(): PersistedState {
     version: CURRENT_VERSION,
     inputs: { ...DEFAULT_INPUTS },
     rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
+    ratesNote: DEFAULT_RATES_NOTE,
     apartmentCases: DEFAULT_APARTMENT_CASES.map((apartment) => ({
       ...apartment,
       annualSpecialRepayments: [...apartment.annualSpecialRepayments],
@@ -325,4 +347,63 @@ export function defaultState(): PersistedState {
     activeApartmentId: DEFAULT_APARTMENT_CASES[0].id,
     selectedId: "ek10",
   };
+}
+
+/**
+ * Everything the app knows, in one file: the screen as it stands plus every named
+ * save. Used for the JSON export and, unchanged, as the payload of the Sheet sync,
+ * so both carry the same shape and pass through the same `reviveState`.
+ */
+export type Bundle = {
+  app: "mortgage-decision-helper";
+  bundleVersion: 1;
+  /** ISO timestamp of when the bundle was built. The sync compares these. */
+  savedAt: string;
+  current: PersistedState;
+  saves: Record<string, PersistedState>;
+};
+
+export function buildBundle(current: PersistedState, now: Date = new Date()): Bundle {
+  const saves: Record<string, PersistedState> = {};
+  for (const name of listSaves()) {
+    const loaded = loadNamed(name);
+    if (loaded) saves[name] = loaded;
+  }
+  return { app: "mortgage-decision-helper", bundleVersion: 1, savedAt: now.toISOString(), current, saves };
+}
+
+/**
+ * Reads a bundle from text. Every state inside is revived like a localStorage entry,
+ * so an edited or older file can only ever produce defaults, never NaN. A broken named
+ * save is skipped rather than failing the whole import; a broken `current` fails it.
+ */
+export function parseBundle(text: string): Omit<Bundle, "current"> & { current: PersistedState } | null {
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown> | null;
+    if (!parsed || parsed.app !== "mortgage-decision-helper" || parsed.bundleVersion !== 1) return null;
+    const current = reviveState(JSON.stringify(parsed.current ?? null));
+    if (!current) return null;
+
+    const saves: Record<string, PersistedState> = {};
+    const storedSaves = (parsed.saves ?? {}) as Record<string, unknown>;
+    if (typeof storedSaves === "object") {
+      for (const [name, state] of Object.entries(storedSaves)) {
+        const revived = reviveState(JSON.stringify(state));
+        if (revived && name.trim()) saves[name.trim()] = revived;
+      }
+    }
+    const savedAt = typeof parsed.savedAt === "string" ? parsed.savedAt : "";
+    return { app: "mortgage-decision-helper", bundleVersion: 1, savedAt, current, saves };
+  } catch {
+    return null;
+  }
+}
+
+/** Writes a bundle's named saves; a save with the same name is replaced. Returns how many. */
+export function writeBundleSaves(saves: Record<string, PersistedState>): number {
+  let written = 0;
+  for (const [name, state] of Object.entries(saves)) {
+    if (saveNamed(name, state)) written += 1;
+  }
+  return written;
 }

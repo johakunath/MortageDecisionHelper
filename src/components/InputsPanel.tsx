@@ -249,6 +249,26 @@ function RateMatrix({
   );
 }
 
+/**
+ * Stand und Quelle der Sollzinsen as free text: one grid can mix quotes from several
+ * sources and days, which no date field can hold (D36). Empty is marked, because a
+ * rate without provenance reads as current when it may not be.
+ */
+function RatesProvenance({ note, onChange }: { note: string; onChange: (note: string) => void }) {
+  const missing = note.trim().length === 0;
+  return (
+    <label className={`save-field rates-provenance ${missing ? "is-missing" : ""}`}>
+      <span>Stand und Quelle{missing ? " · fehlt" : ""}</span>
+      <textarea
+        rows={2}
+        value={note}
+        placeholder="z.B. 10 J.: Interhyp vom 18.11.26 · 15 J.: Hausbank vom 20.11.26"
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
 type InputsPanelProps = {
   inputs: MortgageInputs;
   rates: InterestRates;
@@ -256,6 +276,8 @@ type InputsPanelProps = {
   selectedId: ScenarioId;
   onInputChange: (key: NumericInputKey, value: number) => void;
   onRateChange: (period: number, id: ScenarioId, value: number) => void;
+  ratesNote: string;
+  onRatesNoteChange: (note: string) => void;
   onReset: () => void;
   onSafetyFocus: () => void;
   onMoreSpecial: () => void;
@@ -273,6 +295,8 @@ export default function InputsPanel({
   selectedId,
   onInputChange,
   onRateChange,
+  ratesNote,
+  onRatesNoteChange,
   onReset,
   onSafetyFocus,
   onMoreSpecial,
@@ -404,9 +428,10 @@ export default function InputsPanel({
             activeFixedYears={inputs.fixedRateYears}
             onRateChange={onRateChange}
           />
+          <RatesProvenance note={ratesNote} onChange={onRatesNoteChange} />
           <p className="input-box-note">
-            Aus dem Finanzierungsangebot. Mehr Eigenkapital senkt den Zins nicht
-            gleichmäßig — bei 15 Jahren Bindung kosten 10% und 15% EK dasselbe.
+            Mehr Eigenkapital senkt den Zins nicht gleichmäßig. Im Angebot vom 07.08.2026
+            kosteten 10% und 15% EK bei 15 Jahren Bindung dasselbe.
           </p>
         </InputBox>
 
