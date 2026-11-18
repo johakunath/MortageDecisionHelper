@@ -76,7 +76,7 @@ export default function ExecutiveSummary({ scenarios, decision, inputs, selected
     return (
       <div className="verdict verdict-blocked">
         <h2>
-          Keine der drei Varianten ist tragbar
+          <span aria-hidden="true">✕ </span>Keine der drei Varianten ist tragbar
           <InfoTip text={GLOSSARY.cleanScenario} term="Tragbar" />
         </h2>
         <p>
@@ -110,28 +110,33 @@ export default function ExecutiveSummary({ scenarios, decision, inputs, selected
   return (
     <div className="verdict verdict-ok">
       <h2>
+        <span aria-hidden="true">✓ </span>
         {headline}
-        <InfoTip text={GLOSSARY.cleanScenario} term="Tragbar" />
       </h2>
-      <p>
-        Tragbar heißt: die Rate zahlt das Darlehen ab, nach dem Kauf bleiben mindestens{" "}
-        <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig und die Monatsrate bleibt
-        unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto.
-        {blocked.length > 0 ? (
-          <>
-            {" "}Nicht tragbar:{" "}
-            {blocked.map((scenario, index) => (
-              <span key={scenario.id}>
-                {index > 0 ? ", " : null}
-                {scenario.label} ({scenario.status})
-              </span>
-            ))}
-            .
-          </>
-        ) : null}{" "}
-        Gewählt ist <strong>{selected.label}</strong> mit {formatPct(selected.burdenRatio * 100)}{" "}
-        Belastung.
-      </p>
+      {blocked.length > 0 ? (
+        <p>
+          Nicht tragbar:{" "}
+          {blocked.map((scenario, index) => (
+            <span key={scenario.id}>
+              {index > 0 ? ", " : null}
+              {scenario.label} ({scenario.status})
+            </span>
+          ))}
+          .
+        </p>
+      ) : null}
+      {/* The definition is one click away rather than on screen: it is the same every
+          time, and it pushed the doors below the fold (D37). */}
+      <details className="verdict-details">
+        <summary>Was heißt tragbar?</summary>
+        <p>
+          Die Rate zahlt das Darlehen ab, nach dem Kauf bleiben mindestens{" "}
+          <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig und die Monatsrate
+          bleibt unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto.
+          Gewählt ist <strong>{selected.label}</strong> mit {formatPct(selected.burdenRatio * 100)}{" "}
+          Belastung.
+        </p>
+      </details>
     </div>
   );
 }

@@ -28,7 +28,13 @@ export default function TradeoffStatement({
   const netEtfReturn = afterTaxAnnualReturn(etfReturnRate, etfTaxRate, horizonYears);
 
   return (
-    <div className="tradeoff-statement">
+    <details className="tradeoff-statement">
+      <summary>
+        <strong>{to.label} statt {from.label}:</strong> netto{" "}
+        <strong>{formatSignedEur(netAdvantageFixed)}</strong>{" "}
+        {favoursMore ? "für mehr Eigenkapital" : "für mehr Liquidität"} über {horizonYears} Jahre
+        <span className="tradeoff-summary-more">Details</span>
+      </summary>
       <p>
         {/*
           The sign is read, never assumed. The Sollzinsen are hand-entered and the offer
@@ -61,6 +67,6 @@ export default function TradeoffStatement({
         </label>{" "}
         (nach Steuer ≈ {formatPct(netEtfReturn)} p.a.; die gesparten Zinsen sind steuerfrei).
       </p>
-    </div>
+    </details>
   );
 }

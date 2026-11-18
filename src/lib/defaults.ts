@@ -230,7 +230,7 @@ export const INPUT_BOXES = [
   { id: "capital", label: "Eigenkapital & Kaufkosten" },
   { id: "household", label: "Haushalt" },
   { id: "loan", label: "Darlehen" },
-  { id: "rates", label: "Sollzinsen laut Angebot" },
+  { id: "rates", label: "Sollzinsen" },
   { id: "market", label: "Markt" },
 ] as const;
 

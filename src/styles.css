@@ -32,22 +32,30 @@
 
 :root {
   font-family: "Inter Tight Local", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #252320;
-  background: #f7f3ec;
+  color: #1f1d1a;
+  background: #efeae0;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --cream: #f7f3ec;
-  --paper: #fbf8f1;
-  --ink: #252320;
-  --soft: #6b6357;
-  --muted: #9c9384;
-  --rule: #e6dfce;
-  --sage: #5e7861;
-  --blush: #c98373;
-  --alert: #b75c4d;
-  --amber: #9f703f;
-  --blue: #526d8f;
+  --cream: #efeae0;
+  --paper: #ffffff;
+  --ink: #1f1d1a;
+  --soft: #4c463d;
+  --muted: #6f675a;
+  --rule: #cdc3af;
+  --sage: #3f6646;
+  --blush: #b46b5a;
+  --alert: #9a3f30;
+  --amber: #8a5e2f;
+  --blue: #3f5a7d;
+  /*
+   * The dark frame: header and step rail (D37). It separates navigation from content
+   * by tone, so the content blocks can stay light without blurring into the chrome.
+   */
+  --frame: #3a3631;
+  --frame-raised: #4d4841;
+  --frame-ink: #f3efe7;
+  --frame-soft: #c4bbac;
   /*
    * Height of the sticky header, which everything sticky below clears.
    * This is a constant on purpose: the header holds ONE row of fixed-height content —
@@ -106,8 +114,11 @@ button {
      the sides as content scrolls under it. */
   margin: 0 -56px;
   padding: 0 56px;
-  background: var(--cream);
-  border-bottom: 1px solid var(--rule);
+  background: var(--frame);
+  /* Extends the dark band past .app-shell's max-width on very wide screens. */
+  box-shadow: 0 0 0 100vmax var(--frame);
+  clip-path: inset(0 -100vmax);
+  color: var(--frame-ink);
   /*
    * Height is asserted, not inherited from the text. Everything sticky below clears
    * it with `top: var(--header-height)`, so a header that measured even a few pixels
@@ -144,7 +155,7 @@ button {
 }
 
 .brand-text {
-  color: var(--soft);
+  color: var(--frame-ink);
   font-family: "Fraunces Local", Georgia, serif;
   font-size: 0.96rem;
   font-style: italic;
@@ -182,10 +193,14 @@ button {
 
 .step-rail {
   position: sticky;
-  top: var(--header-height);
+  top: calc(var(--header-height) + 16px);
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-height: calc(100vh - var(--header-height) - 40px);
+  padding: 10px 8px;
+  border-radius: 12px;
+  background: var(--frame);
 }
 
 .step-rail-item {
@@ -194,9 +209,9 @@ button {
   gap: 10px;
   padding: 7px 10px;
   border: 0;
-  border-left: 2px solid var(--rule);
+  border-left: 2px solid transparent;
   border-radius: 0 6px 6px 0;
-  color: var(--muted);
+  color: var(--frame-soft);
   background: transparent;
   font-size: 0.86rem;
   text-align: left;
@@ -210,15 +225,15 @@ button {
 }
 
 .step-rail-item:hover {
-  color: var(--ink);
-  border-left-color: var(--soft);
-  background: rgba(251, 248, 241, 0.7);
+  color: var(--frame-ink);
+  border-left-color: var(--frame-soft);
+  background: var(--frame-raised);
 }
 
 .step-rail-item.is-active {
-  color: var(--ink);
-  border-left-color: var(--sage);
-  background: var(--paper);
+  color: var(--frame-ink);
+  border-left-color: var(--frame-ink);
+  background: var(--frame-raised);
   font-weight: 600;
 }
 
@@ -229,7 +244,7 @@ button {
   gap: 10px;
   min-width: 0;
   overflow: hidden;
-  color: var(--soft);
+  color: var(--frame-soft);
   font-size: 0.88rem;
   /* Wrapping here would push the header past --header-height, and everything sticky
      below clears that constant — see the note on the custom property. */
@@ -237,7 +252,7 @@ button {
 }
 
 .topbar-context-label {
-  color: var(--ink);
+  color: var(--frame-ink);
   font-weight: 600;
 }
 
@@ -246,7 +261,7 @@ button {
   height: 3px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: var(--rule);
+  background: var(--frame-soft);
 }
 
 /* ==========================================================================
@@ -266,7 +281,7 @@ button {
 
 .ek-switch-label {
   margin-right: 2px;
-  color: var(--muted);
+  color: var(--frame-soft);
   font-size: 0.78rem;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -280,10 +295,10 @@ button {
   height: 26px;
   min-width: 52px;
   padding: 0 10px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--frame-soft);
   border-radius: 7px;
-  color: var(--soft);
-  background: var(--paper);
+  color: var(--frame-ink);
+  background: transparent;
   font-family: "JetBrains Mono Local", ui-monospace, monospace;
   font-size: 0.82rem;
   line-height: 1;
@@ -296,8 +311,8 @@ button {
 }
 
 .ek-switch-button:hover {
-  border-color: var(--soft);
-  color: var(--ink);
+  border-color: var(--frame-ink);
+  background: var(--frame-raised);
 }
 
 /*
@@ -305,14 +320,14 @@ button {
  * (PRODUCT_SPEC §14), and `aria-pressed` carries it for anyone not seeing any of them.
  */
 .ek-switch-button.is-active {
-  border-color: var(--ink);
+  border-color: var(--frame-ink);
   color: var(--ink);
-  background: #fffdf8;
+  background: var(--frame-ink);
   font-weight: 700;
 }
 
 .ek-switch-button:focus-visible {
-  outline: 2px solid var(--sage);
+  outline: 2px solid var(--frame-ink);
   outline-offset: 2px;
 }
 
@@ -350,7 +365,7 @@ button {
 
 .apartment-chip.is-active {
   border-color: var(--ink);
-  background: #fffdf8;
+  background: var(--paper);
 }
 
 .apartment-chip-label {
@@ -500,7 +515,7 @@ button {
   line-height: 1.45;
   letter-spacing: 0;
   text-transform: none;
-  box-shadow: 0 6px 18px rgba(37, 35, 32, 0.18);
+  box-shadow: 0 6px 18px rgba(31, 29, 26, 0.18);
 }
 
 .infotip-body::after {
@@ -525,9 +540,9 @@ button {
 }
 
 .verdict h2 {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   font-family: "Fraunces Local", Georgia, serif;
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
   font-weight: 350;
   line-height: 1.1;
 }
@@ -554,8 +569,36 @@ button {
 }
 
 .verdict-ok {
-  border-color: rgba(94, 120, 97, 0.38);
-  background: rgba(243, 249, 240, 0.6);
+  border: 2px solid var(--sage);
+  background: #e3ece0;
+}
+
+.verdict-details summary,
+.tradeoff-statement summary {
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.verdict-details summary {
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.verdict-details[open] summary {
+  margin-bottom: 6px;
+}
+
+.tradeoff-summary-more {
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tradeoff-statement[open] summary {
+  margin-bottom: 12px;
 }
 
 .verdict-ok h2 {
@@ -563,8 +606,8 @@ button {
 }
 
 .verdict-blocked {
-  border-color: rgba(183, 92, 77, 0.38);
-  background: rgba(255, 241, 236, 0.55);
+  border: 2px solid var(--alert);
+  background: #f6e1db;
 }
 
 .verdict-blocked h2 {
@@ -609,7 +652,7 @@ button {
   padding: 1px 8px;
   border: 1px solid var(--rule);
   border-radius: 999px;
-  background: #fffdf8;
+  background: var(--paper);
   color: var(--ink);
   font-weight: 600;
 }
@@ -626,7 +669,7 @@ button {
 
 .tradeoff-etf-chip:focus-within {
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(94, 120, 97, 0.22);
+  box-shadow: 0 0 0 3px rgba(63, 102, 70, 0.22);
 }
 
 /* ==========================================================================
@@ -672,13 +715,26 @@ button {
 }
 
 .compromise-door:hover {
-  border-color: rgba(37, 35, 32, 0.42);
+  border-color: rgba(31, 29, 26, 0.42);
 }
 
 .compromise-door.is-selected {
   color: var(--paper);
-  border-color: var(--ink);
-  background: var(--ink);
+  border-color: var(--sage);
+  background: var(--sage);
+}
+
+/* On the green door, tone colours would vanish; the glyphs and words still carry the
+   meaning, so everything inside reads in the door's own light ink. */
+.compromise-door.is-selected .status,
+.compromise-door.is-selected .signed-value,
+.compromise-door.is-selected .signed-value * {
+  color: var(--paper);
+}
+
+.compromise-door.is-selected .status {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .door-rate {
@@ -791,21 +847,21 @@ button {
 }
 
 .readout-blue {
-  border-color: rgba(82, 109, 143, 0.34);
+  border-color: rgba(63, 90, 125, 0.34);
 }
 
 .readout-green {
-  border-color: rgba(94, 120, 97, 0.38);
+  border-color: rgba(63, 102, 70, 0.38);
   background: rgba(243, 249, 240, 0.6);
 }
 
 .readout-amber,
 .readout-orange {
-  border-color: rgba(159, 112, 63, 0.34);
+  border-color: rgba(138, 94, 47, 0.34);
 }
 
 .readout-red {
-  border-color: rgba(183, 92, 77, 0.38);
+  border-color: rgba(154, 63, 48, 0.38);
   background: rgba(255, 241, 236, 0.62);
 }
 
@@ -839,7 +895,7 @@ button {
 }
 
 .input-field-highlight {
-  border-color: rgba(94, 120, 97, 0.54);
+  border-color: rgba(63, 102, 70, 0.54);
   border-left-color: var(--sage);
 }
 
@@ -858,7 +914,7 @@ button {
   padding: 0 10px;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: #fffdf8;
+  background: var(--paper);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
@@ -867,7 +923,7 @@ button {
 .input-row:focus-within,
 .special-row:focus-within {
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(94, 120, 97, 0.22);
+  box-shadow: 0 0 0 3px rgba(63, 102, 70, 0.22);
 }
 
 .input-row input,
@@ -921,7 +977,7 @@ button {
   border: 1px solid var(--rule);
   border-radius: 8px;
   color: var(--soft);
-  background: #fffdf8;
+  background: var(--paper);
   font-size: 0.88rem;
   font-weight: 700;
   line-height: 1.25;
@@ -1006,29 +1062,34 @@ button {
   white-space: nowrap;
 }
 
+.status-glyph {
+  margin-right: 5px;
+  font-weight: 700;
+}
+
 .status-green {
   color: var(--sage);
-  background: rgba(94, 120, 97, 0.11);
-  border-color: rgba(94, 120, 97, 0.3);
+  background: rgba(63, 102, 70, 0.11);
+  border-color: rgba(63, 102, 70, 0.3);
 }
 
 .status-amber,
 .status-orange {
   color: var(--amber);
-  background: rgba(201, 131, 115, 0.12);
-  border-color: rgba(201, 131, 115, 0.3);
+  background: rgba(180, 107, 90, 0.12);
+  border-color: rgba(180, 107, 90, 0.3);
 }
 
 .status-red {
   color: var(--alert);
-  background: rgba(183, 92, 77, 0.12);
-  border-color: rgba(183, 92, 77, 0.32);
+  background: rgba(154, 63, 48, 0.12);
+  border-color: rgba(154, 63, 48, 0.32);
 }
 
 .status-blue,
 .status-slate {
   color: var(--soft);
-  background: rgba(230, 223, 206, 0.42);
+  background: rgba(205, 195, 175, 0.42);
   border-color: var(--rule);
 }
 
@@ -1135,7 +1196,7 @@ button {
 
 /* Marks the column the reader is comparing against, without relying on colour. */
 .tradeoff-table .is-active-col {
-  background: rgba(94, 120, 97, 0.07);
+  background: rgba(63, 102, 70, 0.07);
 }
 
 .wait-table th:first-child,
@@ -1150,7 +1211,7 @@ button {
  */
 .wait-table .is-total-row td {
   border-top: 2px solid var(--rule);
-  background: rgba(94, 120, 97, 0.05);
+  background: rgba(63, 102, 70, 0.05);
 }
 
 .wait-table .is-total-row td strong {
@@ -1163,7 +1224,7 @@ button {
   padding: 10px 12px;
   border-left: 3px solid var(--sage);
   border-radius: 0 6px 6px 0;
-  background: rgba(94, 120, 97, 0.06);
+  background: rgba(63, 102, 70, 0.06);
   color: var(--ink);
   font-size: 0.9rem;
   line-height: 1.5;
@@ -1207,11 +1268,9 @@ button {
   flex: 1;
   min-height: 0;
   padding: 16px;
-  border: 1px solid rgba(94, 120, 97, 0.38);
-  border-radius: 8px;
-  background:
-    linear-gradient(145deg, rgba(238, 243, 234, 0.96), rgba(246, 241, 231, 0.84)),
-    #eef3ea;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--paper);
 }
 
 .result-panel-head {
@@ -1241,6 +1300,8 @@ button {
 
 /* Five readouts now share the column height, so each one is tighter (D19). */
 .right-panel .readout {
+  border: 0;
+  background: var(--cream);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1269,7 +1330,7 @@ button {
 }
 
 .logic-danger {
-  border-color: rgba(183, 92, 77, 0.38);
+  border-color: rgba(154, 63, 48, 0.38);
 }
 
 /* ==========================================================================
@@ -1332,7 +1393,7 @@ button {
   padding: 8px 10px;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: #fffdf8;
+  background: var(--paper);
 }
 
 .special-row span {
@@ -1471,8 +1532,8 @@ button {
   transform: translate(10px, 0);
   border: 1px solid var(--rule);
   border-radius: 9px;
-  background: #fffdf8;
-  box-shadow: 0 6px 20px rgba(37, 35, 32, 0.12);
+  background: var(--paper);
+  box-shadow: 0 6px 20px rgba(31, 29, 26, 0.12);
   pointer-events: none;
 }
 
@@ -1519,7 +1580,7 @@ button {
 }
 
 .chart-tooltip-swatch.is-muted {
-  background: rgba(94, 120, 97, 0.3);
+  background: rgba(63, 102, 70, 0.3);
 }
 
 .chart-tooltip-swatch.is-blank {
@@ -1675,7 +1736,7 @@ button {
 
 .save-chip.is-active {
   border-color: var(--sage);
-  background: rgba(94, 120, 97, 0.1);
+  background: rgba(63, 102, 70, 0.1);
 }
 
 .save-row {
@@ -1713,7 +1774,7 @@ button {
 
 .save-field input:focus {
   border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(94, 120, 97, 0.22);
+  box-shadow: 0 0 0 3px rgba(63, 102, 70, 0.22);
 }
 
 .save-list {
@@ -1742,7 +1803,7 @@ button {
 }
 
 .save-chip-load:hover {
-  background: rgba(94, 120, 97, 0.1);
+  background: rgba(63, 102, 70, 0.1);
 }
 
 .save-chip-delete,
@@ -1761,7 +1822,7 @@ button {
 .save-chip-confirm {
   border: 0;
   padding: 0 10px;
-  background: rgba(183, 92, 77, 0.12);
+  background: rgba(154, 63, 48, 0.12);
   color: var(--alert);
   font-size: 0.78rem;
   font-weight: 600;
@@ -1844,7 +1905,7 @@ button {
 
 /* Above the contractual cap the amount is not simply "high", it is not allowed. */
 .special-entry.is-over-cap .special-row {
-  border-color: rgba(183, 92, 77, 0.5);
+  border-color: rgba(154, 63, 48, 0.5);
 }
 
 .special-over-cap {
@@ -1995,7 +2056,7 @@ button {
 }
 
 .rate-matrix .is-active-col {
-  background: rgba(94, 120, 97, 0.08);
+  background: rgba(63, 102, 70, 0.08);
 }
 
 .input-field-bare {
@@ -2046,7 +2107,7 @@ button {
 }
 
 .bar-muted {
-  fill: rgba(94, 120, 97, 0.3);
+  fill: rgba(63, 102, 70, 0.3);
 }
 
 .bar-highlighted.bar-solid {
@@ -2100,7 +2161,7 @@ button {
 }
 
 .chart-swatch-muted {
-  background: rgba(94, 120, 97, 0.3);
+  background: rgba(63, 102, 70, 0.3);
 }
 
 .chart-legend-note {
@@ -2130,16 +2191,17 @@ button {
     position: static;
     flex-direction: row;
     flex-wrap: wrap;
+    min-height: 0;
   }
 
   .step-rail-item {
     border-left: 0;
-    border-bottom: 2px solid var(--rule);
+    border-bottom: 2px solid transparent;
     border-radius: 6px 6px 0 0;
   }
 
   .step-rail-item.is-active {
-    border-bottom-color: var(--sage);
+    border-bottom-color: var(--frame-ink);
   }
 
   .right-panel {
