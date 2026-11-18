@@ -1,5 +1,5 @@
 import { normaliseFixedPeriod, type ApartmentCase, type InterestRates, type MortgageInputs, type ScenarioId } from "./calculations";
-import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
+import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_META, EK_SCENARIOS, type RatesMeta } from "./defaults";
 
 /**
  * Everything the user can change, in one serialisable shape.
@@ -10,6 +10,7 @@ export type PersistedState = {
   version: 2;
   inputs: MortgageInputs;
   rates: InterestRates;
+  ratesMeta: RatesMeta;
   apartmentCases: ApartmentCase[];
   activeApartmentId: string;
   selectedId: ScenarioId;
@@ -169,6 +170,27 @@ function reviveHausgeld(raw: Record<string, unknown>, fallback: number, ownerExt
   return fallback;
 }
 
+function ratesEqual(a: InterestRates, b: InterestRates): boolean {
+  return ([10, 15] as const).every((period) =>
+    EK_SCENARIOS.every((scenario) => a[period][scenario.id] === b[period][scenario.id]),
+  );
+}
+
+/**
+ * Saves from before D36 carry no date. If their rates are still the shipped defaults,
+ * the default provenance is true for them; otherwise nobody knows when they were typed,
+ * and the screen says so rather than inventing a date.
+ */
+function reviveRatesMeta(stored: unknown, rates: InterestRates): RatesMeta {
+  const raw = (stored ?? null) as Record<string, unknown> | null;
+  if (raw && typeof raw === "object") {
+    const asOf = typeof raw.asOf === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.asOf) ? raw.asOf : "";
+    const source = typeof raw.source === "string" ? raw.source : "";
+    return { asOf, source };
+  }
+  return ratesEqual(rates, DEFAULT_RATES) ? { ...DEFAULT_RATES_META } : { asOf: "", source: "" };
+}
+
 /** The EK level a v1 save was sitting on, read off its legacy id ("ek5" → 5). */
 function legacyEkRate(selectedId: unknown): number {
   const parsed = Number(String(selectedId ?? "").replace("ek", ""));
@@ -251,14 +273,16 @@ function reviveState(raw: string): PersistedState | null {
       ? (parsed.activeApartmentId as string)
       : apartmentCases[0].id;
     const storedRates = parsed.rates as InterestRates | undefined;
+    const rates: InterestRates = {
+      10: reviveRateRow(storedRates?.[10], DEFAULT_RATES[10]),
+      15: reviveRateRow(storedRates?.[15], DEFAULT_RATES[15]),
+    };
 
     return {
       version: CURRENT_VERSION,
       inputs,
-      rates: {
-        10: reviveRateRow(storedRates?.[10], DEFAULT_RATES[10]),
-        15: reviveRateRow(storedRates?.[15], DEFAULT_RATES[15]),
-      },
+      rates,
+      ratesMeta: reviveRatesMeta(parsed.ratesMeta, rates),
       apartmentCases,
       activeApartmentId,
       selectedId: reviveScenarioId(parsed.selectedId),
@@ -318,6 +342,7 @@ export function defaultState(): PersistedState {
     version: CURRENT_VERSION,
     inputs: { ...DEFAULT_INPUTS },
     rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
+    ratesMeta: { ...DEFAULT_RATES_META },
     apartmentCases: DEFAULT_APARTMENT_CASES.map((apartment) => ({
       ...apartment,
       annualSpecialRepayments: [...apartment.annualSpecialRepayments],

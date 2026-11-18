@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { defaultState, loadNamed, saveExists, saveNamed, storageAvailable } from "./storage";
-import { DEFAULT_INPUTS, DEFAULT_RATES, EK_SCENARIOS } from "./defaults";
+import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_META, EK_SCENARIOS } from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -183,5 +183,28 @@ describe("persistence", () => {
     // Never a negative Hausgeld, even if the old total was below the new extra.
     expect(loaded.apartmentCases[1].hausgeld).toBe(0);
     expect(loaded.apartmentCases[2].hausgeld).toBe(550);
+  });
+
+  it("keeps the date and source of the rates (D36)", () => {
+    const state = { ...defaultState(), ratesMeta: { asOf: "2026-11-18", source: "Interhyp Angebote" } };
+    saveNamed("neu", state);
+    expect(loadNamed("neu")!.ratesMeta).toEqual({ asOf: "2026-11-18", source: "Interhyp Angebote" });
+  });
+
+  it("gives an undated save the default provenance only if its rates are the defaults (D36)", () => {
+    const { ratesMeta: _meta, ...untouched } = defaultState();
+    window.localStorage.setItem("mdh:save:alt-default", JSON.stringify(untouched));
+    expect(loadNamed("alt-default")!.ratesMeta).toEqual(DEFAULT_RATES_META);
+
+    const edited = { ...untouched, rates: { ...untouched.rates, 10: { ...untouched.rates[10], ek10: 4.2 } } };
+    window.localStorage.setItem("mdh:save:alt-edited", JSON.stringify(edited));
+    // Nobody recorded when 4,2% was typed; inventing a date would be worse than none.
+    expect(loadNamed("alt-edited")!.ratesMeta).toEqual({ asOf: "", source: "" });
+  });
+
+  it("drops a malformed stored date instead of showing it", () => {
+    const state = { ...defaultState(), ratesMeta: { asOf: "18.11.26", source: "x" } };
+    window.localStorage.setItem("mdh:save:bad-date", JSON.stringify(state));
+    expect(loadNamed("bad-date")!.ratesMeta).toEqual({ asOf: "", source: "x" });
   });
 });

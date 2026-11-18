@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatShortDate,
+  todayIso,
   formatCompactEur,
   formatNumber,
   formatSignedEur,
@@ -81,5 +83,18 @@ describe("year and compact formatting", () => {
     expect(formatSignedPoints(-0.214)).toBe("−0,2 Pkt.");
     expect(formatSignedPoints(1.5)).toBe("+1,5 Pkt.");
     expect(formatSignedPoints(0.01)).toBe("0 Pkt.");
+  });
+});
+
+describe("dates", () => {
+  it("formats an ISO date short and German, without a timezone shift", () => {
+    expect(formatShortDate("2026-11-18")).toBe("18.11.26");
+    expect(formatShortDate("2026-01-01")).toBe("01.01.26");
+    expect(formatShortDate("")).toBe("—");
+    expect(formatShortDate("18.11.26")).toBe("—");
+  });
+
+  it("builds today from local time", () => {
+    expect(todayIso(new Date(2026, 10, 18, 23, 59))).toBe("2026-11-18");
   });
 });

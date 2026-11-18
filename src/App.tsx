@@ -37,11 +37,13 @@ import {
 import {
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
+  DEFAULT_RATES_META,
   EK_SCENARIOS,
   SECTIONS,
+  type RatesMeta,
   type SectionId,
 } from "./lib/defaults";
-import { formatEur } from "./lib/format";
+import { formatEur, todayIso } from "./lib/format";
 import {
   defaultState,
   deleteNamed,
@@ -68,6 +70,7 @@ const INITIAL_STATE: PersistedState = loadAutosave() ?? defaultState();
 export default function App() {
   const [inputs, setInputs] = useState<MortgageInputs>(INITIAL_STATE.inputs);
   const [rates, setRates] = useState<InterestRates>(INITIAL_STATE.rates);
+  const [ratesMeta, setRatesMeta] = useState<RatesMeta>(INITIAL_STATE.ratesMeta);
   const [apartmentCases, setApartmentCases] = useState<ApartmentCase[]>(INITIAL_STATE.apartmentCases);
   const [activeApartmentId, setActiveApartmentId] = useState<string>(INITIAL_STATE.activeApartmentId);
   const [selectedId, setSelectedId] = useState<ScenarioId>(INITIAL_STATE.selectedId);
@@ -79,8 +82,8 @@ export default function App() {
   const storageWorks = useMemo(() => storageAvailable(), []);
 
   const snapshot = useMemo<PersistedState>(
-    () => ({ version: 2, inputs, rates, apartmentCases, activeApartmentId, selectedId }),
-    [inputs, rates, apartmentCases, activeApartmentId, selectedId],
+    () => ({ version: 2, inputs, rates, ratesMeta, apartmentCases, activeApartmentId, selectedId }),
+    [inputs, rates, ratesMeta, apartmentCases, activeApartmentId, selectedId],
   );
 
   // Autosave, so an accidental reload never costs a session's worth of assumptions.
@@ -91,6 +94,7 @@ export default function App() {
   function applyState(state: PersistedState) {
     setInputs(state.inputs);
     setRates(state.rates);
+    setRatesMeta(state.ratesMeta);
     setApartmentCases(state.apartmentCases);
     setActiveApartmentId(state.activeApartmentId);
     setSelectedId(state.selectedId);
@@ -181,6 +185,12 @@ export default function App() {
   function updateRate(period: number, key: ScenarioId, value: number) {
     const column = normaliseFixedPeriod(period);
     setRates((current) => ({ ...current, [column]: { ...current[column], [key]: value } }));
+    // A typed rate is a new quote: stamp today. The shipped source no longer describes
+    // it, so it is cleared for the couple to name (D36).
+    setRatesMeta((current) => ({
+      asOf: todayIso(),
+      source: current.source === DEFAULT_RATES_META.source ? "" : current.source,
+    }));
   }
 
   function updateApartmentCase(apartmentId: string, patch: Partial<Pick<ApartmentCase, ApartmentNumericKey>>) {
@@ -400,6 +410,8 @@ export default function App() {
               selectedId={selected.id}
               onInputChange={updateInput}
               onRateChange={updateRate}
+              ratesMeta={ratesMeta}
+              onRatesMetaChange={setRatesMeta}
               onReset={() => applyPreset("reset")}
               onSafetyFocus={() => applyPreset("safety")}
               onMoreSpecial={() => applyPreset("special")}

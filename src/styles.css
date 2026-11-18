@@ -1933,6 +1933,30 @@ button {
   grid-column: span 2;
 }
 
+.rates-provenance {
+  margin-top: 12px;
+}
+
+.rates-provenance-summary {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
+.rates-provenance-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rates-provenance-fields .save-field {
+  min-width: 160px;
+}
+
+.save-field.is-missing input {
+  border-left-color: var(--amber);
+}
+
 .input-box-note {
   margin: 10px 0 0;
   color: var(--muted);

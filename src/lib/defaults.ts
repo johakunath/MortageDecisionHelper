@@ -61,6 +61,21 @@ export const DEFAULT_RATES: InterestRates = {
   15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 },
 };
 
+/**
+ * Where the Sollzinsen came from. Rates drift weekly; a figure without a date reads
+ * as current when it may be months old. Editing any rate stamps today's date (D36).
+ */
+export type RatesMeta = {
+  /** ISO date, yyyy-mm-dd. Empty when unknown. */
+  asOf: string;
+  source: string;
+};
+
+export const DEFAULT_RATES_META: RatesMeta = {
+  asOf: "2026-08-07",
+  source: "Finanzierungsangebot",
+};
+
 export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek10", ekRate: 10, label: "10% EK" },
   { id: "ek15", ekRate: 15, label: "15% EK" },
