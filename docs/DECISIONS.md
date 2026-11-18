@@ -578,3 +578,19 @@ Every status now names *what is wrong* rather than which internal constraint fai
 **Decision.** Of three mockups the owner chose a dark frame: header and step rail on `--frame` (#3a3631), white cards on a tinted page, darker rules, text and accent tones. Fonts unchanged. The verdict shrinks to headline plus what is not tragbar; the definition of tragbar folds into "Was heißt tragbar?". The trade-off sentence folds to its net figure with the full text under "Details". The selected door is sage instead of black. Status pills gain a glyph (✓ / ! / ✕), so they no longer rely on colour (rule 4).
 
 **Consequence.** Header still measures `--header-height` at 1280 / 1000 / 820 / 560px, and the right panel still does not scroll at 1280×800.
+
+---
+
+## D38: Export as a file and an optional, manual Google Sheet sync
+
+**Date:** 2026-11-18 · **Status:** accepted
+
+**Context.** Everything lived in one browser's localStorage. The owner enters assumptions on the PC and the phone and wants apartments and rates kept without retyping.
+
+**Decision.** Two ways out of the browser, both carrying the same `Bundle` (screen state plus every named save) and both passing through `reviveState`:
+1. **JSON export / import.** Works offline, including in the standalone file. Import shows what it will load and asks first.
+2. **Google Sheet via Apps Script** (`docs/google-sheet-sync/`). The Sheet is in the owner's Drive; a container-bound script, deployed as a web app, stores the bundle and writes read-only overview tabs. A token in Script Properties guards it. Load and save are **manual buttons**: an automatic pull would replace numbers while someone reads them. A save is refused if the Sheet holds a state this device has not seen; the couple then chooses "Erst laden" or "Trotzdem überschreiben".
+
+A database service (Supabase, Firebase) was rejected: a new dependency, an account and auth for two people and a few dozen records, with nothing gained over a Sheet they already own.
+
+**Consequence.** CLAUDE.md's "no network call" rule for the standalone build still holds by default: no request is made until a device is connected and a button pressed. URL and token live in `mdh:sync` in that browser only, never in a bundle. The web app is reachable by anyone with URL and token; that is the protection, not Google sign-in. The Apps Script itself is not covered by CI; `sync.test.ts` tests the client against a fake that mirrors `Code.gs`.

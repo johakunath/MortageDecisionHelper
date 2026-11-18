@@ -18,6 +18,7 @@ A personal decision-support tool for one German couple deciding how much Eigenka
 | `src/lib/calculations.test.ts` | Vitest coverage for the above |
 | `src/lib/offer.test.ts` | The engine pinned to a real broker offer. Do not weaken |
 | `src/lib/defaults.ts` | Default inputs, EK scenarios, apartment cases, QA test presets |
+| `src/lib/storage.ts`, `src/lib/sync.ts` | localStorage, JSON export bundle, optional Sheet sync. Apps Script in `docs/google-sheet-sync/` |
 | `src/lib/format.ts` | All money/percent/year rendering. Never format inline |
 | `src/components/ui.tsx` | Shared primitives — `Section`, `Button`, `Readout`, `StatusPill`, `InputField`, `SegmentedChoice`, `MiniMetric`, `MetricBar` |
 | `src/styles.css` | Every style. Single file, CSS custom properties, no utility framework |
@@ -65,7 +66,7 @@ npm test
 npm run build
 ```
 
-`npm run build` also regenerates `dist/mortgage-helper-standalone.html`, a single-file offline copy the owner opens directly in a browser. Anything requiring a server, an external asset or a network call breaks it — verify the build after structural changes.
+`npm run build` also regenerates `dist/mortgage-helper-standalone.html`, a single-file offline copy the owner opens directly in a browser. Anything requiring a server, an external asset or a network call breaks it — verify the build after structural changes. The one sanctioned network path is the optional, button-triggered Google Sheet sync ([D38](docs/DECISIONS.md)); the app must keep working fully without it.
 
 ## Before you finish
 

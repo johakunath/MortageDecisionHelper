@@ -1826,6 +1826,38 @@ button {
   margin: 0 0 10px;
 }
 
+.sheet-sync {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.sheet-sync summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sheet-sync[open] summary {
+  margin-bottom: 8px;
+}
+
+.sheet-sync-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sheet-sync-disconnect {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .save-list {
   display: flex;
   flex-wrap: wrap;

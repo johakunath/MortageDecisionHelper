@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { formatTimestamp } from "../lib/format";
 import { parseBundle, type Bundle } from "../lib/storage";
+import SheetSync from "./SheetSync";
 import { Button } from "./ui";
 
 type SavePanelProps = {
@@ -100,9 +101,9 @@ function FileTransfer({ buildExport, onImport }: Pick<SavePanelProps, "buildExpo
 }
 
 /**
- * Named snapshots in the browser's localStorage. Everything stays on this machine —
- * there is no backend and nothing is transmitted, which is also why a cleared browser
- * profile loses the saves.
+ * Named snapshots in the browser's localStorage, plus two ways out of this browser: a
+ * JSON file, and an optional Google Sheet the couple owns (D38). Nothing is sent
+ * anywhere unless they press a sync button.
  *
  * Loading a save now makes it *active*, which is what makes "Aktualisieren" possible:
  * before, the only way back into a stored set was to retype its name exactly and hope
@@ -229,6 +230,7 @@ export default function SavePanel({
         </p>
       )}
       <FileTransfer buildExport={buildExport} onImport={onImport} />
+      <SheetSync buildExport={buildExport} onImport={onImport} />
     </div>
   );
 }
