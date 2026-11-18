@@ -115,7 +115,9 @@ button {
   margin: 0 -56px;
   padding: 0 56px;
   background: var(--frame);
-  /* Extends the dark band past .app-shell's max-width on very wide screens. */
+  /* Extends the dark band past .app-shell's max-width on very wide screens. The clip
+     also cuts anything hanging below the header, which is why the sync popover is
+     rendered outside it. */
   box-shadow: 0 0 0 100vmax var(--frame);
   clip-path: inset(0 -100vmax);
   color: var(--frame-ink);
@@ -130,13 +132,142 @@ button {
   height: var(--header-height);
 }
 
+/* Three columns so the EK switch stays centred whatever sits left and right of it. */
 .topbar {
-  display: flex;
+  display: grid;
   flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 28px;
   min-width: 0;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Sheet sync in the header (D39): two fixed-height buttons, a popover below
+   ========================================================================== */
+
+.sync-controls {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.sync-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--frame-soft);
+  border-radius: 7px;
+  color: var(--frame-ink);
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sync-button:hover:not(:disabled) {
+  border-color: var(--frame-ink);
+  background: var(--frame-raised);
+}
+
+.sync-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.sync-button:focus-visible {
+  outline: 2px solid var(--frame-ink);
+  outline-offset: 2px;
+}
+
+.sync-button.is-unsaved {
+  border-color: var(--frame-ink);
+  color: var(--ink);
+  background: var(--frame-ink);
+}
+
+.sync-unsaved {
+  color: var(--amber);
+  font-size: 0.72rem;
+}
+
+.sync-popover {
+  position: fixed;
+  top: calc(var(--header-height) + 10px);
+  right: 24px;
+  z-index: 30;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 10px 28px rgba(31, 29, 26, 0.22);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.sync-popover p {
+  margin: 0 0 10px;
+}
+
+.icon {
+  flex: 0 0 auto;
+}
+
+.button-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Inside a .save-field, whose label rule targets every span: undo that here. */
+.save-field .token-field {
+  position: relative;
+  display: block;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-transform: none;
+}
+
+.token-field input {
+  padding-right: 40px;
+}
+
+.token-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--soft);
+  background: transparent;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.token-toggle:hover {
+  color: var(--ink);
+  background: var(--cream);
 }
 
 .brand-row {
@@ -2315,8 +2446,18 @@ button {
     display: none;
   }
 
-  .ek-switch-label {
+  .ek-switch-label,
+  .sync-button-label,
+  .sync-unsaved-word {
     display: none;
+  }
+
+  .sync-button {
+    padding: 0 7px;
+  }
+
+  .topbar-right {
+    gap: 10px;
   }
 
   .apartment-chip-row {
@@ -2356,6 +2497,16 @@ button {
     padding: 0 16px;
   }
 
+  /* The equal side columns that centre the switch waste the room the name needs. */
+  .topbar {
+    display: flex;
+    gap: 10px;
+  }
+
+  .topbar-right {
+    flex: 1;
+  }
+
   /* Last thing to go: the price. The apartment's NAME stays at every width — two
      apartments' numbers must never be confusable (D3). */
   .topbar-context span:not(.topbar-context-label),
@@ -2391,5 +2542,18 @@ button {
 @media (max-width: 720px) {
   .apartment-facts-text {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Phones: the brand dot goes and the switch tightens, so the apartment's name keeps
+   its full width next to the two sync buttons. */
+@media (max-width: 440px) {
+  .brand-row {
+    display: none;
+  }
+
+  .ek-switch-button {
+    min-width: 40px;
+    padding: 0 5px;
   }
 }

@@ -118,3 +118,20 @@ export async function pushToSheet(
     return { kind: "error", message: describeFailure(error) };
   }
 }
+
+/**
+ * JSON with object keys sorted, so two equal states always serialise alike. Plain
+ * `JSON.stringify` follows insertion order, and a state revived from the Sheet is built
+ * in a different order than one edited on screen: the "ungespeichert" hint would light
+ * up after every load.
+ */
+export function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
