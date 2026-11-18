@@ -64,6 +64,7 @@ type Fetch = typeof fetch;
 const ERROR_TEXT: Record<string, string> = {
   unauthorized: "Der Token passt nicht zu diesem Sheet.",
   "bad-request": "Das Sheet hat die Anfrage nicht verstanden. Ist das Skript aktuell?",
+  "not-set-up": "Im Apps Script bitte einmal die Funktion „einrichten“ ausführen.",
 };
 
 async function call(config: SyncConfig, body: Record<string, unknown>, fetchImpl: Fetch) {

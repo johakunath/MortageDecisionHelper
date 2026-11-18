@@ -2386,3 +2386,10 @@ button {
     min-height: 0;
   }
 }
+
+/* The apartment's name and note stack once two columns no longer fit. */
+@media (max-width: 720px) {
+  .apartment-facts-text {
+    grid-template-columns: 1fr;
+  }
+}

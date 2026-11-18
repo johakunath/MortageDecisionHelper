@@ -17,7 +17,11 @@ var CHUNK = 45000;
 
 function einrichten() {
   var token = Utilities.getUuid().replace(/-/g, "");
-  PropertiesService.getScriptProperties().setProperty("SYNC_TOKEN", token);
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty("SYNC_TOKEN", token);
+  // A web app cannot call getActiveSpreadsheet() (Apps Script "bound scripts" guide),
+  // so the Sheet's id is captured here, where the editor still knows it.
+  props.setProperty("SPREADSHEET_ID", SpreadsheetApp.getActiveSpreadsheet().getId());
   Logger.log("Token für die App: " + token);
 }
 
@@ -29,9 +33,13 @@ function doPost(e) {
     return reply({ ok: false, error: "bad-request" });
   }
 
-  var expected = PropertiesService.getScriptProperties().getProperty("SYNC_TOKEN");
+  var props = PropertiesService.getScriptProperties();
+  var expected = props.getProperty("SYNC_TOKEN");
   if (!expected || request.token !== expected) {
     return reply({ ok: false, error: "unauthorized" });
+  }
+  if (!props.getProperty("SPREADSHEET_ID")) {
+    return reply({ ok: false, error: "not-set-up" });
   }
 
   var lock = LockService.getScriptLock();
@@ -62,7 +70,8 @@ function reply(body) {
 }
 
 function sheet(name) {
-  var book = SpreadsheetApp.getActiveSpreadsheet();
+  var id = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
+  var book = SpreadsheetApp.openById(id);
   return book.getSheetByName(name) || book.insertSheet(name);
 }
 
