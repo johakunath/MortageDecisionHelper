@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { defaultState, loadNamed, saveExists, saveNamed, storageAvailable } from "./storage";
-import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_META, EK_SCENARIOS } from "./defaults";
+import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -185,26 +185,29 @@ describe("persistence", () => {
     expect(loaded.apartmentCases[2].hausgeld).toBe(550);
   });
 
-  it("keeps the date and source of the rates (D36)", () => {
-    const state = { ...defaultState(), ratesMeta: { asOf: "2026-11-18", source: "Interhyp Angebote" } };
-    saveNamed("neu", state);
-    expect(loadNamed("neu")!.ratesMeta).toEqual({ asOf: "2026-11-18", source: "Interhyp Angebote" });
+  it("keeps the free-text Stand und Quelle of the rates (D36)", () => {
+    const note = "10 J.: Interhyp vom 18.11.26 · 15 J.: Hausbank vom 20.11.26";
+    saveNamed("neu", { ...defaultState(), ratesNote: note });
+    expect(loadNamed("neu")!.ratesNote).toBe(note);
   });
 
-  it("gives an undated save the default provenance only if its rates are the defaults (D36)", () => {
-    const { ratesMeta: _meta, ...untouched } = defaultState();
+  it("gives an undated save the default note only if its rates are the defaults (D36)", () => {
+    const { ratesNote: _note, ...untouched } = defaultState();
     window.localStorage.setItem("mdh:save:alt-default", JSON.stringify(untouched));
-    expect(loadNamed("alt-default")!.ratesMeta).toEqual(DEFAULT_RATES_META);
+    expect(loadNamed("alt-default")!.ratesNote).toBe(DEFAULT_RATES_NOTE);
 
     const edited = { ...untouched, rates: { ...untouched.rates, 10: { ...untouched.rates[10], ek10: 4.2 } } };
     window.localStorage.setItem("mdh:save:alt-edited", JSON.stringify(edited));
-    // Nobody recorded when 4,2% was typed; inventing a date would be worse than none.
-    expect(loadNamed("alt-edited")!.ratesMeta).toEqual({ asOf: "", source: "" });
+    // Nobody recorded where 4,2% came from; inventing a source would be worse than none.
+    expect(loadNamed("alt-edited")!.ratesNote).toBe("");
   });
 
-  it("drops a malformed stored date instead of showing it", () => {
-    const state = { ...defaultState(), ratesMeta: { asOf: "18.11.26", source: "x" } };
-    window.localStorage.setItem("mdh:save:bad-date", JSON.stringify(state));
-    expect(loadNamed("bad-date")!.ratesMeta).toEqual({ asOf: "", source: "x" });
+  it("keeps an apartment's name and note", () => {
+    const state = defaultState();
+    state.apartmentCases[0] = { ...state.apartmentCases[0], label: "Altbau Lindenstraße", note: "3. OG, Makler Weber" };
+    saveNamed("namen", state);
+    const loaded = loadNamed("namen")!;
+    expect(loaded.apartmentCases[0].label).toBe("Altbau Lindenstraße");
+    expect(loaded.apartmentCases[0].note).toBe("3. OG, Makler Weber");
   });
 });

@@ -62,19 +62,11 @@ export const DEFAULT_RATES: InterestRates = {
 };
 
 /**
- * Where the Sollzinsen came from. Rates drift weekly; a figure without a date reads
- * as current when it may be months old. Editing any rate stamps today's date (D36).
+ * Where the Sollzinsen came from and when, as free text. Rates drift weekly; a figure
+ * without a date reads as current when it may be months old. Free text rather than a
+ * date field because one grid can mix quotes from several sources and days (D36).
  */
-export type RatesMeta = {
-  /** ISO date, yyyy-mm-dd. Empty when unknown. */
-  asOf: string;
-  source: string;
-};
-
-export const DEFAULT_RATES_META: RatesMeta = {
-  asOf: "2026-08-07",
-  source: "Finanzierungsangebot",
-};
+export const DEFAULT_RATES_NOTE = "Finanzierungsangebot vom 07.08.2026 (Varianten 1A–3B)";
 
 export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek10", ekRate: 10, label: "10% EK" },

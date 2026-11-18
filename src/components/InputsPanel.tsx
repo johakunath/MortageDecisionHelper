@@ -12,9 +12,9 @@ import {
   type ScenarioBase,
   type ScenarioId,
 } from "../lib/calculations";
-import { INPUT_BOXES, type RatesMeta } from "../lib/defaults";
+import { INPUT_BOXES } from "../lib/defaults";
 import { GLOSSARY } from "../lib/glossary";
-import { formatEur, formatPct, formatShortDate, formatYears } from "../lib/format";
+import { formatEur, formatPct, formatYears } from "../lib/format";
 import { Button, InputField, Readout, Section, SegmentedChoice, type SegmentedOption } from "./ui";
 
 /** The two real German cases: with and without Makler. Nothing in between is common. */
@@ -250,39 +250,22 @@ function RateMatrix({
 }
 
 /**
- * Date and source of the Sollzinsen. Rates move weekly, so a number without a date
- * reads as current when it may not be (D36). Typing a rate stamps today; the source
- * is left for the couple to name.
+ * Stand und Quelle der Sollzinsen as free text: one grid can mix quotes from several
+ * sources and days, which no date field can hold (D36). Empty is marked, because a
+ * rate without provenance reads as current when it may not be.
  */
-function RatesProvenance({ meta, onChange }: { meta: RatesMeta; onChange: (meta: RatesMeta) => void }) {
-  const missingSource = meta.source.trim().length === 0;
+function RatesProvenance({ note, onChange }: { note: string; onChange: (note: string) => void }) {
+  const missing = note.trim().length === 0;
   return (
-    <div className="rates-provenance">
-      <p className="rates-provenance-summary">
-        Stand <strong>{meta.asOf ? formatShortDate(meta.asOf) : "unbekannt"}</strong>
-        {" · "}
-        Quelle <strong>{missingSource ? "nicht angegeben" : meta.source}</strong>
-      </p>
-      <div className="rates-provenance-fields">
-        <label className="save-field">
-          <span>Stand</span>
-          <input
-            type="date"
-            value={meta.asOf}
-            onChange={(event) => onChange({ ...meta, asOf: event.target.value })}
-          />
-        </label>
-        <label className={`save-field ${missingSource ? "is-missing" : ""}`}>
-          <span>Quelle</span>
-          <input
-            type="text"
-            value={meta.source}
-            placeholder="z.B. Interhyp Angebote"
-            onChange={(event) => onChange({ ...meta, source: event.target.value })}
-          />
-        </label>
-      </div>
-    </div>
+    <label className={`save-field rates-provenance ${missing ? "is-missing" : ""}`}>
+      <span>Stand und Quelle{missing ? " · fehlt" : ""}</span>
+      <textarea
+        rows={2}
+        value={note}
+        placeholder="z.B. 10 J.: Interhyp vom 18.11.26 · 15 J.: Hausbank vom 20.11.26"
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 
@@ -293,8 +276,8 @@ type InputsPanelProps = {
   selectedId: ScenarioId;
   onInputChange: (key: NumericInputKey, value: number) => void;
   onRateChange: (period: number, id: ScenarioId, value: number) => void;
-  ratesMeta: RatesMeta;
-  onRatesMetaChange: (meta: RatesMeta) => void;
+  ratesNote: string;
+  onRatesNoteChange: (note: string) => void;
   onReset: () => void;
   onSafetyFocus: () => void;
   onMoreSpecial: () => void;
@@ -312,8 +295,8 @@ export default function InputsPanel({
   selectedId,
   onInputChange,
   onRateChange,
-  ratesMeta,
-  onRatesMetaChange,
+  ratesNote,
+  onRatesNoteChange,
   onReset,
   onSafetyFocus,
   onMoreSpecial,
@@ -445,7 +428,7 @@ export default function InputsPanel({
             activeFixedYears={inputs.fixedRateYears}
             onRateChange={onRateChange}
           />
-          <RatesProvenance meta={ratesMeta} onChange={onRatesMetaChange} />
+          <RatesProvenance note={ratesNote} onChange={onRatesNoteChange} />
           <p className="input-box-note">
             Mehr Eigenkapital senkt den Zins nicht gleichmäßig. Im Angebot vom 07.08.2026
             kosteten 10% und 15% EK bei 15 Jahren Bindung dasselbe.

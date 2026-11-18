@@ -557,15 +557,15 @@ Every status now names *what is wrong* rather than which internal constraint fai
 
 ---
 
-## D36: The Sollzinsen carry a date and a source
+## D36: The Sollzinsen carry their Stand und Quelle; apartments can be named
 
 **Date:** 2026-11-18 · **Status:** accepted
 
-**Context.** Rates had risen since the offer of 07.08.2026. The six numbers on screen gave no hint how old they were, and a stale rate reads exactly like a current one.
+**Context.** Rates had risen since the offer of 07.08.2026. The six numbers on screen gave no hint how old they were, and a stale rate reads exactly like a current one. Apartment names were fixed at "Wohnung B/C".
 
-**Decision.** The persisted state gains `ratesMeta: { asOf, source }`, shown under the Sollzins grid as "Stand 07.08.26 · Quelle Finanzierungsangebot", both editable. Typing any rate stamps today's date. If the source was still the shipped default, it is cleared and marked as missing, so the couple names where the new quote came from (e.g. "Interhyp Angebote").
+**Decision.** The persisted state gains `ratesNote`, one free-text field "Stand und Quelle" under the Sollzins grid. Free text rather than a date field because one grid can mix quotes from several sources and days ("10 J.: Interhyp vom 18.11.26 · 15 J.: Hausbank …"). Typing any rate clears the shipped default note and marks the field as missing; a note the couple wrote stays. Each apartment gets an editable name and a free-text note in "Fakten bearbeiten". The model reads neither.
 
-**Consequence.** Saves without `ratesMeta` get the default provenance only if their rates still equal the defaults; otherwise they show "Stand unbekannt" rather than an invented date. The box is renamed from "Sollzinsen laut Angebot" to "Sollzinsen", since later rates need not come from that offer. Storage stays at version 2: the field is additive and revived defensively.
+**Consequence.** Saves without `ratesNote` get the default note only if their rates still equal the defaults; otherwise the field is empty and marked. Storage stays at version 2: both fields are additive and revived defensively. The box is renamed "Sollzinsen", since later rates need not come from that offer.
 
 ---
 

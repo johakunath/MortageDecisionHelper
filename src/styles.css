@@ -369,8 +369,12 @@ button {
 }
 
 .apartment-chip-label {
+  max-width: 220px;
+  overflow: hidden;
   color: var(--ink);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .apartment-chip-price {
@@ -393,6 +397,33 @@ button {
 
 .apartment-facts summary:hover {
   color: var(--ink);
+}
+
+.apartment-facts-text {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(260px, 2fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.save-field textarea {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--sage);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.4;
+  resize: vertical;
+  outline: 0;
+}
+
+.save-field textarea:focus {
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px rgba(63, 102, 70, 0.22);
 }
 
 .apartment-facts-grid {
@@ -1995,26 +2026,12 @@ button {
 }
 
 .rates-provenance {
+  display: block;
   margin-top: 12px;
 }
 
-.rates-provenance-summary {
-  margin: 0 0 8px;
-  color: var(--ink);
-  font-size: 0.85rem;
-}
-
-.rates-provenance-fields {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.rates-provenance-fields .save-field {
-  min-width: 160px;
-}
-
-.save-field.is-missing input {
+.save-field.is-missing input,
+.save-field.is-missing textarea {
   border-left-color: var(--amber);
 }
 

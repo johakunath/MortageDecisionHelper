@@ -118,18 +118,3 @@ export function formatSignedPoints(value: number, digits = 1): string {
   return `${sign}${amount} Pkt.`;
 }
 
-/**
- * An ISO date (yyyy-mm-dd) as "18.11.26". Parsed by hand rather than through `Date`,
- * which would read the string as UTC midnight and can show the previous day.
- */
-export function formatShortDate(iso: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!match) return "—";
-  return `${match[3]}.${match[2]}.${match[1].slice(2)}`;
-}
-
-/** Today in local time as yyyy-mm-dd. */
-export function todayIso(now: Date = new Date()): string {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}

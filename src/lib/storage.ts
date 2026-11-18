@@ -1,5 +1,5 @@
 import { normaliseFixedPeriod, type ApartmentCase, type InterestRates, type MortgageInputs, type ScenarioId } from "./calculations";
-import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_META, EK_SCENARIOS, type RatesMeta } from "./defaults";
+import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
 
 /**
  * Everything the user can change, in one serialisable shape.
@@ -10,7 +10,8 @@ export type PersistedState = {
   version: 2;
   inputs: MortgageInputs;
   rates: InterestRates;
-  ratesMeta: RatesMeta;
+  /** Stand und Quelle der Sollzinsen, free text (D36). */
+  ratesNote: string;
   apartmentCases: ApartmentCase[];
   activeApartmentId: string;
   selectedId: ScenarioId;
@@ -154,6 +155,7 @@ function reviveApartment(stored: unknown, index: number, ownerExtra: number): Ap
     renovation: reviveNumber(raw.renovation, fallback.renovation),
     hausgeld: reviveHausgeld(raw, fallback.hausgeld, ownerExtra),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
+    ...(typeof raw.note === "string" && raw.note.length > 0 ? { note: raw.note } : {}),
   };
 }
 
@@ -177,18 +179,13 @@ function ratesEqual(a: InterestRates, b: InterestRates): boolean {
 }
 
 /**
- * Saves from before D36 carry no date. If their rates are still the shipped defaults,
- * the default provenance is true for them; otherwise nobody knows when they were typed,
- * and the screen says so rather than inventing a date.
+ * Saves from before D36 carry no note. If their rates are still the shipped defaults,
+ * the default provenance is true for them; otherwise nobody knows where they came
+ * from, and the screen says so rather than inventing a source.
  */
-function reviveRatesMeta(stored: unknown, rates: InterestRates): RatesMeta {
-  const raw = (stored ?? null) as Record<string, unknown> | null;
-  if (raw && typeof raw === "object") {
-    const asOf = typeof raw.asOf === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.asOf) ? raw.asOf : "";
-    const source = typeof raw.source === "string" ? raw.source : "";
-    return { asOf, source };
-  }
-  return ratesEqual(rates, DEFAULT_RATES) ? { ...DEFAULT_RATES_META } : { asOf: "", source: "" };
+function reviveRatesNote(stored: unknown, rates: InterestRates): string {
+  if (typeof stored === "string") return stored;
+  return ratesEqual(rates, DEFAULT_RATES) ? DEFAULT_RATES_NOTE : "";
 }
 
 /** The EK level a v1 save was sitting on, read off its legacy id ("ek5" → 5). */
@@ -282,7 +279,7 @@ function reviveState(raw: string): PersistedState | null {
       version: CURRENT_VERSION,
       inputs,
       rates,
-      ratesMeta: reviveRatesMeta(parsed.ratesMeta, rates),
+      ratesNote: reviveRatesNote(parsed.ratesNote, rates),
       apartmentCases,
       activeApartmentId,
       selectedId: reviveScenarioId(parsed.selectedId),
@@ -342,7 +339,7 @@ export function defaultState(): PersistedState {
     version: CURRENT_VERSION,
     inputs: { ...DEFAULT_INPUTS },
     rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
-    ratesMeta: { ...DEFAULT_RATES_META },
+    ratesNote: DEFAULT_RATES_NOTE,
     apartmentCases: DEFAULT_APARTMENT_CASES.map((apartment) => ({
       ...apartment,
       annualSpecialRepayments: [...apartment.annualSpecialRepayments],
