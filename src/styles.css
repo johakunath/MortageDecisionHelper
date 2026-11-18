@@ -1808,6 +1808,24 @@ button {
   box-shadow: 0 0 0 3px rgba(63, 102, 70, 0.22);
 }
 
+.save-transfer {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.save-transfer-confirm {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.save-transfer-confirm p {
+  margin: 0 0 10px;
+}
+
 .save-list {
   display: flex;
   flex-wrap: wrap;

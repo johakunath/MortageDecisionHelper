@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { formatTimestamp } from "../lib/format";
+import { parseBundle, type Bundle } from "../lib/storage";
 import { Button } from "./ui";
 
 type SavePanelProps = {
@@ -10,7 +12,92 @@ type SavePanelProps = {
   onSave: (name: string) => void;
   onLoad: (name: string) => void;
   onDelete: (name: string) => void;
+  /** The bundle to write into the export file. */
+  buildExport: () => Bundle;
+  onImport: (bundle: Bundle) => void;
 };
+
+/**
+ * The export as a file download. A Blob URL works from `file://` as well, so the
+ * standalone copy can export too — no server, no network.
+ */
+function downloadBundle(bundle: Bundle) {
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `hausrechner-${bundle.savedAt.slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Export / import as a JSON file: the way to move the assumptions between the PC, the
+ * phone and the standalone copy by hand, and a backup that survives a cleared browser.
+ * Importing replaces the screen, so it shows what it is about to load and asks first.
+ */
+function FileTransfer({ buildExport, onImport }: Pick<SavePanelProps, "buildExport" | "onImport">) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<Bundle | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function readFile(file: File) {
+    const bundle = parseBundle(await file.text());
+    setMessage(bundle ? null : "Diese Datei ist kein Export des Hausrechners.");
+    setPending(bundle);
+  }
+
+  return (
+    <div className="save-transfer">
+      <div className="button-row">
+        <Button variant="action" onClick={() => downloadBundle(buildExport())}>
+          Als Datei exportieren
+        </Button>
+        <Button variant="action" onClick={() => fileInput.current?.click()}>
+          Datei importieren
+        </Button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void readFile(file);
+            event.target.value = "";
+          }}
+        />
+      </div>
+      {pending ? (
+        <div className="save-transfer-confirm">
+          <p>
+            Export vom <strong>{formatTimestamp(pending.savedAt)}</strong> mit{" "}
+            {Object.keys(pending.saves).length} gespeicherten Datensätzen. Übernehmen ersetzt
+            den aktuellen Stand; gleichnamige Datensätze werden überschrieben.
+          </p>
+          <div className="button-row">
+            <Button
+              variant="action"
+              onClick={() => {
+                onImport(pending);
+                setPending(null);
+                setMessage("Import übernommen.");
+              }}
+            >
+              Übernehmen
+            </Button>
+            <Button variant="action" onClick={() => setPending(null)}>
+              Abbrechen
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {message ? <p className="save-empty">{message}</p> : null}
+    </div>
+  );
+}
 
 /**
  * Named snapshots in the browser's localStorage. Everything stays on this machine —
@@ -29,6 +116,8 @@ export default function SavePanel({
   onSave,
   onLoad,
   onDelete,
+  buildExport,
+  onImport,
 }: SavePanelProps) {
   const [name, setName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -139,6 +228,7 @@ export default function SavePanel({
           hinweg erhalten.
         </p>
       )}
+      <FileTransfer buildExport={buildExport} onImport={onImport} />
     </div>
   );
 }

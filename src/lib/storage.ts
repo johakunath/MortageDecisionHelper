@@ -348,3 +348,62 @@ export function defaultState(): PersistedState {
     selectedId: "ek10",
   };
 }
+
+/**
+ * Everything the app knows, in one file: the screen as it stands plus every named
+ * save. Used for the JSON export and, unchanged, as the payload of the Sheet sync,
+ * so both carry the same shape and pass through the same `reviveState`.
+ */
+export type Bundle = {
+  app: "mortgage-decision-helper";
+  bundleVersion: 1;
+  /** ISO timestamp of when the bundle was built. The sync compares these. */
+  savedAt: string;
+  current: PersistedState;
+  saves: Record<string, PersistedState>;
+};
+
+export function buildBundle(current: PersistedState, now: Date = new Date()): Bundle {
+  const saves: Record<string, PersistedState> = {};
+  for (const name of listSaves()) {
+    const loaded = loadNamed(name);
+    if (loaded) saves[name] = loaded;
+  }
+  return { app: "mortgage-decision-helper", bundleVersion: 1, savedAt: now.toISOString(), current, saves };
+}
+
+/**
+ * Reads a bundle from text. Every state inside is revived like a localStorage entry,
+ * so an edited or older file can only ever produce defaults, never NaN. A broken named
+ * save is skipped rather than failing the whole import; a broken `current` fails it.
+ */
+export function parseBundle(text: string): Omit<Bundle, "current"> & { current: PersistedState } | null {
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown> | null;
+    if (!parsed || parsed.app !== "mortgage-decision-helper" || parsed.bundleVersion !== 1) return null;
+    const current = reviveState(JSON.stringify(parsed.current ?? null));
+    if (!current) return null;
+
+    const saves: Record<string, PersistedState> = {};
+    const storedSaves = (parsed.saves ?? {}) as Record<string, unknown>;
+    if (typeof storedSaves === "object") {
+      for (const [name, state] of Object.entries(storedSaves)) {
+        const revived = reviveState(JSON.stringify(state));
+        if (revived && name.trim()) saves[name.trim()] = revived;
+      }
+    }
+    const savedAt = typeof parsed.savedAt === "string" ? parsed.savedAt : "";
+    return { app: "mortgage-decision-helper", bundleVersion: 1, savedAt, current, saves };
+  } catch {
+    return null;
+  }
+}
+
+/** Writes a bundle's named saves; a save with the same name is replaced. Returns how many. */
+export function writeBundleSaves(saves: Record<string, PersistedState>): number {
+  let written = 0;
+  for (const [name, state] of Object.entries(saves)) {
+    if (saveNamed(name, state)) written += 1;
+  }
+  return written;
+}

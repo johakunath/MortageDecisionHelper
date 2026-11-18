@@ -45,6 +45,7 @@ import {
 import { formatEur } from "./lib/format";
 import {
   defaultState,
+  buildBundle,
   deleteNamed,
   listSaves,
   loadAutosave,
@@ -53,6 +54,7 @@ import {
   saveNamed,
   storageAvailable,
   writeAutosave,
+  writeBundleSaves,
   type PersistedState,
 } from "./lib/storage";
 
@@ -438,6 +440,13 @@ export default function App() {
                 deleteNamed(name);
                 setSaves(listSaves());
                 if (activeSaveName === name) setActiveSaveName(null);
+              }}
+              buildExport={() => buildBundle(snapshot)}
+              onImport={(bundle) => {
+                writeBundleSaves(bundle.saves);
+                applyState(bundle.current);
+                setSaves(listSaves());
+                setActiveSaveName(null);
               }}
             />
           </section>
