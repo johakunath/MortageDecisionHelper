@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import { formatTimestamp } from "../lib/format";
 import { parseBundle, type Bundle } from "../lib/storage";
-import SheetSync from "./SheetSync";
-import { Button } from "./ui";
+import { SyncSettings } from "./SheetSync";
+import { Button, Icon } from "./ui";
+import type { SheetSync } from "./useSheetSync";
 
 type SavePanelProps = {
   saves: string[];
@@ -16,6 +17,7 @@ type SavePanelProps = {
   /** The bundle to write into the export file. */
   buildExport: () => Bundle;
   onImport: (bundle: Bundle) => void;
+  sync: SheetSync;
 };
 
 /**
@@ -119,6 +121,7 @@ export default function SavePanel({
   onDelete,
   buildExport,
   onImport,
+  sync,
 }: SavePanelProps) {
   const [name, setName] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -179,7 +182,10 @@ export default function SavePanel({
           />
         </label>
         <Button variant="action" onClick={submit}>
-          {pendingOverwrite ? "Wirklich überschreiben?" : wouldOverwrite ? "Überschreiben" : "Speichern"}
+          <span className="button-with-icon">
+            <Icon name="save" />
+            {pendingOverwrite ? "Wirklich überschreiben?" : wouldOverwrite ? "Überschreiben" : "Speichern"}
+          </span>
         </Button>
       </div>
 
@@ -230,7 +236,7 @@ export default function SavePanel({
         </p>
       )}
       <FileTransfer buildExport={buildExport} onImport={onImport} />
-      <SheetSync buildExport={buildExport} onImport={onImport} />
+      <SyncSettings sync={sync} />
     </div>
   );
 }

@@ -594,3 +594,15 @@ Every status now names *what is wrong* rather than which internal constraint fai
 A database service (Supabase, Firebase) was rejected: a new dependency, an account and auth for two people and a few dozen records, with nothing gained over a Sheet they already own.
 
 **Consequence.** CLAUDE.md's "no network call" rule for the standalone build still holds by default: no request is made until a device is connected and a button pressed. URL and token live in `mdh:sync` in that browser only, never in a bundle. The web app is reachable by anyone with URL and token; that is the protection, not Google sign-in. The Apps Script itself is not covered by CI; `sync.test.ts` tests the client against a fake that mirrors `Code.gs`.
+
+---
+
+## D39: Sheet Laden / Speichern move into the header
+
+**Date:** 2026-11-18 · **Status:** accepted · **Refines** [D25](#d25--the-sticky-header-carries-exactly-one-control-the-ek-choice), [D38](#d38-export-as-a-file-and-an-optional-manual-google-sheet-sync)
+
+**Context.** With the sync working, the owner asked for the save buttons at the top right, provided the Sheet holds *every* input. It does: the bundle carries inputs, rates and their note, every apartment with its Sondertilgung plan, the wait fields, the chosen EK level and every named save. Only view state (chart tab, open details) stays local. A tinted "this goes to the Sheet" area in §2, the alternative the owner offered, would therefore have marked a boundary that does not exist.
+
+**Decision.** Two fixed-height buttons at the header's right edge: **Laden** (download icon) and **Speichern** (floppy icon). Speichern shows "● neu" when the screen or a named save differs from what was last loaded or saved, compared through a key-order-independent serialisation. Confirmations, conflicts and messages open in `SyncPopover`, rendered next to the header, because the header's clip-path would cut it and its growth would break `--header-height`. Unconnected, the header shows one "Sheet verbinden" button that opens the settings in §2. The token field gains an eye toggle, also once connected, so it can be read off and typed on the other device.
+
+**Consequence.** Header still measures 50px at 1280 / 1000 / 820 / 560px and on an iPhone 13 (390px), with no horizontal scroll. Below 880px the buttons drop their words (the icons carry aria-labels); below 620px the topbar leaves its centred grid so the apartment name keeps its width; below 440px the brand dot goes.

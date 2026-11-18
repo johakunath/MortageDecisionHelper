@@ -321,3 +321,58 @@ export function SignedValue({
   );
 }
 
+
+/*
+ * Line icons, inline so the standalone file needs no asset. Each is decorative: the
+ * control around it always carries a visible word or an aria-label.
+ */
+type IconName = "save" | "load" | "eye" | "eye-off" | "cloud";
+
+const ICON_PATHS: Record<IconName, ReactNode> = {
+  save: (
+    <>
+      <path d="M4 3h12l4 4v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M7 3v6h9V3" />
+      <rect x="7" y="13" width="10" height="7" />
+    </>
+  ),
+  load: (
+    <>
+      <path d="M12 4v11" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M4 20h16" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  "eye-off": (
+    <>
+      <path d="M2 12s3.5-7 10-7c2 0 3.7.6 5.1 1.5M22 12s-3.5 7-10 7c-2 0-3.7-.6-5.1-1.5" />
+      <path d="M4 4l16 16" />
+    </>
+  ),
+  cloud: <path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.1 4.5 4.5 0 0 0 7 18z" />,
+};
+
+export function Icon({ name }: { name: IconName }) {
+  return (
+    <svg
+      className="icon"
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {ICON_PATHS[name]}
+    </svg>
+  );
+}

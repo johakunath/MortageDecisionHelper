@@ -1,178 +1,200 @@
 import { useState } from "react";
 import { formatTimestamp } from "../lib/format";
-import type { Bundle } from "../lib/storage";
-import {
-  isValidSyncUrl,
-  loadSyncConfig,
-  pullFromSheet,
-  pushToSheet,
-  saveSyncConfig,
-  type SyncConfig,
-} from "../lib/sync";
-import { Button } from "./ui";
-
-type SheetSyncProps = {
-  buildExport: () => Bundle;
-  onImport: (bundle: Bundle) => void;
-};
+import { isValidSyncUrl } from "../lib/sync";
+import { Button, Icon } from "./ui";
+import type { SheetSync } from "./useSheetSync";
 
 /**
- * Manual load / save against the couple's Google Sheet (D38). Manual on purpose: an
- * automatic pull would replace the numbers on screen while someone is reading them,
- * and an automatic push would make the conflict guard fire on every keystroke.
+ * Load / save in the sticky header (D39). Every input the app has is in the bundle, so
+ * the sync is about the whole screen, not one section, and belongs where the whole
+ * screen's context lives. Fixed height by construction: two 26px buttons. Anything
+ * that has to say more (a confirmation, a conflict, an error) goes to `SyncPopover`.
  */
-export default function SheetSync({ buildExport, onImport }: SheetSyncProps) {
-  const [config, setConfig] = useState<SyncConfig | null>(() => loadSyncConfig());
+export function SyncControls({ sync, onSetup }: { sync: SheetSync; onSetup: () => void }) {
+  if (!sync.config) {
+    return (
+      <div className="sync-controls">
+        <button type="button" className="sync-button" onClick={onSetup} aria-label="Google Sheet verbinden">
+          <Icon name="cloud" />
+          <span className="sync-button-label">Sheet verbinden</span>
+        </button>
+      </div>
+    );
+  }
+
+  const lastSynced = sync.config.lastSyncedAt ? formatTimestamp(sync.config.lastSyncedAt) : "noch nie";
+
+  return (
+    <div className="sync-controls">
+      <button
+        type="button"
+        className="sync-button"
+        onClick={sync.load}
+        disabled={sync.busy}
+        aria-label="Aus dem Sheet laden"
+        title={`Aus dem Sheet laden · zuletzt abgeglichen: ${lastSynced}`}
+      >
+        <Icon name="load" />
+        <span className="sync-button-label">Laden</span>
+      </button>
+      <button
+        type="button"
+        className={`sync-button ${sync.unsaved ? "is-unsaved" : ""}`}
+        onClick={() => sync.save()}
+        disabled={sync.busy}
+        aria-label={sync.unsaved ? "Ins Sheet speichern, es gibt ungespeicherte Änderungen" : "Ins Sheet speichern"}
+        title={`Ins Sheet speichern · zuletzt abgeglichen: ${lastSynced}`}
+      >
+        <Icon name="save" />
+        <span className="sync-button-label">{sync.busy ? "…" : "Speichern"}</span>
+        {/* A dot and a word, never the dot alone (rule 4). */}
+        {sync.unsaved ? (
+          <span className="sync-unsaved">
+            <span aria-hidden="true">●</span>
+            <span className="sync-unsaved-word"> neu</span>
+          </span>
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Rendered next to the header, not inside it: the header's clip-path would cut it off,
+ * and inside it any growth would threaten `--header-height`.
+ */
+export function SyncPopover({ sync }: { sync: SheetSync }) {
+  if (sync.pending) {
+    return (
+      <div className="sync-popover" role="dialog" aria-label="Stand aus dem Sheet übernehmen">
+        <p>
+          Stand im Sheet vom <strong>{formatTimestamp(sync.pending.savedAt)}</strong> mit{" "}
+          {Object.keys(sync.pending.saves).length} gespeicherten Datensätzen. Übernehmen ersetzt den
+          aktuellen Stand auf diesem Gerät.
+        </p>
+        <div className="button-row">
+          <Button variant="action" onClick={sync.acceptPending}>Übernehmen</Button>
+          <Button variant="action" onClick={sync.dismiss}>Abbrechen</Button>
+        </div>
+      </div>
+    );
+  }
+  if (sync.conflictAt) {
+    return (
+      <div className="sync-popover" role="dialog" aria-label="Neuerer Stand im Sheet">
+        <p>
+          Im Sheet liegt ein neuerer Stand vom <strong>{formatTimestamp(sync.conflictAt)}</strong>,
+          wahrscheinlich vom anderen Gerät. Speichern würde ihn überschreiben.
+        </p>
+        <div className="button-row">
+          <Button variant="action" onClick={sync.load}>Erst laden</Button>
+          <Button variant="action" onClick={() => sync.save(true)}>Trotzdem überschreiben</Button>
+        </div>
+      </div>
+    );
+  }
+  if (sync.message) {
+    return (
+      <div className="sync-popover" role="status">
+        <p>{sync.message}</p>
+        <div className="button-row">
+          <Button variant="action" onClick={sync.dismiss}>OK</Button>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+/** A token field whose content can be shown, to read it off and type it on the other device. */
+function TokenField({ value, onChange, readOnly = false }: { value: string; onChange?: (value: string) => void; readOnly?: boolean }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <label className="save-field">
+      <span>Token</span>
+      <span className="token-field">
+        <input
+          type={visible ? "text" : "password"}
+          value={value}
+          readOnly={readOnly}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => onChange?.(event.target.value)}
+        />
+        <button
+          type="button"
+          className="token-toggle"
+          aria-label={visible ? "Token verbergen" : "Token anzeigen"}
+          aria-pressed={visible}
+          onClick={() => setVisible((current) => !current)}
+        >
+          <Icon name={visible ? "eye-off" : "eye"} />
+        </button>
+      </span>
+    </label>
+  );
+}
+
+/** Connecting this device, and reading URL and token back off it, in §2. */
+export function SyncSettings({ sync }: { sync: SheetSync }) {
   const [draftUrl, setDraftUrl] = useState("");
   const [draftToken, setDraftToken] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [pending, setPending] = useState<Bundle | null>(null);
-  const [conflictAt, setConflictAt] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
-  function remember(next: SyncConfig | null) {
-    saveSyncConfig(next);
-    setConfig(next);
-  }
-
-  async function load(target: SyncConfig) {
-    setBusy(true);
-    setConflictAt(null);
-    const result = await pullFromSheet(target);
-    setBusy(false);
-    if (result.kind === "error") {
-      setMessage(result.message);
-    } else if (!result.bundle) {
-      setMessage("Verbunden. Im Sheet liegt noch nichts. Speichere den aktuellen Stand hinein.");
-    } else {
-      setMessage(null);
-      setPending(result.bundle);
-    }
-  }
-
-  async function save(force: boolean) {
-    if (!config) return;
-    setBusy(true);
-    const result = await pushToSheet(config, buildExport(), force);
-    setBusy(false);
-    if (result.kind === "ok") {
-      remember({ ...config, lastSyncedAt: result.savedAt });
-      setConflictAt(null);
-      setMessage(`Ins Sheet gespeichert (${formatTimestamp(result.savedAt)}).`);
-    } else if (result.kind === "conflict") {
-      setConflictAt(result.savedAt);
-      setMessage(null);
-    } else {
-      setMessage(result.message);
-    }
-  }
-
-  if (!config) {
-    const urlOk = isValidSyncUrl(draftUrl);
+  if (sync.config) {
     return (
-      <details className="sheet-sync">
-        <summary>Mit Google Sheet abgleichen (Handy und PC)</summary>
+      <details className="sheet-sync" id="sheet-sync-settings">
+        <summary>Google Sheet: verbunden</summary>
         <p className="save-empty">
-          Einmal pro Gerät einrichten. Anleitung: docs/google-sheet-sync/README.md im Repository.
+          Laden und Speichern sitzen oben rechts in der Kopfzeile. Hier stehen URL und Token,
+          um ein weiteres Gerät zu verbinden.
         </p>
         <div className="save-row">
           <label className="save-field">
             <span>Web-App-URL</span>
-            <input
-              type="url"
-              value={draftUrl}
-              placeholder="https://script.google.com/macros/s/…/exec"
-              onChange={(event) => setDraftUrl(event.target.value)}
-            />
+            <input type="url" value={sync.config.url} readOnly />
           </label>
-          <label className="save-field">
-            <span>Token</span>
-            <input type="password" value={draftToken} onChange={(event) => setDraftToken(event.target.value)} />
-          </label>
-          <Button
-            variant="action"
-            onClick={() => {
-              if (!urlOk || !draftToken.trim()) {
-                setMessage("Bitte die URL der Web-App (endet auf /exec) und den Token eintragen.");
-                return;
-              }
-              const next = { url: draftUrl.trim(), token: draftToken.trim(), lastSyncedAt: "" };
-              remember(next);
-              void load(next);
-            }}
-          >
-            Verbinden
-          </Button>
+          <TokenField value={sync.config.token} readOnly />
         </div>
-        {message ? <p className="save-empty">{message}</p> : null}
+        <button type="button" className="sheet-sync-disconnect" onClick={sync.disconnect}>
+          Verbindung auf diesem Gerät trennen
+        </button>
       </details>
     );
   }
 
   return (
-    <div className="sheet-sync">
-      <div className="sheet-sync-head">
-        <strong>Google Sheet</strong>
-        <span className="save-empty">
-          {config.lastSyncedAt ? `Zuletzt abgeglichen: ${formatTimestamp(config.lastSyncedAt)}` : "Noch nicht abgeglichen"}
-        </span>
-      </div>
-      <div className="button-row">
-        <Button variant="action" onClick={() => void load(config)}>
-          {busy ? "…" : "Aus Sheet laden"}
+    <details className="sheet-sync" id="sheet-sync-settings">
+      <summary>Mit Google Sheet abgleichen (Handy und PC)</summary>
+      <p className="save-empty">
+        Einmal pro Gerät einrichten. Anleitung: docs/google-sheet-sync/README.md im Repository.
+      </p>
+      <div className="save-row">
+        <label className="save-field">
+          <span>Web-App-URL</span>
+          <input
+            type="url"
+            value={draftUrl}
+            placeholder="https://script.google.com/macros/s/…/exec"
+            onChange={(event) => setDraftUrl(event.target.value)}
+          />
+        </label>
+        <TokenField value={draftToken} onChange={setDraftToken} />
+        <Button
+          variant="action"
+          onClick={() => {
+            if (!isValidSyncUrl(draftUrl) || !draftToken.trim()) {
+              setHint("Bitte die URL der Web-App (endet auf /exec) und den Token eintragen.");
+              return;
+            }
+            setHint(null);
+            sync.connect(draftUrl, draftToken);
+          }}
+        >
+          Verbinden
         </Button>
-        <Button variant="action" onClick={() => void save(false)}>
-          {busy ? "…" : "Ins Sheet speichern"}
-        </Button>
-        <button type="button" className="sheet-sync-disconnect" onClick={() => remember(null)}>
-          Verbindung auf diesem Gerät trennen
-        </button>
       </div>
-
-      {pending ? (
-        <div className="save-transfer-confirm">
-          <p>
-            Stand im Sheet vom <strong>{formatTimestamp(pending.savedAt)}</strong> mit{" "}
-            {Object.keys(pending.saves).length} gespeicherten Datensätzen. Übernehmen ersetzt den
-            aktuellen Stand auf diesem Gerät.
-          </p>
-          <div className="button-row">
-            <Button
-              variant="action"
-              onClick={() => {
-                onImport(pending);
-                remember({ ...config, lastSyncedAt: pending.savedAt });
-                setPending(null);
-                setMessage("Aus dem Sheet übernommen.");
-              }}
-            >
-              Übernehmen
-            </Button>
-            <Button variant="action" onClick={() => setPending(null)}>
-              Abbrechen
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {conflictAt ? (
-        <div className="save-transfer-confirm">
-          <p>
-            Im Sheet liegt ein neuerer Stand vom <strong>{formatTimestamp(conflictAt)}</strong>,
-            wahrscheinlich vom anderen Gerät. Speichern würde ihn überschreiben.
-          </p>
-          <div className="button-row">
-            <Button variant="action" onClick={() => void load(config)}>
-              Erst laden
-            </Button>
-            <Button variant="action" onClick={() => void save(true)}>
-              Trotzdem überschreiben
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {message ? <p className="save-empty">{message}</p> : null}
-    </div>
+      {hint ? <p className="save-empty">{hint}</p> : null}
+    </details>
   );
 }

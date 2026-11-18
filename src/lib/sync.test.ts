@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBundle, defaultState } from "./storage";
-import { isValidSyncUrl, pullFromSheet, pushToSheet, type SyncConfig } from "./sync";
+import { isValidSyncUrl, pullFromSheet, pushToSheet, stableStringify, type SyncConfig } from "./sync";
 
 globalThis.window = { localStorage: { length: 0, key: () => null, getItem: () => null } } as unknown as Window &
   typeof globalThis;
@@ -73,5 +73,10 @@ describe("sheet sync", () => {
     }) as unknown as typeof fetch;
     const result = await pullFromSheet(wrong, offline);
     expect(result.kind === "error" && result.message).toContain("nicht erreichbar");
+  });
+
+  it("serialises equal states alike whatever their key order", () => {
+    expect(stableStringify({ b: 1, a: [{ d: 2, c: 3 }] })).toBe(stableStringify({ a: [{ c: 3, d: 2 }], b: 1 }));
+    expect(stableStringify({ a: 1, gone: undefined })).toBe('{"a":1}');
   });
 });

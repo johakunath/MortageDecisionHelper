@@ -9,6 +9,8 @@ import InputsPanel from "./components/InputsPanel";
 import ProgressSection from "./components/ProgressSection";
 import RightPanel from "./components/RightPanel";
 import SavePanel from "./components/SavePanel";
+import { SyncControls, SyncPopover } from "./components/SheetSync";
+import { fingerprintOf, useSheetSync } from "./components/useSheetSync";
 import SondertilgungPanel from "./components/SondertilgungPanel";
 import TradeoffMatrix from "./components/TradeoffMatrix";
 import TradeoffStatement from "./components/TradeoffStatement";
@@ -46,6 +48,7 @@ import { formatEur } from "./lib/format";
 import {
   defaultState,
   buildBundle,
+  type Bundle,
   deleteNamed,
   listSaves,
   loadAutosave,
@@ -86,6 +89,22 @@ export default function App() {
     () => ({ version: 2, inputs, rates, ratesNote, apartmentCases, activeApartmentId, selectedId }),
     [inputs, rates, ratesNote, apartmentCases, activeApartmentId, selectedId],
   );
+
+  function importBundle(bundle: Bundle) {
+    writeBundleSaves(bundle.saves);
+    applyState(bundle.current);
+    setSaves(listSaves());
+    setActiveSaveName(null);
+  }
+
+  // Recomputed when the screen or the list of saves changes; saving under a name always
+  // resets `saves`, so an updated save counts as a change too.
+  const syncFingerprint = useMemo(() => fingerprintOf(buildBundle(snapshot)), [snapshot, saves]);
+  const sync = useSheetSync({
+    buildExport: () => buildBundle(snapshot),
+    onImport: importBundle,
+    fingerprint: syncFingerprint,
+  });
 
   // Autosave, so an accidental reload never costs a session's worth of assumptions.
   useEffect(() => {
@@ -330,7 +349,8 @@ export default function App() {
         The EK switch in the middle is the one control up here, and the exception is
         deliberate: it is the question the whole app is about, it is re-asked constantly
         while reading sections 3–6, and it is fixed-height so `--header-height` stays a
-        constant (D25 refines D8/D21).
+        constant (D25 refines D8/D21). The Sheet's Laden / Speichern sit at the far right
+        on the same terms: fixed height, and they act on the whole screen (D39).
       */}
       <header className="app-header">
         <div className="topbar">
@@ -339,6 +359,7 @@ export default function App() {
             <span className="brand-text">haus · ein ruhiger rechner</span>
           </div>
           <EkSwitch scenarios={scenarios} selectedId={selected.id} onSelect={setSelectedId} />
+          <div className="topbar-right">
           <div className="topbar-context">
             <span className="topbar-context-label">{activeApartment.label}</span>
             <i />
@@ -350,8 +371,19 @@ export default function App() {
               + {formatEur(selected.closingCosts)} Nebenkosten
             </span>
           </div>
+          <SyncControls
+            sync={sync}
+            onSetup={() => {
+              const settings = document.getElementById("sheet-sync-settings") as HTMLDetailsElement | null;
+              if (!settings) return;
+              settings.open = true;
+              settings.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
+          </div>
         </div>
       </header>
+      <SyncPopover sync={sync} />
 
       <div className="app-grid">
         <nav className="step-rail" aria-label="Abschnitte">
@@ -442,12 +474,8 @@ export default function App() {
                 if (activeSaveName === name) setActiveSaveName(null);
               }}
               buildExport={() => buildBundle(snapshot)}
-              onImport={(bundle) => {
-                writeBundleSaves(bundle.saves);
-                applyState(bundle.current);
-                setSaves(listSaves());
-                setActiveSaveName(null);
-              }}
+              onImport={importBundle}
+              sync={sync}
             />
           </section>
 
