@@ -3,7 +3,16 @@ import { formatEur } from "../lib/format";
 import { GLOSSARY } from "../lib/glossary";
 import { Button, InputField, StatusPill } from "./ui";
 
-type ApartmentEditableKey = "label" | "note" | "purchasePrice" | "renovation" | "hausgeld";
+type ApartmentEditableKey =
+  | "label"
+  | "note"
+  | "purchasePrice"
+  | "renovation"
+  | "hausgeld"
+  | "parkingPrice"
+  | "kfwAmount"
+  | "kfwRate"
+  | "moveInMonths";
 
 type ApartmentSwitcherProps = {
   results: ApartmentComparisonResult[];
@@ -104,6 +113,14 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
           highlight
         />
         <InputField
+          label="davon Stellplatz"
+          value={apartment.parkingPrice}
+          min={0}
+          onChange={(value) => onChange({ parkingPrice: Math.max(0, value) })}
+          info={GLOSSARY.parkingPrice}
+          hint="steckt im Kaufpreis · 0 = keiner"
+        />
+        <InputField
           label="Renovierung"
           value={apartment.renovation}
           onChange={(value) => onChange({ renovation: value })}
@@ -119,6 +136,33 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
           onChange={(value) => onChange({ hausgeld: value })}
           info={GLOSSARY.hausgeld}
           hint={`+ ${formatEur(ownerExtraMonthly)} Grundsteuer und eigene Rücklage = ${formatEur(apartment.hausgeld + ownerExtraMonthly)} im Monat`}
+        />
+        <InputField
+          label="KfW-Darlehen"
+          value={apartment.kfwAmount}
+          min={0}
+          onChange={(value) => onChange({ kfwAmount: Math.max(0, value) })}
+          info={GLOSSARY.kfwAmount}
+          hint="0 = keins"
+        />
+        <InputField
+          label="KfW-Zins"
+          value={apartment.kfwRate}
+          suffix="%"
+          step={0.05}
+          min={0}
+          onChange={(value) => onChange({ kfwRate: Math.max(0, value) })}
+          info={GLOSSARY.kfwRate}
+        />
+        <InputField
+          label="Monate bis Einzug"
+          value={apartment.moveInMonths}
+          suffix="Monate"
+          step={1}
+          min={0}
+          onChange={(value) => onChange({ moveInMonths: Math.max(0, Math.round(value)) })}
+          info={GLOSSARY.moveInMonths}
+          hint="0 = sofort · Neubau: bis zur Übergabe"
         />
       </div>
     </details>

@@ -162,6 +162,10 @@ function reviveApartment(
   const raw = (stored ?? {}) as Record<string, unknown>;
   const fallback =
     DEFAULT_APARTMENT_CASES[Math.min(index, DEFAULT_APARTMENT_CASES.length - 1)];
+  // Fields added in D42 fall back to the shipped flat with the same id, else to "none":
+  // borrowing a KfW loan or a Neubau delay from whichever flat sits at the same index
+  // would invent facts about a flat the couple entered themselves.
+  const sameId = DEFAULT_APARTMENT_CASES.find((apartment) => apartment.id === raw.id);
 
   return {
     id: typeof raw.id === "string" && raw.id.length > 0 ? raw.id : `flat-${index + 1}`,
@@ -173,6 +177,10 @@ function reviveApartment(
     // apartment used, so they stay what each of them uses.
     closingCostRate: Math.max(0, reviveNumber(raw.closingCostRate, globalClosingCostRate)),
     monthlyPayment: Math.max(1, reviveNumber(raw.monthlyPayment, globalMonthlyPayment)),
+    kfwAmount: Math.max(0, reviveNumber(raw.kfwAmount, sameId?.kfwAmount ?? 0)),
+    kfwRate: Math.max(0, reviveNumber(raw.kfwRate, sameId?.kfwRate ?? 0)),
+    moveInMonths: Math.max(0, Math.round(reviveNumber(raw.moveInMonths, sameId?.moveInMonths ?? 0))),
+    parkingPrice: Math.max(0, reviveNumber(raw.parkingPrice, sameId?.parkingPrice ?? 0)),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
     ...(typeof raw.note === "string" && raw.note.length > 0 ? { note: raw.note } : {}),
   };

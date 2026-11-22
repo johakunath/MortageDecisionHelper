@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   afterTaxAnnualReturn,
+  apartmentColumn,
+  bindingMonths,
+  blendedRate,
   buildApartmentInputs,
   buildScenario,
   buildScenarios,
@@ -15,6 +18,7 @@ import {
   interestForPlan,
   monthlyAnnuity,
   normaliseFixedPeriod,
+  planFromInputs,
   rateFor,
   refinanceStress,
   repaymentRateFromMonthlyPayment,
@@ -33,6 +37,7 @@ import {
   CASE_PRESETS,
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
+  DEFAULT_RATES,
   OFFER_RATES,
   EK_SCENARIOS,
 } from "./defaults";
@@ -158,6 +163,66 @@ describe("calculation engine", () => {
     expect(makler.closingCosts - developer.closingCosts).toBeCloseTo(655100 * 0.0357, 0);
   });
 
+  it("blends a fixed KfW loan into one rate per EK level (D42)", () => {
+    // More EK shrinks only the bank part, so the blend falls with EK: one average for
+    // all three levels would understate what extra EK saves.
+    expect(blendedRate(4.3, 589590, 170000, 1.3)).toBeCloseTo(3.435, 3);
+    expect(blendedRate(4.0, 524080, 170000, 1.3)).toBeCloseTo(3.124, 3);
+    expect(blendedRate(4.3, 100000, 170000, 1.3)).toBeCloseTo(1.3, 6);
+    expect(blendedRate(4.3, 500000, 0, 1.3)).toBe(4.3);
+
+    const flat = { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, kfwAmount: 170000, kfwRate: 1.3, monthlyPayment: 2700 };
+    const [ek10] = buildScenarios(EK_SCENARIOS, buildApartmentInputs(DEFAULT_INPUTS, flat), DEFAULT_RATES);
+    expect(ek10.interestRate).toBeCloseTo(blendedRate(DEFAULT_RATES[10].ek10, 589590, 170000, 1.3), 9);
+  });
+
+  it("amortises a Neubau only for the part of the binding after handover (D42)", () => {
+    const flat = { ...DEFAULT_APARTMENT_CASES[0], moveInMonths: 19 };
+    const delayed = buildApartmentInputs(DEFAULT_INPUTS, flat);
+    const atOnce = buildApartmentInputs(DEFAULT_INPUTS, { ...flat, moveInMonths: 0 });
+    expect(bindingMonths(delayed)).toBe(101);
+    expect(bindingMonths(atOnce)).toBe(120);
+
+    const [late] = buildScenarios(EK_SCENARIOS, delayed, OFFER_RATES);
+    const [now] = buildScenarios(EK_SCENARIOS, atOnce, OFFER_RATES);
+    // Same loan, same rate, same runtime from handover; but at the end of the binding
+    // 19 fewer months have been repaid, so more is left to refinance.
+    expect(late.mortgage.runtimeYears).toBeCloseTo(now.mortgage.runtimeYears, 9);
+    expect(late.mortgage.remainingAfterFixed).toBeGreaterThan(now.mortgage.remainingAfterFixed + 10000);
+    // Equal to the balance after month 101 of the undelayed loan.
+    const after101 = simulateMortgage({
+      principal: now.loan,
+      interestRatePct: now.interestRate,
+      repaymentRatePct: now.repaymentRate,
+      fixedRateYears: 101 / 12,
+      specialPlan: planFromInputs(atOnce),
+      specialRepaymentLimitRate: atOnce.specialRepaymentLimitRate,
+    }).remainingAfterFixed;
+    expect(late.mortgage.remainingAfterFixed).toBeCloseTo(after101, 6);
+  });
+
+  it("builds a comparison column with construction interest and the parking space's share (D42)", () => {
+    const flat = {
+      ...DEFAULT_APARTMENT_CASES[0],
+      purchasePrice: 520000,
+      closingCostRate: 11.57,
+      monthlyPayment: 2460,
+      moveInMonths: 12,
+      parkingPrice: 26000,
+    };
+    const column = apartmentColumn(flat, EK_SCENARIOS[0], DEFAULT_INPUTS, DEFAULT_RATES);
+    // 468.000 € × 4,3 % × 1 Jahr × halb abgerufen.
+    expect(column.constructionInterest).toBeCloseTo(468000 * 0.043 * 0.5, 6);
+    // 5 % of the price: 5 % of the rate; and 10 % EK + 11,57 % KNK of 26.000 €.
+    expect(column.parkingMonthly).toBeCloseTo(column.scenario.mortgage.regularMonthlyPayment * 0.05, 6);
+    expect(column.parkingCash).toBeCloseTo(26000 * 0.2157, 6);
+    expect(column.withoutSpecial.mortgage.remainingAfterFixed).toBeGreaterThan(
+      column.scenario.mortgage.remainingAfterFixed,
+    );
+    expect(column.debtFreeAfterYears).toBeCloseTo(1 + column.scenario.mortgage.runtimeYears, 9);
+    expect(column.specialInBinding).toBe(9 * 6000);
+  });
+
   it("compares apartment cases with independent prices and Sondertilgung paths", () => {
     const results = compareApartmentCases(
       [
@@ -169,6 +234,10 @@ describe("calculation engine", () => {
           hausgeld: 610,
           closingCostRate: 8,
           monthlyPayment: 2900,
+          kfwAmount: 0,
+          kfwRate: 0,
+          moveInMonths: 0,
+          parkingPrice: 0,
           annualSpecialRepayments: [0, 0, 0],
         },
         {
@@ -179,6 +248,10 @@ describe("calculation engine", () => {
           hausgeld: 810,
           closingCostRate: 11.57,
           monthlyPayment: 2900,
+          kfwAmount: 0,
+          kfwRate: 0,
+          moveInMonths: 0,
+          parkingPrice: 0,
           annualSpecialRepayments: [10000, 10000, 10000],
         },
       ],

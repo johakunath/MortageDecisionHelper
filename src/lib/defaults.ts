@@ -29,6 +29,10 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   monthlyPayment: 1900,
   // 10 Jahre: die kürzere der beiden angebotenen Bindungen und die günstigere.
   fixedRateYears: 10,
+  // Gehören der Wohnung (D42); global nur für die QA-Presets ohne Wohnung.
+  kfwAmount: 0,
+  kfwRate: 0,
+  moveInMonths: 0,
   annualSpecialRepayment: 6000,
   annualSpecialRepayments: [6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000],
   specialRepaymentLimitRate: 5,
@@ -106,9 +110,13 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     // Laut Exposé; Makler: wegen WEG-Investitionen ca. zwei Jahre erhöht.
     hausgeld: 630,
     closingCostRate: 11.57,
-    // Geschätzt, kein Angebot: dasselbe Verhältnis Rate/Darlehen wie im echten Angebot
-    // (1.900 € auf 405.000 €), also 468.000 € × 1.900 / 405.000 ≈ 2.196 €.
-    monthlyPayment: 2200,
+    // Geschätzt, kein Angebot: 2 % Anfangstilgung bei 10 % EK, wie im Shortlist-Sheet.
+    // 468.000 € × (4,3 % + 2 %) / 12 ≈ 2.457 €.
+    monthlyPayment: 2460,
+    kfwAmount: 0,
+    kfwRate: 0,
+    moveInMonths: 0,
+    parkingPrice: 25000,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
     note:
       "Lindenstraße 31G (Inserat: 32G), WE49?, 93,6 m², 4. OG, Bj. 1998, Energie D. " +
@@ -126,14 +134,21 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     hausgeld: 331,
     // Provisionsfrei: 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch.
     closingCostRate: 8,
-    // Geschätzt, kein Angebot: 589.590 € × 1.900 / 405.000 ≈ 2.766 €. Ohne KfW 300.
-    monthlyPayment: 2770,
+    // Geschätzt, kein Angebot: 2 % Anfangstilgung bei 10 % EK auf den Mischzins aus
+    // Bank 4,3 % und KfW 300: 589.590 € × (3,435 % + 2 %) / 12 ≈ 2.670 €.
+    monthlyPayment: 2670,
+    // KfW 300 bis 170.000 € bei zwei Kindern, Zins laut Sheet angenommen, keine Zusage.
+    kfwAmount: 170000,
+    kfwRate: 1.3,
+    // Unterschrift Dezember 2026, Übergabe vsl. Juni 2028.
+    moveInMonths: 19,
+    parkingPrice: 30000,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
     note:
       "An der Filmfabrik 9, Haus 2 WE08, 94,6 m², 2. OG Nordost, Neubau EH40, Bezug vsl. Juni 2028. " +
       "Kaufpreis = 625.100 € Aktionspreis (bis 30.11.2026) + 30.000 € Stellplatz. Provisionsfrei. " +
-      "Renovierung = Einbauküche 12k. Hausgeld 331 € nur BUWOG-Schätzung. Nicht abgebildet: KfW 300 " +
-      "(bis 170k zu ca. 1,3 %), Bereitstellungszinsen, Miete bis Bezug 2028. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
+      "Renovierung = Einbauküche 12k. Hausgeld 331 € nur BUWOG-Schätzung. KfW 300 170k zu 1,3 % " +
+      "angenommen (keine Zusage). Einzug in 19 Monaten: Bauzeitzinsen nur geschätzt. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
   },
 ];
 
@@ -153,6 +168,10 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     hausgeld: 550,
     closingCostRate: DEFAULT_INPUTS.closingCostRate,
     monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
+    kfwAmount: 0,
+    kfwRate: 0,
+    moveInMonths: 0,
+    parkingPrice: 0,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -163,6 +182,10 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     hausgeld: 600,
     closingCostRate: DEFAULT_INPUTS.closingCostRate,
     monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
+    kfwAmount: 0,
+    kfwRate: 0,
+    moveInMonths: 0,
+    parkingPrice: 0,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -173,6 +196,10 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     hausgeld: 670,
     closingCostRate: DEFAULT_INPUTS.closingCostRate,
     monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
+    kfwAmount: 0,
+    kfwRate: 0,
+    moveInMonths: 0,
+    parkingPrice: 0,
     annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
   },
   ...SHORTLIST_APARTMENT_CASES.map((apartment) => ({
@@ -210,6 +237,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9000,
       monthlyPayment: 2400,
       fixedRateYears: 10,
+      kfwAmount: 0,
+      kfwRate: 0,
+      moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
       maxRuntimeYears: 35,
@@ -230,6 +260,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9600,
       monthlyPayment: 2900,
       fixedRateYears: 10,
+      kfwAmount: 0,
+      kfwRate: 0,
+      moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
       maxRuntimeYears: 35,
@@ -253,6 +286,9 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       // Reserve und Belastung reißen und trotzdem niemand zum Sieger erklärt wird.
       monthlyPayment: 3400,
       fixedRateYears: 10,
+      kfwAmount: 0,
+      kfwRate: 0,
+      moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
       maxRuntimeYears: 35,
@@ -274,6 +310,7 @@ export const SECTIONS = [
   { id: "progress", number: 4, label: "Verlauf" },
   { id: "special", number: 5, label: "Sondertilgung" },
   { id: "wait", number: 6, label: "Warten" },
+  { id: "compare", number: 7, label: "Wohnungen vergleichen" },
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];

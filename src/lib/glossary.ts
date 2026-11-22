@@ -25,6 +25,15 @@ export const GLOSSARY = {
     "Was ein Eigentümer zusätzlich zum Hausgeld trägt: die Grundsteuer, die ihr direkt an die Gemeinde zahlt (für eine Wohnung grob 300 bis 500 € im Jahr), und eine eigene Rücklage für Bad, Böden, Fenster und Geräte in eurer Wohnung, die die Rücklage der Gemeinschaft nicht abdeckt. Die 90 € sind eine Schätzung: etwa 35 € Grundsteuer und 55 € Rücklage.",
 
   // --- Finanzierung ---
+  parkingPrice:
+    "Welcher Teil des Kaufpreises auf den Stellplatz entfällt. Er steckt schon im Kaufpreis; das Feld zeigt nur, was der Stellplatz euch monatlich und beim Kauf kostet.",
+  kfwAmount:
+    "Ein Förderdarlehen der KfW, z. B. KfW 300 für Familien beim Neubau. Es ersetzt einen Teil des Bankdarlehens. Die App mischt beide Zinsen zu einem Zins je Eigenkapitalstufe, gewichtet nach Betrag. Weil der KfW-Teil fest ist, senkt mehr Eigenkapital nur den teureren Bankteil.",
+  kfwRate: "Der Sollzins des KfW-Darlehens laut Förderzusage oder Angebot.",
+  moveInMonths:
+    "Monate von der Unterschrift bis zur Übergabe, bei einem Neubau oft ein bis zwei Jahre. Die Zinsbindung läuft ab Unterschrift, die Tilgung beginnt aber meist erst nach der Übergabe. Deshalb bleibt am Ende der Zinsbindung mehr Restschuld übrig. Bis zum Einzug zahlt ihr weiter Miete statt Rate.",
+  constructionInterest:
+    "Grobe Schätzung der Zinsen, die während der Bauzeit auf die schon ausgezahlten Raten anfallen (Bauzeitzinsen), plus Bereitstellungszinsen. Angenommen: im Schnitt ist die Hälfte des Darlehens ausgezahlt. Den echten Wert nennt die Bank mit dem Zahlungsplan.",
   householdNetIncome: "Was monatlich nach Steuern und Sozialabgaben bei euch beiden zusammen ankommt.",
   monthlyPayment:
     "Was ihr monatlich ans Darlehen zahlt — für jede Eigenkapitalstufe gleich, weil euer Budget sich durch mehr Eigenkapital nicht ändert. Bei mehr Eigenkapital ist das Darlehen kleiner, also steckt mehr von derselben Rate in der Tilgung und ihr seid früher schuldenfrei. Genauso rechnet auch die Bank in ihren Angeboten.",

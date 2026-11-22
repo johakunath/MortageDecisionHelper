@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   monthlyAnnuity,
   normaliseFixedPeriod,
+  blendedRate,
   rateFor,
   repaymentRateFromMonthlyPayment,
   repaymentRateFromRuntimeYears,
@@ -76,7 +77,12 @@ function PaymentField({
   const selected = scenarios.find((entry) => entry.id === selectedId) ?? scenarios[0];
   const ekRate = selected.ekRate;
   const referenceLoan = inputs.purchasePrice * (1 - ekRate / 100);
-  const referenceRate = rateFor(rates, inputs.fixedRateYears, selectedId);
+  const referenceRate = blendedRate(
+    rateFor(rates, inputs.fixedRateYears, selectedId),
+    referenceLoan,
+    inputs.kfwAmount,
+    inputs.kfwRate,
+  );
   const repaymentRate = repaymentRateFromMonthlyPayment(
     referenceLoan,
     referenceRate,
@@ -429,6 +435,25 @@ export default function InputsPanel({
             onRateChange={onRateChange}
           />
           <RatesProvenance note={ratesNote} onChange={onRatesNoteChange} />
+          {inputs.kfwAmount > 0 ? (
+            <p className="input-box-note">
+              Bankzinsen. Diese Wohnung hat zusätzlich {formatEur(inputs.kfwAmount)} KfW zu{" "}
+              {formatPct(inputs.kfwRate, 2)} und rechnet deshalb mit einem Mischzins:{" "}
+              {scenarios
+                .map((scenario) => {
+                  const loan = inputs.purchasePrice * (1 - scenario.ekRate / 100);
+                  const rate = blendedRate(
+                    rateFor(rates, inputs.fixedRateYears, scenario.id),
+                    loan,
+                    inputs.kfwAmount,
+                    inputs.kfwRate,
+                  );
+                  return `${scenario.label} ${formatPct(rate, 2)}`;
+                })
+                .join(" · ")}
+              .
+            </p>
+          ) : null}
           <p className="input-box-note">
             Mehr Eigenkapital senkt den Zins nicht gleichmäßig. Im Angebot vom 07.08.2026
             kosteten 10% und 15% EK bei 15 Jahren Bindung dasselbe.

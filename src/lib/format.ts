@@ -36,6 +36,15 @@ export function formatNumber(value: number, digits = 1): string {
   return value.toLocaleString("de-DE", { maximumFractionDigits: digits });
 }
 
+/** A calendar year from a fractional year, e.g. 2037.6 → "2037". */
+export function formatCalendarYear(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+
+  return String(Math.floor(value));
+}
+
 export function formatYears(value: number): string {
   if (!Number.isFinite(value)) {
     return "—";

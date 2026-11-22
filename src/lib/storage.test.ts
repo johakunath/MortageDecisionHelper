@@ -309,4 +309,22 @@ describe("persistence", () => {
     saveNamed("Angebot August", offer);
     expect(loadNamed("Angebot August")!.rates).toEqual(OFFER_RATES);
   });
+
+  it("never borrows KfW, handover delay or parking from another flat (D42)", () => {
+    const state = defaultState();
+    const strip = ({ kfwAmount: _k, kfwRate: _r, moveInMonths: _m, parkingPrice: _p, ...rest }: (typeof state.apartmentCases)[number]) => rest;
+    const own = { ...strip(state.apartmentCases[0]), id: "flat-own", label: "Eigene" };
+    const stored = {
+      ...state,
+      // A flat of their own at index 4, where BUWOG sits in the defaults, and BUWOG
+      // stored before these fields existed.
+      apartmentCases: [...state.apartmentCases.slice(0, 3).map(strip), strip(state.apartmentCases[3]), own, strip(state.apartmentCases[4])],
+    };
+    window.localStorage.setItem("mdh:save:pre-d42", JSON.stringify(stored));
+
+    const loaded = loadNamed("pre-d42")!;
+    const byId = (id: string) => loaded.apartmentCases.find((a) => a.id === id)!;
+    expect(byId("flat-own")).toMatchObject({ kfwAmount: 0, kfwRate: 0, moveInMonths: 0, parkingPrice: 0 });
+    expect(byId("buwog-arbor-h2-we08")).toMatchObject({ kfwAmount: 170000, kfwRate: 1.3, moveInMonths: 19, parkingPrice: 30000 });
+  });
 });

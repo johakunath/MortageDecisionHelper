@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ApartmentComparison from "./components/ApartmentComparison";
 import ApartmentSwitcher, { ApartmentFacts } from "./components/ApartmentSwitcher";
 import CashBlock from "./components/CashBlock";
 import CompromiseFinder from "./components/CompromiseFinder";
@@ -62,7 +63,16 @@ import {
 } from "./lib/storage";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
-type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld" | "closingCostRate" | "monthlyPayment";
+type ApartmentNumericKey =
+  | "purchasePrice"
+  | "renovation"
+  | "hausgeld"
+  | "closingCostRate"
+  | "monthlyPayment"
+  | "kfwAmount"
+  | "kfwRate"
+  | "moveInMonths"
+  | "parkingPrice";
 
 /**
  * Restored synchronously during the first render, not in an effect: loading in an
@@ -271,6 +281,10 @@ export default function App() {
         hausgeld: DEFAULT_APARTMENT_CASES[0].hausgeld,
         closingCostRate: activeApartment.closingCostRate,
         monthlyPayment: activeApartment.monthlyPayment,
+        kfwAmount: 0,
+        kfwRate: 0,
+        moveInMonths: 0,
+        parkingPrice: 0,
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);
@@ -573,6 +587,17 @@ export default function App() {
                 waitMonths={Math.max(0, Math.round(activeInputs.waitMonths))}
               />
             </details>
+          </section>
+
+          <section id="section-compare" ref={registerSection("compare")} className="page-section">
+            <div className="section-kicker">7 · Wohnungen vergleichen</div>
+            <ApartmentComparison
+              apartments={apartmentCases}
+              scenarios={EK_SCENARIOS}
+              inputs={inputs}
+              rates={rates}
+              selectedId={selected.id}
+            />
           </section>
         </main>
 

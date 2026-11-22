@@ -617,7 +617,7 @@ A database service (Supabase, Firebase) was rejected: a new dependency, an accou
 
 **Decision.** `ApartmentCase` gains `closingCostRate` and `monthlyPayment`; `buildApartmentInputs` takes both from the apartment. The controls stay where they were in §2 but write to the active apartment, and their hints say "gilt nur für die gewählte Wohnung". Older saves revive each apartment with the global value they used, so no stored figure moves. The two flats are appended to the defaults with stable ids, and `reviveState` appends them to any autosave, named save or Sheet state that lacks them, matched by id, so an edited copy is never overwritten or duplicated.
 
-Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000 € = 495.000 + 25.000 TG; 655.100 € = 625.100 Aktionspreis + 30.000 Stellplatz), renovation is the 12.000 € kitchen both lack, Hausgeld 630 € (Exposé) and 331 € (BUWOG estimate). Monatsraten are estimates ([ASSUMPTIONS §4.18](ASSUMPTIONS.md)).
+Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000 € = 495.000 + 25.000 TG; 655.100 € = 625.100 Aktionspreis + 30.000 Stellplatz), renovation is the 12.000 € kitchen both lack, Hausgeld 630 € (Exposé) and 331 € (BUWOG estimate). Monatsraten are estimates ([ASSUMPTIONS §4.17](ASSUMPTIONS.md)).
 
 **Consequence.** The golden snapshots for the three existing apartments are unchanged; two new ones pin the Shortlist flats. KfW 300, Bereitstellungszinsen and rent until BUWOG's 2028 handover remain outside the model.
 
@@ -633,3 +633,19 @@ Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000
 **Decision.** `DEFAULT_RATES` becomes that grid; the 15-year column is an estimate, +0,2 points as in the August offer. The offer's grid stays as `OFFER_RATES`: the golden master, the invariants and every test that describes the offer now name it explicitly, so they keep testing the offer rather than whatever the default happens to be. The screen's working state (autosave, the Sheet's current state) that still holds the untouched offer grid moves to the new assumption on load; named saves and grids with a note the couple wrote are left as they are.
 
 **Consequence.** No golden snapshot changed. Wohnung C, a placeholder at the old 1.900 € rate, no longer amortises at 4,3 % and reads "nicht tragbar".
+
+---
+
+## D42: Two flats side by side, with KfW blend, Neubau handover and the parking space's cost
+
+**Date:** 2026-11-22 · **Status:** accepted · **Refines** [D3](#d3--apartments-are-a-context-switcher-plus-a-read-only-comparison-table), [D40](#d40-kaufnebenkosten-and-monatsrate-move-onto-the-apartment-the-two-shortlist-flats-ship-as-defaults)
+
+**Context.** The owners want to compare Lindenstraße 31G and BUWOG Arbor WE08, not one after the other. BUWOG has a KfW 300 loan and is handed over about 19 months after signing; the couple disagree whether to buy the parking spaces. Of two mockups the owner chose a table plus one shared Restschuld chart.
+
+**Decision.**
+- **New section 7 "Wohnungen vergleichen"**: two columns, each with its own flat and its own EK level (the "A at 10% vs B at 15%" limitation D3 recorded). Read-only, rows from `apartmentColumn`. Restschuld and interest are read on one date for both, the end of the Zinsbindung counted from signing, so rule 5 holds. The chart puts both flats on one time axis from signing; a Neubau's line starts at handover.
+- **KfW per apartment** (`kfwAmount`, `kfwRate`), blended with the bank's rate per EK level by `blendedRate`. The owner proposed entering a hand-computed weighted average; the app computes it instead, because the KfW part is fixed, so the blend differs by EK level, and one average for all three would understate what extra EK saves. Bank rates stay one shared grid: they depend on the loan-to-value, not on the flat.
+- **`moveInMonths` per apartment**: the binding is priced in full but the loan amortises only after handover (`bindingMonths`). Every horizon "within the binding" uses it, so the page's own figures for a Neubau cover the shorter amortising period and its Restschuld at refinancing is higher. Bauzeitzinsen are an estimate shown in the comparison, not a cash deduction ([ASSUMPTIONS §4.20](ASSUMPTIONS.md)).
+- **`parkingPrice` per apartment**, a share of the price already in it, so the comparison shows what the space costs per month and at signing. The tool does not decide; it prices the question.
+
+**Consequence.** With no KfW and no delay the engine is unchanged: the golden snapshots for the three older flats and the QA presets did not move, and the invariants hold for BUWOG with both. Only BUWOG's and Lindenstraße's own snapshots changed, because their inputs did. `LineChart` gains an optional `endLabel`, since four lines ending at zero would print their names on top of each other.

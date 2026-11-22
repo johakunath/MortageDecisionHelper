@@ -1,10 +1,11 @@
 import {
+  bindingYears,
   BETTER_WHEN,
   ekStepReturn,
   type MortgageInputs,
   type ScenarioResult,
 } from "../lib/calculations";
-import { formatEur, formatPct, formatSignedEur, formatSignedYears, formatYears } from "../lib/format";
+import { formatEur, formatNumber, formatPct, formatSignedEur, formatSignedYears, formatYears } from "../lib/format";
 import { SignedValue } from "./ui";
 
 type TradeoffMatrixProps = {
@@ -22,7 +23,7 @@ function interpret(
   cashDelta: number,
   interestDelta: number,
   runtimeDelta: number,
-  fixedRateYears: number,
+  fixedRateYears: string,
 ): string {
   if (Math.abs(cashDelta) < 1 && Math.abs(interestDelta) < 1) {
     return "Praktisch kein Unterschied.";
@@ -60,7 +61,8 @@ function interpret(
  * what more Eigenkapital actually moves.
  */
 export default function TradeoffMatrix({ scenarios, inputs }: TradeoffMatrixProps) {
-  const { fixedRateYears } = inputs;
+  // The amortising part of the binding: shorter than the binding for a Neubau (D42).
+  const fixedRateYears = formatNumber(bindingYears(inputs));
   const low = scenarios[0];
   const mid = scenarios[Math.floor(scenarios.length / 2)];
   const high = scenarios[scenarios.length - 1];

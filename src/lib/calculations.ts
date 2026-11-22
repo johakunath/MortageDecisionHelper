@@ -65,6 +65,20 @@ export type MortgageInputs = {
    */
   monthlyPayment: number;
   fixedRateYears: number;
+  /**
+   * A KfW loan inside the financing: its fixed amount and Sollzins. Owned by the
+   * apartment (0 = none). The model blends it with the bank's rate into one rate per EK
+   * level, weighted by amount; the KfW part is fixed, so more EK only shrinks the bank
+   * part and the blend differs by EK level (D42, ASSUMPTIONS §4.19).
+   */
+  kfwAmount: number;
+  kfwRate: number;
+  /**
+   * Months from signing to moving in (Neubau). The Zinsbindung starts at signing, but
+   * the annuity starts only at handover, so the loan amortises for this much less of
+   * the binding. 0 for a flat that is moved into at once. Owned by the apartment (D42).
+   */
+  moveInMonths: number;
   annualSpecialRepayment: number;
   annualSpecialRepayments: number[];
   specialRepaymentLimitRate: number;
@@ -114,6 +128,36 @@ export type InterestRates = Record<FixedPeriod, Record<ScenarioId, number>>;
 /** Nearest supported binding. Guards old saved states that still hold 20 years. */
 export function normaliseFixedPeriod(fixedRateYears: number): FixedPeriod {
   return fixedRateYears <= 12.5 ? 10 : 15;
+}
+
+/**
+ * One Sollzins for a loan made of a bank part and a fixed KfW part, weighted by amount.
+ * Exact for the interest of the first month; afterwards an approximation, because the
+ * two parts would amortise at their own pace (ASSUMPTIONS §4.19).
+ */
+export function blendedRate(
+  bankRatePct: number,
+  loan: number,
+  kfwAmount: number,
+  kfwRatePct: number,
+): number {
+  if (loan <= 0 || kfwAmount <= 0) return bankRatePct;
+  const kfw = Math.min(kfwAmount, loan);
+  return (kfw * kfwRatePct + (loan - kfw) * bankRatePct) / loan;
+}
+
+/**
+ * The months the loan amortises inside the Zinsbindung: the binding minus the time
+ * until the flat is handed over (D42). Every horizon "within the binding" uses this;
+ * only the rate lookup still reads `fixedRateYears`, because the bank prices the
+ * binding it signs, not the part of it that is left after the handover.
+ */
+export function bindingMonths(inputs: Pick<MortgageInputs, "fixedRateYears" | "moveInMonths">): number {
+  return Math.max(0, Math.round(inputs.fixedRateYears * 12) - Math.max(0, Math.round(inputs.moveInMonths ?? 0)));
+}
+
+export function bindingYears(inputs: Pick<MortgageInputs, "fixedRateYears" | "moveInMonths">): number {
+  return bindingMonths(inputs) / 12;
 }
 
 export function rateFor(
@@ -372,6 +416,16 @@ export type ApartmentCase = {
    * directly by the developer (8%) differ by ~23.000 € on 650k (D40).
    */
   closingCostRate: number;
+  /** KfW loan amount and Sollzins for this apartment; 0 = none (D42). */
+  kfwAmount: number;
+  kfwRate: number;
+  /** Months from signing to handover; 0 = moved into at once (D42). */
+  moveInMonths: number;
+  /**
+   * The parking space's share of `purchasePrice`, which already includes it. Read only
+   * to show what the space costs; the model finances the whole price (D42).
+   */
+  parkingPrice: number;
   /**
    * The Monatsrate of this apartment's loan, the same for all three EK levels. Per
    * apartment because a rate sized for a 405k loan does not even cover the interest on
@@ -502,6 +556,9 @@ export function simulateMortgage({
     };
   }
 
+  // Rounded once: a binding shortened by a handover delay is a fractional number of
+  // years, and `months === years * 12` must not hinge on floating-point luck.
+  const fixedMonths = Math.round(fixedRateYears * 12);
   const monthlyRate = Math.max(0, interestRatePct) / 100 / 12;
   const regularMonthlyPayment = monthlyAnnuity(
     safePrincipal,
@@ -536,7 +593,7 @@ export function simulateMortgage({
     balance -= principalPart;
     interestTotal += interest;
 
-    if (months <= fixedRateYears * 12) {
+    if (months <= fixedMonths) {
       interestFixed += interest;
     }
 
@@ -561,7 +618,7 @@ export function simulateMortgage({
       balance: Math.max(0, balance),
     });
 
-    if (months === fixedRateYears * 12) {
+    if (months === fixedMonths) {
       remainingAfterFixed = Math.max(0, balance);
     }
 
@@ -585,7 +642,7 @@ export function simulateMortgage({
     interestTotal,
     interestFixed,
     remainingAfterFixed:
-      months < fixedRateYears * 12 ? Math.max(0, balance) : remainingAfterFixed,
+      months < fixedMonths ? Math.max(0, balance) : remainingAfterFixed,
     runtimeYears: months / 12,
     maxAnnualSpecial,
     usedAnnualSpecial,
@@ -685,7 +742,12 @@ export function buildScenario(
     inputs.renovation,
     inputs.moving,
   );
-  const interestRate = rateFor(rates, inputs.fixedRateYears, base.id);
+  const interestRate = blendedRate(
+    rateFor(rates, inputs.fixedRateYears, base.id),
+    loan,
+    inputs.kfwAmount,
+    inputs.kfwRate,
+  );
   // Same € every month at every EK level; the Tilgungssatz is what moves. Verified
   // against the broker's Tilgungsplan: 405.000 € at 3,87 % and 1.900 €/month yields
   // 1,759630 % and reproduces their 10-year figures to the cent.
@@ -694,7 +756,7 @@ export function buildScenario(
     principal: loan,
     interestRatePct: interestRate,
     repaymentRatePct: repaymentRate,
-    fixedRateYears: inputs.fixedRateYears,
+    fixedRateYears: bindingYears(inputs),
     specialPlan,
     specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
   });
@@ -719,7 +781,7 @@ export function buildScenario(
   const minimumPayment = minimumPaymentForLifetime(
     loan,
     interestRate,
-    inputs.fixedRateYears,
+    bindingYears(inputs),
     specialPlan,
     inputs.specialRepaymentLimitRate,
   );
@@ -851,10 +913,83 @@ export function buildApartmentInputs(
     purchasePrice: apartment.purchasePrice,
     closingCostRate: apartment.closingCostRate,
     monthlyPayment: apartment.monthlyPayment,
+    kfwAmount: apartment.kfwAmount,
+    kfwRate: apartment.kfwRate,
+    moveInMonths: apartment.moveInMonths,
     renovation: apartment.renovation,
     monthlyOwnershipCosts: apartment.hausgeld + baseInputs.ownerExtraMonthly,
     annualSpecialRepayment,
     annualSpecialRepayments: apartment.annualSpecialRepayments,
+  };
+}
+
+/**
+ * Share of the loan assumed drawn, on average, while a Neubau is built (MaBV tranches).
+ * A guess, not a payment plan: it only feeds `constructionInterest` (ASSUMPTIONS §4.20).
+ */
+export const CONSTRUCTION_DRAW_SHARE = 0.5;
+
+export type ApartmentColumn = {
+  apartment: ApartmentCase;
+  inputs: MortgageInputs;
+  /** This apartment at the chosen EK level, with its own Sondertilgung plan. */
+  scenario: ScenarioResult;
+  /** The same loan with no Sondertilgung at all. */
+  withoutSpecial: ScenarioResult;
+  /** The bank's own rate for this EK level, before any KfW blend. */
+  bankRate: number;
+  /** Months the loan amortises inside the Zinsbindung (binding minus handover delay). */
+  bindingMonths: number;
+  /** Rough Bauzeit- and Bereitstellungszinsen until handover. 0 without a delay. */
+  constructionInterest: number;
+  /** Sondertilgung actually paid inside the binding. */
+  specialInBinding: number;
+  /** Years from signing until debt-free: the handover delay plus the runtime. */
+  debtFreeAfterYears: number;
+  /** The parking space's share of the Monatsrate, at this EK level. */
+  parkingMonthly: number;
+  /** Cash the parking space needs at signing: its share of EK and Kaufnebenkosten. */
+  parkingCash: number;
+};
+
+/**
+ * One apartment at one EK level, as the side-by-side comparison shows it (D42). Each
+ * column picks its own EK level, so "Lindenstraße at 10% against BUWOG at 15%" is a
+ * question the screen can answer — the limitation D3 recorded.
+ */
+export function apartmentColumn(
+  apartment: ApartmentCase,
+  base: ScenarioBase,
+  baseInputs: MortgageInputs,
+  rates: InterestRates,
+): ApartmentColumn {
+  const inputs = buildApartmentInputs(baseInputs, apartment);
+  const scenario = buildScenario(base, inputs, rates);
+  const withoutSpecial = buildScenario(base, inputs, rates, { kind: "none" });
+  const months = bindingMonths(inputs);
+  const constructionInterest =
+    ((scenario.loan * scenario.interestRate) / 100) *
+    (Math.max(0, inputs.moveInMonths) / 12) *
+    CONSTRUCTION_DRAW_SHARE;
+  const specialInBinding = scenario.mortgage.usedAnnualSpecialRepayments
+    .slice(0, Math.floor(months / 12))
+    .reduce((sum, amount) => sum + (amount ?? 0), 0);
+  // The Monatsrate scales with the loan at a fixed EK share, so the space carries its
+  // share of the price; at signing it needs its share of EK and Kaufnebenkosten.
+  const parkingShare = inputs.purchasePrice > 0 ? apartment.parkingPrice / inputs.purchasePrice : 0;
+
+  return {
+    apartment,
+    inputs,
+    scenario,
+    withoutSpecial,
+    bankRate: rateFor(rates, inputs.fixedRateYears, base.id),
+    bindingMonths: months,
+    constructionInterest,
+    specialInBinding,
+    debtFreeAfterYears: Math.max(0, inputs.moveInMonths) / 12 + scenario.mortgage.runtimeYears,
+    parkingMonthly: scenario.mortgage.regularMonthlyPayment * parkingShare,
+    parkingCash: apartment.parkingPrice * ((base.ekRate + inputs.closingCostRate) / 100),
   };
 }
 
@@ -963,7 +1098,7 @@ export function compareEkScenarios(
   inputs: MortgageInputs,
 ): EkTradeoff {
   const extraCashRequired = to.cashNeeded - from.cashNeeded;
-  const horizonYears = inputs.fixedRateYears;
+  const horizonYears = bindingYears(inputs);
   const interestSavedFixed = from.mortgage.interestFixed - to.mortgage.interestFixed;
   const etfForegoneGross = opportunityCost(
     Math.max(0, extraCashRequired),
@@ -1030,7 +1165,7 @@ export function ekStepReturn(
   to: ScenarioResult,
   inputs: MortgageInputs,
 ): EkStepReturn {
-  const years = inputs.fixedRateYears;
+  const years = bindingYears(inputs);
   const extraCash = to.cashNeeded - from.cashNeeded;
   const debtReduction = from.mortgage.remainingAfterFixed - to.mortgage.remainingAfterFixed;
   if (extraCash <= 0 || years <= 0) {
@@ -1283,7 +1418,7 @@ export function buildWaitScenario(
   rates: InterestRates,
   waitMonths: number = inputs.waitMonths,
   /** The common date. Pass one value for every column of a table. */
-  horizonMonths: number = Math.max(inputs.fixedRateYears * 12, waitMonths),
+  horizonMonths: number = Math.max(bindingMonths(inputs), waitMonths),
 ): WaitScenario {
   const years = waitMonths / 12;
   const { futurePrice, adjustedInterestRate, purchaseRates } = purchaseAfterWaiting(
@@ -1352,7 +1487,7 @@ export function buildWaitScenarios(
 ): WaitScenario[] {
   // One date for every column, so the table compares like with like even if someone
   // types a Wartezeit longer than the binding.
-  const horizonMonths = Math.max(inputs.fixedRateYears * 12, ...months);
+  const horizonMonths = Math.max(bindingMonths(inputs), ...months);
   return months.map((waitMonths) =>
     buildWaitScenario(selectedBase, inputs, rates, waitMonths, horizonMonths),
   );
@@ -1393,7 +1528,7 @@ export function waitTippingPoints(
   rates: InterestRates,
   waitMonths: number = inputs.waitMonths,
 ): WaitTippingPoint[] {
-  const horizonMonths = Math.max(inputs.fixedRateYears * 12, waitMonths);
+  const horizonMonths = Math.max(bindingMonths(inputs), waitMonths);
   const delta = (assumption: WaitAssumption, value: number) => {
     const varied = { ...inputs, [assumption]: value };
     return (
@@ -1516,7 +1651,7 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
   const waitMonths = Math.max(0, Math.round(params.waitMonths ?? 0));
   const horizonMonths = Math.max(
     waitMonths,
-    Math.round(params.horizonMonths ?? inputs.fixedRateYears * 12),
+    Math.round(params.horizonMonths ?? bindingMonths(inputs)),
   );
   const specialPlan = params.specialPlan ?? planFromInputs(inputs);
   const monthlyReturn = Math.pow(1 + inputs.etfReturnRate / 100, 1 / 12) - 1;
@@ -1562,7 +1697,7 @@ export function scenarioWealthAtHorizon(
   scenario: ScenarioResult,
   inputs: MortgageInputs,
   specialPlan: SpecialPlan = planFromInputs(inputs),
-  horizonMonths: number = Math.round(inputs.fixedRateYears * 12),
+  horizonMonths: number = bindingMonths(inputs),
 ): WealthAtHorizon {
   return ownUntilHorizon(scenario, inputs, specialPlan, {
     horizonMonths,
@@ -1606,7 +1741,7 @@ function ownUntilHorizon(
     principal: purchase.loan,
     interestRatePct: purchase.interestRate,
     repaymentRatePct: purchase.repaymentRate,
-    fixedRateYears: inputs.fixedRateYears,
+    fixedRateYears: bindingYears(inputs),
     specialPlan,
     specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
     onMonth: (entry) => {
@@ -1672,7 +1807,7 @@ export type RefinanceStress = {
  * Restschuld onward with the rest of the yearly plan, so only the rate differs.
  */
 export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs): RefinanceStress {
-  const fixedYears = inputs.fixedRateYears;
+  const fixedYears = bindingYears(inputs);
   const remaining = scenario.mortgage.remainingAfterFixed;
   const stressRate = Math.max(0, scenario.interestRate + inputs.refiStressShift);
   const payment = scenario.mortgage.regularMonthlyPayment;

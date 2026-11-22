@@ -4,6 +4,7 @@ import type {
   RefinanceStress,
   ScenarioResult,
 } from "../lib/calculations";
+import { bindingYears } from "../lib/calculations";
 import { GLOSSARY } from "../lib/glossary";
 import { formatEur, formatNumber, formatPct } from "../lib/format";
 import { Readout, StatusPill } from "./ui";
@@ -23,7 +24,7 @@ type RightPanelProps = {
 function describeStress(stress: RefinanceStress, inputs: MortgageInputs): string {
   // One line at 1280 px, even in the red state: a second line pushed the panel's own
   // warning box over it (D19).
-  if (!stress.applies) return `in den ${inputs.fixedRateYears} Jahren abbezahlt`;
+  if (!stress.applies) return `in den ${formatNumber(bindingYears(inputs))} Jahren abbezahlt`;
   const shift = `bei +${formatNumber(inputs.refiStressShift)} Pkt. Zins`;
   if (!stress.coversInterest) return `${shift}: Rate reicht nicht`;
   return `${shift}: ${formatNumber(stress.extraYears)} J. länger`;
@@ -71,7 +72,7 @@ export default function RightPanel({ selected, inputs, decision, stress }: Right
             info={GLOSSARY.cashLeft}
           />
           <Readout
-            label={`Zinsen in ${inputs.fixedRateYears} Jahren`}
+            label={`Zinsen in ${formatNumber(bindingYears(inputs))} Jahren`}
             value={formatEur(selected.mortgage.interestFixed)}
             sub="Verlässlich — innerhalb der Zinsbindung"
             tone="amber"
