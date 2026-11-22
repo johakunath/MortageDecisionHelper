@@ -5,6 +5,8 @@ import {
   DEFAULT_RATES,
   DEFAULT_RATES_NOTE,
   EK_SCENARIOS,
+  OFFER_RATES,
+  OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
 } from "./defaults";
 
@@ -202,7 +204,25 @@ function ratesEqual(a: InterestRates, b: InterestRates): boolean {
  */
 function reviveRatesNote(stored: unknown, rates: InterestRates): string {
   if (typeof stored === "string") return stored;
-  return ratesEqual(rates, DEFAULT_RATES) ? DEFAULT_RATES_NOTE : "";
+  if (ratesEqual(rates, DEFAULT_RATES)) return DEFAULT_RATES_NOTE;
+  return ratesEqual(rates, OFFER_RATES) ? OFFER_RATES_NOTE : "";
+}
+
+/**
+ * The working state still holding the August offer, untouched, moves to the current
+ * rate assumption (D41). Only the screen's own state (autosave, the Sheet's current
+ * state): a named save holding the offer may hold it on purpose, so it is left alone.
+ * A note the couple wrote themselves means they chose these rates, so it is kept too.
+ */
+export function upgradeShippedRates(state: PersistedState): PersistedState {
+  const untouched =
+    ratesEqual(state.rates, OFFER_RATES) && (state.ratesNote === OFFER_RATES_NOTE || state.ratesNote === "");
+  if (!untouched) return state;
+  return {
+    ...state,
+    rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
+    ratesNote: DEFAULT_RATES_NOTE,
+  };
 }
 
 /** The EK level a v1 save was sitting on, read off its legacy id ("ek5" → 5). */
@@ -328,7 +348,8 @@ function reviveState(raw: string): PersistedState | null {
 
 export function loadAutosave(): PersistedState | null {
   const raw = safeGet(AUTOSAVE_KEY);
-  return raw ? reviveState(raw) : null;
+  const state = raw ? reviveState(raw) : null;
+  return state ? upgradeShippedRates(state) : null;
 }
 
 export function writeAutosave(state: PersistedState): void {
@@ -418,8 +439,9 @@ export function parseBundle(text: string): Omit<Bundle, "current"> & { current: 
   try {
     const parsed = JSON.parse(text) as Record<string, unknown> | null;
     if (!parsed || parsed.app !== "mortgage-decision-helper" || parsed.bundleVersion !== 1) return null;
-    const current = reviveState(JSON.stringify(parsed.current ?? null));
-    if (!current) return null;
+    const revivedCurrent = reviveState(JSON.stringify(parsed.current ?? null));
+    if (!revivedCurrent) return null;
+    const current = upgradeShippedRates(revivedCurrent);
 
     const saves: Record<string, PersistedState> = {};
     const storedSaves = (parsed.saves ?? {}) as Record<string, unknown>;

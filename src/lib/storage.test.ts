@@ -8,9 +8,18 @@ import {
   saveExists,
   saveNamed,
   storageAvailable,
+  upgradeShippedRates,
   writeBundleSaves,
 } from "./storage";
-import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS, SHORTLIST_APARTMENT_CASES } from "./defaults";
+import {
+  DEFAULT_INPUTS,
+  DEFAULT_RATES,
+  DEFAULT_RATES_NOTE,
+  EK_SCENARIOS,
+  OFFER_RATES,
+  OFFER_RATES_NOTE,
+  SHORTLIST_APARTMENT_CASES,
+} from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -281,5 +290,23 @@ describe("persistence", () => {
     const again = loadNamed("edited")!;
     expect(again.apartmentCases).toHaveLength(5);
     expect(again.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!.purchasePrice).toBe(505000);
+  });
+
+  it("moves an untouched offer grid to the current assumption, but never a chosen one (D41)", () => {
+    const offer = { ...defaultState(), rates: OFFER_RATES, ratesNote: OFFER_RATES_NOTE };
+    expect(upgradeShippedRates(offer).rates).toEqual(DEFAULT_RATES);
+    expect(upgradeShippedRates(offer).ratesNote).toBe(DEFAULT_RATES_NOTE);
+
+    // Their own note means they chose these rates.
+    const chosen = { ...offer, ratesNote: "Angebot Baudarlehen24 nochmal geprüft" };
+    expect(upgradeShippedRates(chosen)).toBe(chosen);
+
+    // One edited rate means it is no longer the shipped grid.
+    const edited = { ...offer, rates: { ...OFFER_RATES, 10: { ...OFFER_RATES[10], ek10: 3.9 } } };
+    expect(upgradeShippedRates(edited)).toBe(edited);
+
+    // Named saves are not upgraded: one may hold the offer on purpose.
+    saveNamed("Angebot August", offer);
+    expect(loadNamed("Angebot August")!.rates).toEqual(OFFER_RATES);
   });
 });

@@ -50,15 +50,29 @@ export const DEFAULT_INPUTS: MortgageInputs = {
 
 /**
  * Sollzinsen aus dem Finanzierungsangebot vom 07.08.2026, Varianten 1A–3B
- * (90% / 85% / 80% Finanzierung × 10 / 15 Jahre Zinsbindung).
+ * (90% / 85% / 80% Finanzierung × 10 / 15 Jahre Zinsbindung). Nicht mehr die
+ * Voreinstellung, aber der Satz, gegen den `offer.test.ts` die Engine prüft, und der
+ * Satz, an dem `storage.ts` unveränderte alte Stände erkennt.
  *
  * Sie fallen über die EK-Stufen NICHT gleichmäßig: 15% EK kauft gegenüber 10% fast
  * nichts, bei 15 Jahren Bindung exakt nichts. Der Sprung kommt erst bei 80%
  * Beleihung. Nichts im Modell darf Monotonie unterstellen.
  */
-export const DEFAULT_RATES: InterestRates = {
+export const OFFER_RATES: InterestRates = {
   10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 },
   15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 },
+};
+
+export const OFFER_RATES_NOTE = "Finanzierungsangebot vom 07.08.2026 (Varianten 1A–3B)";
+
+/**
+ * Annahme der Eigentümer vom 22.11.2026, bis die neuen Bankangebote da sind (D41):
+ * 10 Jahre 4,3 / 4,2 / 4,0 %. Die 15-Jahres-Spalte ist geschätzt: derselbe Aufschlag
+ * von 0,2 Punkten, den das Angebot vom August zwischen 10 und 15 Jahren hatte.
+ */
+export const DEFAULT_RATES: InterestRates = {
+  10: { ek10: 4.3, ek15: 4.2, ek20: 4.0 },
+  15: { ek10: 4.5, ek15: 4.4, ek20: 4.2 },
 };
 
 /**
@@ -66,7 +80,8 @@ export const DEFAULT_RATES: InterestRates = {
  * without a date reads as current when it may be months old. Free text rather than a
  * date field because one grid can mix quotes from several sources and days (D36).
  */
-export const DEFAULT_RATES_NOTE = "Finanzierungsangebot vom 07.08.2026 (Varianten 1A–3B)";
+export const DEFAULT_RATES_NOTE =
+  "Annahme vom 22.11.2026, noch kein Angebot: 10 J. 4,3 / 4,2 / 4,0 % · 15 J. je +0,2 geschätzt";
 
 export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek10", ekRate: 10, label: "10% EK" },

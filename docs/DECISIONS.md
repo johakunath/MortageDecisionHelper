@@ -621,3 +621,15 @@ Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000
 
 **Consequence.** The golden snapshots for the three existing apartments are unchanged; two new ones pin the Shortlist flats. KfW 300, Bereitstellungszinsen and rent until BUWOG's 2028 handover remain outside the model.
 
+
+---
+
+## D41: Default Sollzinsen move to the owners' current assumption; the August offer stays pinned
+
+**Date:** 2026-11-22 · **Status:** accepted · **Refines** [D36](#d36-the-sollzinsen-carry-their-stand-und-quelle-apartments-can-be-named)
+
+**Context.** Rates had risen since the offer of 07.08.2026. Until new quotes arrive, the owners assume 4,3 / 4,2 / 4,0 % for 10 Jahre at 10 / 15 / 20 % EK.
+
+**Decision.** `DEFAULT_RATES` becomes that grid; the 15-year column is an estimate, +0,2 points as in the August offer. The offer's grid stays as `OFFER_RATES`: the golden master, the invariants and every test that describes the offer now name it explicitly, so they keep testing the offer rather than whatever the default happens to be. The screen's working state (autosave, the Sheet's current state) that still holds the untouched offer grid moves to the new assumption on load; named saves and grids with a note the couple wrote are left as they are.
+
+**Consequence.** No golden snapshot changed. Wohnung C, a placeholder at the old 1.900 € rate, no longer amortises at 4,3 % and reads "nicht tragbar".
