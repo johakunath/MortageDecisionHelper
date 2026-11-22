@@ -223,6 +223,8 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 14. **ETF tax in the ledger is linear** in the net gain and charged once, at the horizon. It may turn negative where withdrawals exceed growth; that is the after-tax growth those withdrawals gave up. No Vorabpauschale, no Sparerpauschbetrag.
 15. **The household budget is constant** (`waitSavingsMonthly + currentWarmRent`) for the whole horizon: no pay rises, no inflation.
 16. **"Grundsteuer + eigene Rücklage" is one flat amount** (default 90 €/Monat) for every apartment, not derived from size, Bundesland or building age. Grundsteuer differs by municipality, the needed reserve by the flat's condition ([D35](DECISIONS.md)).
+17. **KfW loans are not modelled.** One bank loan per apartment. The BUWOG Neubau could take up to 170.000 € KfW 300 at ~1,3%, which would lower its Monatsrate noticeably; the app shows it with the bank rate only ([D40](DECISIONS.md)).
+18. **The Shortlist flats' Monatsraten are estimates**, not offers: the real offer's ratio of Rate to Darlehen (1.900 € / 405.000 €) applied to each flat's 90% loan, so each starts at the offer's Tilgung. Replace them when a bank quotes.
 
 ## 5. Defect log
 

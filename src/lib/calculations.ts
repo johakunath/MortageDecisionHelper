@@ -366,6 +366,18 @@ export type ApartmentCase = {
    * `ownerExtraMonthly`. A number the couple can look up, which "Eigentumskosten" was not.
    */
   hausgeld: number;
+  /**
+   * Kaufnebenkosten in % of this apartment's price. Per apartment because the Makler
+   * is a property of the offer: one flat with Käuferprovision (11,57%) and one sold
+   * directly by the developer (8%) differ by ~23.000 € on 650k (D40).
+   */
+  closingCostRate: number;
+  /**
+   * The Monatsrate of this apartment's loan, the same for all three EK levels. Per
+   * apartment because a rate sized for a 405k loan does not even cover the interest on
+   * a 590k one; one global rate made every larger flat "nicht tragbar" by construction (D40).
+   */
+  monthlyPayment: number;
   annualSpecialRepayments: number[];
   /** Free text: address, Makler, link to the Exposé. Never read by the model. */
   note?: string;
@@ -837,6 +849,8 @@ export function buildApartmentInputs(
   return {
     ...baseInputs,
     purchasePrice: apartment.purchasePrice,
+    closingCostRate: apartment.closingCostRate,
+    monthlyPayment: apartment.monthlyPayment,
     renovation: apartment.renovation,
     monthlyOwnershipCosts: apartment.hausgeld + baseInputs.ownerExtraMonthly,
     annualSpecialRepayment,

@@ -606,3 +606,18 @@ A database service (Supabase, Firebase) was rejected: a new dependency, an accou
 **Decision.** Two fixed-height buttons at the header's right edge: **Laden** (download icon) and **Speichern** (floppy icon). Speichern shows "● neu" when the screen or a named save differs from what was last loaded or saved, compared through a key-order-independent serialisation. Confirmations, conflicts and messages open in `SyncPopover`, rendered next to the header, because the header's clip-path would cut it and its growth would break `--header-height`. Unconnected, the header shows one "Sheet verbinden" button that opens the settings in §2. The token field gains an eye toggle, also once connected, so it can be read off and typed on the other device.
 
 **Consequence.** Header still measures 50px at 1280 / 1000 / 820 / 560px and on an iPhone 13 (390px), with no horizontal scroll. Below 880px the buttons drop their words (the icons carry aria-labels); below 620px the topbar leaves its centred grid so the apartment name keeps its width; below 440px the brand dot goes.
+
+---
+
+## D40: Kaufnebenkosten and Monatsrate move onto the apartment; the two Shortlist flats ship as defaults
+
+**Date:** 2026-11-22 · **Status:** accepted · **Refines** [D3](#d3--apartments-are-a-context-switcher-plus-a-read-only-comparison-table), [D12](#d12--kaufnebenkosten-two-presets-and-1157-as-default)
+
+**Context.** The owner wanted the two flats marked "Vergleichen? Ja" in their Shortlist Sheet (Lindenstraße 31G, BUWOG Arbor H2 WE08) selectable without retyping. Two inputs were global and could not hold both: the Lindenstraße flat carries 3,57% Käuferprovision (11,57% KNK), BUWOG sells directly (8%), a 23.400 € difference on 655.100 €; and the one Monatsrate of 1.900 € was sized for the 405k offer loan and does not cover the interest on BUWOG's 590k loan, so BUWOG would have read "nicht tragbar" by construction.
+
+**Decision.** `ApartmentCase` gains `closingCostRate` and `monthlyPayment`; `buildApartmentInputs` takes both from the apartment. The controls stay where they were in §2 but write to the active apartment, and their hints say "gilt nur für die gewählte Wohnung". Older saves revive each apartment with the global value they used, so no stored figure moves. The two flats are appended to the defaults with stable ids, and `reviveState` appends them to any autosave, named save or Sheet state that lacks them, matched by id, so an edited copy is never overwritten or duplicated.
+
+Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000 € = 495.000 + 25.000 TG; 655.100 € = 625.100 Aktionspreis + 30.000 Stellplatz), renovation is the 12.000 € kitchen both lack, Hausgeld 630 € (Exposé) and 331 € (BUWOG estimate). Monatsraten are estimates ([ASSUMPTIONS §4.18](ASSUMPTIONS.md)).
+
+**Consequence.** The golden snapshots for the three existing apartments are unchanged; two new ones pin the Shortlist flats. KfW 300, Bereitstellungszinsen and rent until BUWOG's 2028 handover remain outside the model.
+

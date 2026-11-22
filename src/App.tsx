@@ -62,7 +62,7 @@ import {
 } from "./lib/storage";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
-type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld";
+type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld" | "closingCostRate" | "monthlyPayment";
 
 /**
  * Restored synchronously during the first render, not in an effect: loading in an
@@ -197,6 +197,13 @@ export default function App() {
   }, [selected.id, activeInputs, rates]);
 
   function updateInput(key: NumericInputKey, value: number) {
+    // Kaufnebenkosten (Makler or not) and the Monatsrate belong to the apartment, so
+    // their controls in §2 write to the active one rather than to a global every flat
+    // would share (D40).
+    if (key === "closingCostRate" || key === "monthlyPayment") {
+      updateApartmentCase(activeApartmentId, { [key]: value });
+      return;
+    }
     setInputs((current) => ({ ...current, [key]: value }));
   }
 
@@ -262,6 +269,8 @@ export default function App() {
         purchasePrice: DEFAULT_APARTMENT_CASES[0].purchasePrice,
         renovation: 0,
         hausgeld: DEFAULT_APARTMENT_CASES[0].hausgeld,
+        closingCostRate: activeApartment.closingCostRate,
+        monthlyPayment: activeApartment.monthlyPayment,
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);
@@ -276,16 +285,15 @@ export default function App() {
     }
 
     const yearlyAmount = preset === "safety" ? 3000 : 12000;
-    setInputs((current) => ({
-      ...current,
-      ...(preset === "safety"
-        ? { reserveTarget: 35000, monthlyPayment: 1700 }
-        : { monthlyPayment: 2100 }),
-    }));
+    if (preset === "safety") setInputs((current) => ({ ...current, reserveTarget: 35000 }));
     setApartmentCases((current) =>
       current.map((apartment) =>
         apartment.id === activeApartmentId
-          ? { ...apartment, annualSpecialRepayments: apartment.annualSpecialRepayments.map(() => yearlyAmount) }
+          ? {
+              ...apartment,
+              monthlyPayment: preset === "safety" ? 1700 : 2100,
+              annualSpecialRepayments: apartment.annualSpecialRepayments.map(() => yearlyAmount),
+            }
           : apartment,
       ),
     );

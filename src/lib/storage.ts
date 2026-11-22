@@ -1,5 +1,12 @@
 import { normaliseFixedPeriod, type ApartmentCase, type InterestRates, type MortgageInputs, type ScenarioId } from "./calculations";
-import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
+import {
+  DEFAULT_APARTMENT_CASES,
+  DEFAULT_INPUTS,
+  DEFAULT_RATES,
+  DEFAULT_RATES_NOTE,
+  EK_SCENARIOS,
+  SHORTLIST_APARTMENT_CASES,
+} from "./defaults";
 
 /**
  * Everything the user can change, in one serialisable shape.
@@ -143,7 +150,13 @@ function reviveRateRow(
  * the four values it is allowed to own — and keys from older shapes (`selectedScenarioId`)
  * do not ride along into the live state.
  */
-function reviveApartment(stored: unknown, index: number, ownerExtra: number): ApartmentCase {
+function reviveApartment(
+  stored: unknown,
+  index: number,
+  ownerExtra: number,
+  globalClosingCostRate: number,
+  globalMonthlyPayment: number,
+): ApartmentCase {
   const raw = (stored ?? {}) as Record<string, unknown>;
   const fallback =
     DEFAULT_APARTMENT_CASES[Math.min(index, DEFAULT_APARTMENT_CASES.length - 1)];
@@ -154,6 +167,10 @@ function reviveApartment(stored: unknown, index: number, ownerExtra: number): Ap
     purchasePrice: reviveNumber(raw.purchasePrice, fallback.purchasePrice),
     renovation: reviveNumber(raw.renovation, fallback.renovation),
     hausgeld: reviveHausgeld(raw, fallback.hausgeld, ownerExtra),
+    // Saves before D40 had one global KNK rate and Monatsrate; they were what every
+    // apartment used, so they stay what each of them uses.
+    closingCostRate: Math.max(0, reviveNumber(raw.closingCostRate, globalClosingCostRate)),
+    monthlyPayment: Math.max(1, reviveNumber(raw.monthlyPayment, globalMonthlyPayment)),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
     ...(typeof raw.note === "string" && raw.note.length > 0 ? { note: raw.note } : {}),
   };
@@ -248,6 +265,24 @@ function migrateV1(parsed: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
+ * The Shortlist flats (D40) are appended to any state that lacks them, so they appear
+ * in an existing autosave, a named save or the Sheet without retyping. Matched by id:
+ * once present, a flat the couple has edited is never overwritten or added again.
+ */
+function withShortlistApartments(cases: ApartmentCase[]): ApartmentCase[] {
+  const missing = SHORTLIST_APARTMENT_CASES.filter(
+    (shortlisted) => !cases.some((apartment) => apartment.id === shortlisted.id),
+  );
+  return [
+    ...cases,
+    ...missing.map((apartment) => ({
+      ...apartment,
+      annualSpecialRepayments: [...apartment.annualSpecialRepayments],
+    })),
+  ];
+}
+
+/**
  * Rebuilds a usable state from stored text, or returns null.
  * Nothing is trusted: missing fields fall back to the defaults, and present-but-unusable
  * ones do too. See `reviveNumber`.
@@ -263,8 +298,10 @@ function reviveState(raw: string): PersistedState | null {
     if (!Array.isArray(storedCases) || storedCases.length === 0) return null;
 
     const inputs = reviveInputs(parsed.inputs);
-    const apartmentCases: ApartmentCase[] = storedCases.map((stored, index) =>
-      reviveApartment(stored, index, inputs.ownerExtraMonthly),
+    const apartmentCases: ApartmentCase[] = withShortlistApartments(
+      storedCases.map((stored, index) =>
+        reviveApartment(stored, index, inputs.ownerExtraMonthly, inputs.closingCostRate, inputs.monthlyPayment),
+      ),
     );
     const activeApartmentId = apartmentCases.some((a) => a.id === parsed.activeApartmentId)
       ? (parsed.activeApartmentId as string)

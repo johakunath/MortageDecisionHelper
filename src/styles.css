@@ -472,6 +472,7 @@ button {
 
 .apartment-chip-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 10px;
 }

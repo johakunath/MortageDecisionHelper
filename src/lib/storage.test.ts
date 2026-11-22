@@ -10,7 +10,7 @@ import {
   storageAvailable,
   writeBundleSaves,
 } from "./storage";
-import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
+import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS, SHORTLIST_APARTMENT_CASES } from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -244,5 +244,42 @@ describe("persistence", () => {
     const bundle = { ...buildBundle(defaultState()), saves: { gut: defaultState(), kaputt: { version: 2 } } };
     const parsed = parseBundle(JSON.stringify(bundle))!;
     expect(Object.keys(parsed.saves)).toEqual(["gut"]);
+  });
+
+  it("adds the Shortlist flats to older saves once, and keeps their global KNK (D40)", () => {
+    const state = defaultState();
+    const shortlistIds = SHORTLIST_APARTMENT_CASES.map((apartment) => apartment.id);
+    const stored = {
+      ...state,
+      inputs: { ...state.inputs, closingCostRate: 8 },
+      apartmentCases: state.apartmentCases
+        .filter((apartment) => !shortlistIds.includes(apartment.id))
+        .map(({ closingCostRate: _rate, ...rest }) => rest),
+    };
+    window.localStorage.setItem("mdh:save:pre-d40", JSON.stringify(stored));
+
+    const loaded = loadNamed("pre-d40")!;
+    expect(loaded.apartmentCases.map((apartment) => apartment.id)).toEqual([
+      "flat-a",
+      "flat-b",
+      "flat-c",
+      ...shortlistIds,
+    ]);
+    // The old global rate was what every stored apartment used.
+    expect(loaded.apartmentCases[0].closingCostRate).toBe(8);
+    expect(loaded.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!.closingCostRate).toBe(8);
+    expect(loaded.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!.closingCostRate).toBe(11.57);
+
+    // An edited Shortlist flat survives a round trip and is not added a second time.
+    const edited = {
+      ...loaded,
+      apartmentCases: loaded.apartmentCases.map((apartment) =>
+        apartment.id === "lindenstrasse-31g-we49" ? { ...apartment, purchasePrice: 505000 } : apartment,
+      ),
+    };
+    saveNamed("edited", edited);
+    const again = loadNamed("edited")!;
+    expect(again.apartmentCases).toHaveLength(5);
+    expect(again.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!.purchasePrice).toBe(505000);
   });
 });

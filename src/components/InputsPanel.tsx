@@ -106,7 +106,7 @@ function PaymentField({
           highlight
           onChange={(value) => onInputChange("monthlyPayment", Math.max(1, value))}
           info={GLOSSARY.monthlyPayment}
-          hint={`bei ${ekRate}% EK: ${repaymentText} · ${runtimeText}`}
+          hint={`bei ${ekRate}% EK: ${repaymentText} · ${runtimeText} · gilt nur für die gewählte Wohnung`}
         />
       ) : null}
 
@@ -188,7 +188,7 @@ function ClosingCostField({
         min={0}
         onChange={(value) => onInputChange("closingCostRate", value)}
         info={GLOSSARY.closingCostRate}
-        hint={`= ${formatEur((inputs.purchasePrice * inputs.closingCostRate) / 100)} bei diesem Kaufpreis · andere Bundesländer weichen ab`}
+        hint={`= ${formatEur((inputs.purchasePrice * inputs.closingCostRate) / 100)} bei diesem Kaufpreis · gilt nur für die gewählte Wohnung · andere Bundesländer weichen ab`}
       />
     </div>
   );

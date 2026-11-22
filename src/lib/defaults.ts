@@ -75,6 +75,54 @@ export const EK_SCENARIOS: ScenarioBase[] = [
 ];
 
 /**
+ * The two flats marked "Vergleichen? Ja" in the couple's Shortlist Sheet (Stand
+ * 22.11.2026). Prices include the parking space and Kaufnebenkosten are computed on
+ * that total, exactly as the Sheet's own formulas do; "Renovierung" is the 12k kitchen
+ * both lack. Stable ids, so `storage.ts` can add them to saves made before they existed
+ * without ever adding them twice (D40).
+ */
+export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
+  {
+    id: "lindenstrasse-31g-we49",
+    label: "Lindenstraße 31G",
+    // 495.000 € Wohnung + 25.000 € TG-Stellplatz.
+    purchasePrice: 520000,
+    renovation: 12000,
+    // Laut Exposé; Makler: wegen WEG-Investitionen ca. zwei Jahre erhöht.
+    hausgeld: 630,
+    closingCostRate: 11.57,
+    // Geschätzt, kein Angebot: dasselbe Verhältnis Rate/Darlehen wie im echten Angebot
+    // (1.900 € auf 405.000 €), also 468.000 € × 1.900 / 405.000 ≈ 2.196 €.
+    monthlyPayment: 2200,
+    annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
+    note:
+      "Lindenstraße 31G (Inserat: 32G), WE49?, 93,6 m², 4. OG, Bj. 1998, Energie D. " +
+      "Kaufpreis = 495.000 € + 25.000 € TG. Mit Makler (3,57 %). Renovierung = Einbauküche 12k " +
+      "(Küchenöffnung 7–8k nicht enthalten). Hausgeld 630 € laut Exposé, evtl. später niedriger. " +
+      "Offen: 31G/32G per Grundbuch klären. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
+  },
+  {
+    id: "buwog-arbor-h2-we08",
+    label: "BUWOG Arbor WE08",
+    // 625.100 € Aktionspreis (bis Beurkundung 30.11.2026) + 30.000 € Stellplatz.
+    purchasePrice: 655100,
+    renovation: 12000,
+    // BUWOG-Schätzung 3,50 €/m², kein finaler Wirtschaftsplan.
+    hausgeld: 331,
+    // Provisionsfrei: 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch.
+    closingCostRate: 8,
+    // Geschätzt, kein Angebot: 589.590 € × 1.900 / 405.000 ≈ 2.766 €. Ohne KfW 300.
+    monthlyPayment: 2770,
+    annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
+    note:
+      "An der Filmfabrik 9, Haus 2 WE08, 94,6 m², 2. OG Nordost, Neubau EH40, Bezug vsl. Juni 2028. " +
+      "Kaufpreis = 625.100 € Aktionspreis (bis 30.11.2026) + 30.000 € Stellplatz. Provisionsfrei. " +
+      "Renovierung = Einbauküche 12k. Hausgeld 331 € nur BUWOG-Schätzung. Nicht abgebildet: KfW 300 " +
+      "(bis 170k zu ca. 1,3 %), Bereitstellungszinsen, Miete bis Bezug 2028. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
+  },
+];
+
+/**
  * Hausgeld values are placeholders, not Exposé figures: they are the old "Eigentumskosten"
  * estimates (640 / 690 / 760 €) minus the 90 € now carried by `ownerExtraMonthly`, so the
  * totals on screen did not move (D35). Replace them with the Exposé's Hausgeld.
@@ -88,6 +136,8 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 450000,
     renovation: 0,
     hausgeld: 550,
+    closingCostRate: DEFAULT_INPUTS.closingCostRate,
+    monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -96,6 +146,8 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 500000,
     renovation: 10000,
     hausgeld: 600,
+    closingCostRate: DEFAULT_INPUTS.closingCostRate,
+    monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -104,8 +156,14 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 600000,
     renovation: 5000,
     hausgeld: 670,
+    closingCostRate: DEFAULT_INPUTS.closingCostRate,
+    monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
     annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
   },
+  ...SHORTLIST_APARTMENT_CASES.map((apartment) => ({
+    ...apartment,
+    annualSpecialRepayments: [...apartment.annualSpecialRepayments],
+  })),
 ];
 
 export type PresetId = "case600" | "case720" | "case850";

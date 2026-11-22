@@ -100,7 +100,7 @@ describe("calculation engine", () => {
 
     // The split did not move a single default figure: the old totals were 640/690/760 €.
     expect(
-      DEFAULT_APARTMENT_CASES.map(
+      DEFAULT_APARTMENT_CASES.slice(0, 3).map(
         (flat) => buildApartmentInputs(DEFAULT_INPUTS, flat).monthlyOwnershipCosts,
       ),
     ).toEqual([640, 690, 760]);
@@ -142,6 +142,22 @@ describe("calculation engine", () => {
     expect(decision.feasibleScenarios.length).toBeGreaterThan(0);
   });
 
+  it("takes the Kaufnebenkosten from the apartment, not from a global (D40)", () => {
+    const withMakler = buildApartmentInputs(
+      { ...DEFAULT_INPUTS, closingCostRate: 3 },
+      { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, closingCostRate: 11.57 },
+    );
+    const direct = buildApartmentInputs(
+      { ...DEFAULT_INPUTS, closingCostRate: 3 },
+      { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, closingCostRate: 8 },
+    );
+    const [makler] = buildScenarios(EK_SCENARIOS, withMakler, DEFAULT_RATES);
+    const [developer] = buildScenarios(EK_SCENARIOS, direct, DEFAULT_RATES);
+    // The Shortlist Sheet's own figure for BUWOG: 52.408 € on 655.100 €.
+    expect(developer.closingCosts).toBeCloseTo(52408, 0);
+    expect(makler.closingCosts - developer.closingCosts).toBeCloseTo(655100 * 0.0357, 0);
+  });
+
   it("compares apartment cases with independent prices and Sondertilgung paths", () => {
     const results = compareApartmentCases(
       [
@@ -151,6 +167,8 @@ describe("calculation engine", () => {
           purchasePrice: 600000,
           renovation: 0,
           hausgeld: 610,
+          closingCostRate: 8,
+          monthlyPayment: 2900,
           annualSpecialRepayments: [0, 0, 0],
         },
         {
@@ -159,6 +177,8 @@ describe("calculation engine", () => {
           purchasePrice: 700000,
           renovation: 10000,
           hausgeld: 810,
+          closingCostRate: 11.57,
+          monthlyPayment: 2900,
           annualSpecialRepayments: [10000, 10000, 10000],
         },
       ],
