@@ -19,12 +19,13 @@ const CONSTRAINT_LABELS: Record<ConstraintId, string> = {
   payment: "die Monatsrate tilgt das Darlehen nicht ab",
   cash: "das Geld reicht nicht für den Kauf",
   reserve: "die Sicherheitsreserve wird unterschritten",
+  runtime: "das Darlehen ist bis zu eurer Grenze nicht abbezahlt",
   burden: "die Monatsbelastung ist zu hoch",
 };
 
 /**
  * `gap` carries a different unit per constraint — a ratio for `burden`, €/Monat for
- * `payment`, € for `cash` and `reserve` — so the unit is chosen here rather than
+ * `payment` and `runtime`, € for `cash` and `reserve` — so the unit is chosen here rather than
  * assumed. Printing the payment gap as a plain "es fehlen X €" read as a one-off
  * shortfall when it is a monthly one.
  */
@@ -37,6 +38,9 @@ function describeMiss(constraint: ConstraintId, gap: number): string {
     // Covers both failures: a rate below the interest, and one that pays the loan off
     // but not within a lifetime. "um überhaupt zu tilgen" was false for the second.
     return `der Monatsrate fehlen ${formatEur(missing)} pro Monat, um das Darlehen in einem Leben abzuzahlen.`;
+  }
+  if (constraint === "runtime") {
+    return `der Monatsrate fehlen ${formatEur(missing)} pro Monat, um bis zu eurer Grenze schuldenfrei zu sein.`;
   }
   return `es fehlen ${formatEur(missing)}.`;
 }

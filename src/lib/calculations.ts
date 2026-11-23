@@ -199,6 +199,12 @@ export type MortgageSimulationParams = {
   specialPlan: SpecialPlan;
   specialRepaymentLimitRate: number;
   /**
+   * Months of the same loan already behind this simulation, for a follow-up that
+   * continues it (the refinancing). Sondertilgung then falls on the original loan's
+   * year-ends and reads the plan at the original year index. 0 = a new loan.
+   */
+  monthOffset?: number;
+  /**
    * Called once per simulated month with what was paid. Read-only: it observes the
    * schedule and cannot change it, so the offer-pinned amortisation stays exactly as
    * it is. Used by `wealthAtHorizon` to follow the cash month by month.
@@ -244,7 +250,7 @@ export type MortgageSimulation = {
  * cover the monthly interest produces a loan that never amortises, and reporting that
  * as "80 years" would be a number pretending to be an answer.
  */
-export type ConstraintId = "payment" | "cash" | "reserve" | "burden";
+export type ConstraintId = "payment" | "cash" | "reserve" | "runtime" | "burden";
 
 export type ConstraintCheck = {
   id: ConstraintId;
@@ -288,8 +294,13 @@ export type ScenarioResult = ScenarioBase & {
    * UI has to say so. See docs/ASSUMPTIONS.md K14.
    */
   paymentSubstituted: boolean;
-  /** Runs past `maxRuntimeYears`. A warning shown in the status, never a failed check. */
+  /**
+   * Not repaid within `maxRuntimeYears` of signing at the regular rate, the bank's
+   * condition (repaid by retirement). A failed constraint since D43; it was a warning.
+   */
   runsPastLimit: boolean;
+  /** Years from signing until repaid at the regular rate, without any Sondertilgung. */
+  contractYearsFromSigning: number;
   feasible: boolean;
   diagnosis: ScenarioDiagnosis;
   status: string;
@@ -539,6 +550,7 @@ export function simulateMortgage({
   fixedRateYears,
   specialPlan,
   specialRepaymentLimitRate,
+  monthOffset = 0,
   onMonth,
 }: MortgageSimulationParams): MortgageSimulation {
   const safePrincipal = Math.max(0, principal);
@@ -598,8 +610,9 @@ export function simulateMortgage({
     }
 
     let appliedSpecial = 0;
-    if (months % 12 === 0 && balance > 0.01) {
-      const yearIndex = months / 12 - 1;
+    const loanMonth = months + monthOffset;
+    if (loanMonth % 12 === 0 && balance > 0.01) {
+      const yearIndex = loanMonth / 12 - 1;
       const requestedSpecial = requestedSpecialForYear(specialPlan, yearIndex);
       const cappedSpecial = Math.min(requestedSpecial, maxAnnualSpecial);
       usedAnnualSpecialRepayments[yearIndex] = cappedSpecial;
@@ -791,6 +804,17 @@ export function buildScenario(
   // derived Laufzeit, Zinsen and Restschuld still belong to a payment nobody entered.
   const impliedRepaymentRate = (inputs.monthlyPayment * 1200) / loan - interestRate;
   const paymentSubstituted = loan > 0 && impliedRepaymentRate < 0.01;
+  const delayYears = Math.max(0, inputs.moveInMonths) / 12;
+  const contractYearsFromSigning =
+    delayYears + runtimeYearsFromRepaymentRate(interestRate, repaymentRate);
+  const runtimeWithinLimit = contractYearsFromSigning <= inputs.maxRuntimeYears + 1e-9;
+  // The smallest Monatsrate that is repaid in time at the regular rate. €/Monat, the
+  // same unit as the payment check, so the verdict can say what is missing.
+  const yearsLeft = inputs.maxRuntimeYears - delayYears;
+  const deadlinePayment =
+    yearsLeft > 0
+      ? monthlyAnnuity(loan, interestRate, repaymentRateFromRuntimeYears(interestRate, yearsLeft))
+      : Infinity;
   const checks: ConstraintCheck[] = [
     // Does the rate repay the loan at all, within a lifetime?
     {
@@ -810,6 +834,15 @@ export function buildScenario(
       required: inputs.reserveTarget,
       gap: cashLeft - inputs.reserveTarget,
     },
+    // Repaid by retirement, as the bank requires? Counted from signing, so a Neubau's
+    // wait counts, and without Sondertilgung, which the bank cannot rely on (D43).
+    {
+      id: "runtime",
+      passed: runtimeWithinLimit,
+      actual: contractYearsFromSigning,
+      required: inputs.maxRuntimeYears,
+      gap: inputs.monthlyPayment - deadlinePayment,
+    },
     // Is the monthly load bearable?
     {
       id: "burden",
@@ -825,8 +858,11 @@ export function buildScenario(
   // Feasibility keys off the payment, reserve and burden checks; `cash` is a strictly
   // worse subset of `reserve` and exists to tell the two failures apart in the UI.
   const feasible =
-    amortises && cashLeft >= inputs.reserveTarget && burdenRatio <= maxBurdenRatio;
-  const runsPastLimit = mortgage.runtimeYears > inputs.maxRuntimeYears + 1e-9;
+    amortises &&
+    cashLeft >= inputs.reserveTarget &&
+    runtimeWithinLimit &&
+    burdenRatio <= maxBurdenRatio;
+  const runsPastLimit = !runtimeWithinLimit;
 
   // Plain-language labels: these are read aloud between two non-experts, so they say
   // what is wrong rather than naming an internal constraint.
@@ -841,12 +877,12 @@ export function buildScenario(
   } else if (failed.includes("reserve")) {
     status = "Reserve zu dünn";
     statusTone = "red";
+  } else if (failed.includes("runtime")) {
+    // Not repaid by retirement at the regular rate: the bank would not lend (D43).
+    status = "Läuft zu lange";
+    statusTone = "red";
   } else if (failed.includes("burden")) {
     status = "Rate zu hoch";
-    statusTone = "amber";
-  } else if (runsPastLimit) {
-    // Tragbar, but not debt-free by the couple's own limit (D34).
-    status = "Läuft zu lange";
     statusTone = "amber";
   } else if (cashLeft < inputs.reserveTarget * 1.5) {
     status = "Gerade so tragbar";
@@ -869,6 +905,7 @@ export function buildScenario(
     mortgage,
     paymentSubstituted,
     runsPastLimit,
+    contractYearsFromSigning,
     feasible,
     diagnosis,
     status,
@@ -1036,7 +1073,7 @@ function constraintsFailedInAll(scenarios: ScenarioResult[]): ConstraintId[] {
     return [];
   }
 
-  const candidates: ConstraintId[] = ["payment", "cash", "reserve", "burden"];
+  const candidates: ConstraintId[] = ["payment", "cash", "reserve", "runtime", "burden"];
   return candidates.filter((id) =>
     scenarios.every((scenario) => scenario.diagnosis.failed.includes(id)),
   );
@@ -1059,7 +1096,7 @@ function findNarrowestMiss(scenarios: ScenarioResult[]): DecisionDiagnosis["narr
   const closest = infeasible.reduce((best, scenario) =>
     scenario.diagnosis.failed.length < best.diagnosis.failed.length ? scenario : best,
   );
-  const priority: ConstraintId[] = ["payment", "cash", "reserve", "burden"];
+  const priority: ConstraintId[] = ["payment", "cash", "reserve", "runtime", "burden"];
   const blocker = priority.find((id) => closest.diagnosis.failed.includes(id));
   if (!blocker) {
     return null;
@@ -1811,10 +1848,12 @@ export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs
   const remaining = scenario.mortgage.remainingAfterFixed;
   const stressRate = Math.max(0, scenario.interestRate + inputs.refiStressShift);
   const payment = scenario.mortgage.regularMonthlyPayment;
-  const laterPlan: SpecialPlan = {
-    kind: "path",
-    years: inputs.annualSpecialRepayments.slice(Math.round(fixedYears)),
-  };
+  // The whole plan, read on the original loan's calendar through `monthOffset`: with a
+  // handover delay the binding ends mid-year, and slicing the plan by whole years
+  // dropped or shifted a Sondertilgung, so even the same-rate baseline ran longer
+  // than the scenario itself (Codex review of PR #11).
+  const laterPlan: SpecialPlan = { kind: "path", years: inputs.annualSpecialRepayments };
+  const offsetMonths = bindingMonths(inputs);
 
   if (remaining <= 0.01 || !Number.isFinite(remaining)) {
     const runtime = scenario.mortgage.runtimeYears;
@@ -1837,6 +1876,7 @@ export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs
       repaymentRatePct: repaymentRateFromMonthlyPayment(remaining, ratePct, payment),
       fixedRateYears: 0,
       specialPlan: laterPlan,
+      monthOffset: offsetMonths,
       // The cap stays a share of the ORIGINAL loan, as everywhere else in the model.
       // The follow-up runs on the Restschuld, so the rate is rescaled to the same € cap;
       // otherwise even the same-rate baseline ran longer than the scenario itself.

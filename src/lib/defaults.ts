@@ -48,7 +48,8 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   etfTaxRate: 18.4625,
   // Stresstest, keine Prognose: 2 Prozentpunkte über dem heutigen Sollzins.
   refiStressShift: 2,
-  // Persönliche Grenze: schuldenfrei bis zum Renteneintritt des Älteren. Im Feld änderbar.
+  // Bankbedingung: schuldenfrei bis zur Rente mit 67 (Jahrgang 1985, also 2052), gezählt
+  // ab Unterschrift Ende 2026, ohne Sondertilgung (D43). Im Feld änderbar.
   maxRuntimeYears: 26,
 };
 
@@ -71,8 +72,7 @@ export const OFFER_RATES_NOTE = "Finanzierungsangebot vom 07.08.2026 (Varianten 
 
 /**
  * Annahme der Eigentümer vom 22.11.2026, bis die neuen Bankangebote da sind (D41):
- * 10 Jahre 4,3 / 4,2 / 4,0 %. Die 15-Jahres-Spalte ist geschätzt: derselbe Aufschlag
- * von 0,2 Punkten, den das Angebot vom August zwischen 10 und 15 Jahren hatte.
+ * 10 Jahre 4,3 / 4,2 / 4,0 %. 15 Jahre kosten laut den Eigentümern je 0,2 Punkte mehr.
  */
 export const DEFAULT_RATES: InterestRates = {
   10: { ek10: 4.3, ek15: 4.2, ek20: 4.0 },
@@ -85,7 +85,7 @@ export const DEFAULT_RATES: InterestRates = {
  * date field because one grid can mix quotes from several sources and days (D36).
  */
 export const DEFAULT_RATES_NOTE =
-  "Annahme vom 22.11.2026, noch kein Angebot: 10 J. 4,3 / 4,2 / 4,0 % · 15 J. je +0,2 geschätzt";
+  "Annahme vom 22.11.2026, noch kein Angebot: 10 J. 4,3 / 4,2 / 4,0 % · 15 J. je +0,2 Pkt.";
 
 export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek10", ekRate: 10, label: "10% EK" },
@@ -110,19 +110,20 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     // Laut Exposé; Makler: wegen WEG-Investitionen ca. zwei Jahre erhöht.
     hausgeld: 630,
     closingCostRate: 11.57,
-    // Geschätzt, kein Angebot: 2 % Anfangstilgung bei 10 % EK, wie im Shortlist-Sheet.
-    // 468.000 € × (4,3 % + 2 %) / 12 ≈ 2.457 €.
-    monthlyPayment: 2460,
+    // Geschätzt, kein Angebot: die kleinste Rate, mit der 468.000 € bei 4,3 % ohne
+    // Sondertilgung in 26 Jahren getilgt sind (Bankbedingung: bis zur Rente, D43).
+    // Nötig 2.494 €, aufgerundet; ≈ 2,1 % Anfangstilgung.
+    monthlyPayment: 2500,
     kfwAmount: 0,
     kfwRate: 0,
     moveInMonths: 0,
     parkingPrice: 25000,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
     note:
-      "Lindenstraße 31G (Inserat: 32G), WE49?, 93,6 m², 4. OG, Bj. 1998, Energie D. " +
+      "Lindenstraße 31G, Haus 3 / WE49, 93,6 m², 4. OG rechts, Bj. 1998, Energie D. " +
       "Kaufpreis = 495.000 € + 25.000 € TG. Mit Makler (3,57 %). Renovierung = Einbauküche 12k " +
       "(Küchenöffnung 7–8k nicht enthalten). Hausgeld 630 € laut Exposé, evtl. später niedriger. " +
-      "Offen: 31G/32G per Grundbuch klären. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
+      "Quelle: Shortlist-Sheet, Stand 23.11.2026.",
   },
   {
     id: "buwog-arbor-h2-we08",
@@ -134,9 +135,12 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     hausgeld: 331,
     // Provisionsfrei: 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch.
     closingCostRate: 8,
-    // Geschätzt, kein Angebot: 2 % Anfangstilgung bei 10 % EK auf den Mischzins aus
-    // Bank 4,3 % und KfW 300: 589.590 € × (3,435 % + 2 %) / 12 ≈ 2.670 €.
-    monthlyPayment: 2670,
+    // Geschätzt, kein Angebot: die kleinste Rate, mit der 589.590 € zum Mischzins aus
+    // Bank 4,3 % und KfW 300 (3,435 %) ohne Sondertilgung bis 26 Jahre nach Unterschrift
+    // getilgt sind; davon gehen 19 Monate Bauzeit ab (D43). Nötig 2.975,40 €, auf den Euro
+    // aufgerundet, denn 2.980 € läge mit Hausgeld 1 € über 40 % vom Haushaltsnetto.
+    // ≈ 2,6 % Anfangstilgung. Das tilgungsfreie KfW-Jahr ist nicht abgebildet.
+    monthlyPayment: 2976,
     // KfW 300 bis 170.000 € bei zwei Kindern, Zins laut Sheet angenommen, keine Zusage.
     kfwAmount: 170000,
     kfwRate: 1.3,
@@ -148,7 +152,8 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
       "An der Filmfabrik 9, Haus 2 WE08, 94,6 m², 2. OG Nordost, Neubau EH40, Bezug vsl. Juni 2028. " +
       "Kaufpreis = 625.100 € Aktionspreis (bis 30.11.2026) + 30.000 € Stellplatz. Provisionsfrei. " +
       "Renovierung = Einbauküche 12k. Hausgeld 331 € nur BUWOG-Schätzung. KfW 300 170k zu 1,3 % " +
-      "angenommen (keine Zusage). Einzug in 19 Monaten: Bauzeitzinsen nur geschätzt. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
+      "angenommen (keine Zusage; 1 tilgungsfreies Jahr, keine Sondertilgung auf KfW). Einzug in 19 Monaten: " +
+      "Zinsbindung läuft ab Unterschrift, Tilgung erst ab Übergabe. Bauzeitzinsen nur geschätzt. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
   },
 ];
 

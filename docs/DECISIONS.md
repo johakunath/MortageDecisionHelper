@@ -529,7 +529,7 @@ Every status now names *what is wrong* rather than which internal constraint fai
 
 ## D34: A tragbar scenario that runs past the couple's own limit is flagged, not failed
 
-**Date:** 2026-10-08 · **Status:** accepted
+**Date:** 2026-10-08 · **Status:** superseded by [D43](#d43-repaid-by-retirement-is-a-bank-condition-not-a-warning)
 
 **Context.** Feasibility only failed a loan that would not be repaid inside 60 years. Wohnung C at 10% EK ran 49,5 years at 1.900 €/Monat with no warning. The owners gave their birth years; the older partner reaches the statutory retirement age of 67 about 26 years after a 2026 purchase.
 
@@ -649,3 +649,18 @@ Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000
 - **`parkingPrice` per apartment**, a share of the price already in it, so the comparison shows what the space costs per month and at signing. The tool does not decide; it prices the question.
 
 **Consequence.** With no KfW and no delay the engine is unchanged: the golden snapshots for the three older flats and the QA presets did not move, and the invariants hold for BUWOG with both. Only BUWOG's and Lindenstraße's own snapshots changed, because their inputs did. `LineChart` gains an optional `endLabel`, since four lines ending at zero would print their names on top of each other.
+
+---
+
+## D43: Repaid by retirement is a bank condition, not a warning
+
+**Date:** 2026-11-23 · **Status:** accepted · **Supersedes** [D34](#d34-a-tragbar-scenario-that-runs-past-the-couples-own-limit-is-flagged-not-failed)
+
+**Context.** The bank requires the loan to be repaid by the owner's retirement at 67 (born 1985, so 2052). D34 had made the runtime limit a yellow warning measured with Sondertilgung from the first repayment, on the grounds that the runtime rests on today's rate. A bank decides on the contract: the regular rate, no Sondertilgung, from signing.
+
+**Decision.** A fifth constraint, `runtime`: at the regular rate and without Sondertilgung, the loan must be repaid within `maxRuntimeYears` of signing, and a Neubau's wait until handover counts. Failing it makes a scenario not tragbar ("Läuft zu lange", red), and the verdict names the Monatsrate still missing, in €/Monat like the payment check. The default stays 26 years (end of 2026 to 2052).
+
+The owner expected that the bank's household calculation would need less than 2 % Tilgung. The deadline points the other way: Lindenstraße needs at least 2.494 €/Monat (≈ 2,1 %), BUWOG at least 2.976 € (≈ 2,6 % on its blended rate) because its 19 months of construction come off the 26 years. The shortlist flats ship with those minimums. The bank's own household calculation is not modelled; the 40 % burden rule stays the app's proxy for it.
+
+**Consequence.** The August offer's 1.900 € on 405.000 € runs about 30 years and no longer passes at 10 % EK; the three older flats now read "Keine der drei Varianten ist tragbar" at the default rates. Their golden snapshots changed only in status and feasibility fields, no euro figure. The refinancing stress follow-up now keeps the original loan's Sondertilgung calendar (`monthOffset`), found by the Codex review of PR #11: with a handover delay that is not a whole number of years, the old slicing dropped or shifted a Sondertilgung.
+

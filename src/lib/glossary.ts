@@ -56,7 +56,7 @@ export const GLOSSARY = {
   refiStressShift:
     "Um wie viele Prozentpunkte der Zins nach der Zinsbindung höher liegen könnte als heute. Kein Forecast, sondern ein Stresstest: Wie viel länger würde dieselbe Monatsrate dann brauchen, bis ihr schuldenfrei seid? Weniger Restschuld heißt weniger Risiko an dieser Stelle.",
   maxRuntimeYears:
-    "Spätestens nach so vielen Jahren soll das Darlehen abbezahlt sein, zum Beispiel bis zum Renteneintritt des Älteren von euch. Varianten, die länger laufen, bleiben tragbar, werden aber gelb markiert: die Laufzeit hängt am heutigen Zins und ist deshalb eine Schätzung.",
+    "Spätestens so viele Jahre nach der Unterschrift muss das Darlehen abbezahlt sein. Die Bank verlangt: bis zur Rente. Gerechnet wird wie bei der Bank mit der regulären Rate, ohne Sondertilgung, und bei einem Neubau zählt die Bauzeit mit. Eine Variante, die länger läuft, ist nicht tragbar.",
   maxBurdenRate:
     "Wie viel eures Haushaltsnettos maximal in die Wohnung fließen darf. 40% ist eine verbreitete Faustregel, keine Bankregel — ihr könnt sie anpassen.",
   propertyGrowthRate: "Angenommene jährliche Wertsteigerung der Immobilie. Bewusst konservativ setzen.",

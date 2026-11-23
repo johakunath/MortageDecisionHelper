@@ -9,7 +9,7 @@ import {
   type ScenarioId,
 } from "../lib/calculations";
 import { SHORTLIST_APARTMENT_CASES } from "../lib/defaults";
-import { formatCalendarYear, formatCompactEur, formatEur, formatNumber, formatPct, formatYears } from "../lib/format";
+import { formatCalendarYear, formatCompactEur, formatEur, formatNumber, formatPct } from "../lib/format";
 import { GLOSSARY } from "../lib/glossary";
 import LineChart, { type ChartSeries } from "./LineChart";
 import { InfoTip, Section, SegmentedChoice, StatusPill } from "./ui";
@@ -216,7 +216,7 @@ export default function ApartmentComparison({
       label: "Schuldenfrei",
       cell: (column) => ({
         value: `≈ ${formatCalendarYear(startYear + column.debtFreeAfterYears)}`,
-        sub: `${formatYears(column.debtFreeAfterYears)} ab Unterschrift, mit eurer Sondertilgung${column.scenario.runsPastLimit ? " · länger als eure Grenze" : ""}`,
+        sub: `mit eurer Sondertilgung · ohne: ≈ ${formatCalendarYear(startYear + column.scenario.contractYearsFromSigning)}${column.scenario.runsPastLimit ? ", nach der Grenze der Bank" : ""}`,
       }),
     },
     {

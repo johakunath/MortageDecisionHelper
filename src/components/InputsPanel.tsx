@@ -400,7 +400,7 @@ export default function InputsPanel({
               min={1}
               onChange={(value) => onInputChange("maxRuntimeYears", value)}
               info={GLOSSARY.maxRuntimeYears}
-              hint="z. B. bis zur Rente des Älteren"
+              hint="ab Unterschrift, ohne Sondertilgung · 26 J. = bis 2052"
             />
             <PaymentField
               inputs={inputs}

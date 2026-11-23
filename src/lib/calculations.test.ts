@@ -201,6 +201,19 @@ describe("calculation engine", () => {
     expect(late.mortgage.remainingAfterFixed).toBeCloseTo(after101, 6);
   });
 
+  it("keeps the refinancing baseline on the loan's own calendar after a handover delay", () => {
+    // At the same rate, refinancing changes nothing, so the baseline must run exactly
+    // as long as the scenario, whatever month the binding ends in.
+    for (const moveInMonths of [0, 5, 12, 17, 19, 23]) {
+      const inputs = buildApartmentInputs(DEFAULT_INPUTS, { ...DEFAULT_APARTMENT_CASES[0], moveInMonths });
+      for (const scenario of buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES)) {
+        const stress = refinanceStress(scenario, inputs);
+        if (!stress.applies) continue;
+        expect(stress.runtimeYearsAtSameRate).toBeCloseTo(scenario.mortgage.runtimeYears, 9);
+      }
+    }
+  });
+
   it("builds a comparison column with construction interest and the parking space's share (D42)", () => {
     const flat = {
       ...DEFAULT_APARTMENT_CASES[0],
@@ -351,7 +364,9 @@ describe("calculation engine", () => {
   it("lists every tragbar level instead of preferring one (D28)", () => {
     // The offer flat: 10% and 15% EK carry the reserve, 20% does not. The old rule
     // named "10% EK" as the recommendation, which since D15 is the lowest level.
-    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    // Pinned: this test is about listing, not about the retirement deadline (D43), which
+    // the offer's 1.900 € rate misses at 10% EK (30 years without Sondertilgung).
+    const inputs = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 35 };
     const decision = evaluateDecision(buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES));
 
     expect(decision.feasibleScenarios.map((scenario) => scenario.id)).toEqual(["ek10", "ek15"]);
@@ -601,31 +616,32 @@ describe("calculation engine", () => {
     expect(ekStepReturn(ek15, ek10, inputs).annualReturn).toBeNull();
   });
 
-  it("flags a tragbar scenario that runs past the couple's own limit (D34)", () => {
-    // The offer flat runs 24,1 / 21,7 / 19,2 years. With a 20-year limit the first two
-    // are flagged and stay tragbar: the runtime assumes today's rate for the whole term,
-    // so it warns rather than fails.
-    const inputs = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 20 };
-    const [ek10, ek15, ek20] = buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES);
-
+  it("fails a scenario the bank would refuse: not repaid by retirement (D43)", () => {
+    // The offer flat at the offer's own rate runs about 30,1 years without Sondertilgung;
+    // the broker's Tilgungsplan says "30 Jahre 2 Monate".
+    const offer = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
+    const [ek10] = buildScenarios(EK_SCENARIOS, { ...offer, maxRuntimeYears: 26 }, OFFER_RATES);
+    expect(ek10.contractYearsFromSigning).toBeCloseTo(30.1, 1);
     expect(ek10.runsPastLimit).toBe(true);
-    expect(ek10.feasible).toBe(true);
+    expect(ek10.feasible).toBe(false);
     expect(ek10.status).toBe("Läuft zu lange");
-    expect(ek10.statusTone).toBe("amber");
-    expect(ek15.runsPastLimit).toBe(true);
-    expect(ek20.runsPastLimit).toBe(false);
-    // A failed constraint still names itself first.
-    expect(ek20.status).toBe("Reserve zu dünn");
+    expect(ek10.statusTone).toBe("red");
 
-    // The default limit leaves the offer flat unflagged at every level.
-    const defaults = buildScenarios(
-      EK_SCENARIOS,
-      buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
-      OFFER_RATES,
-    );
-    expect(defaults.every((scenario) => !scenario.runsPastLimit)).toBe(true);
+    // The gap is the Monatsrate still missing: paying it is repaid in exactly 26 years.
+    const gap = ek10.diagnosis.checks.find((check) => check.id === "runtime")!.gap;
+    const enough = { ...offer, maxRuntimeYears: 26, monthlyPayment: offer.monthlyPayment - gap };
+    const [fixed] = buildScenarios(EK_SCENARIOS, enough, OFFER_RATES);
+    expect(fixed.contractYearsFromSigning).toBeCloseTo(26, 6);
+
+    // Sondertilgung does not count: the bank cannot rely on it.
+    const generous = { ...offer, maxRuntimeYears: 26, annualSpecialRepayments: offer.annualSpecialRepayments.map(() => 20000) };
+    expect(buildScenarios(EK_SCENARIOS, generous, OFFER_RATES)[0].runsPastLimit).toBe(true);
+
+    // A Neubau's wait counts: the deadline is a date, measured from signing.
+    const late = buildScenarios(EK_SCENARIOS, { ...enough, moveInMonths: 12 }, OFFER_RATES)[0];
+    expect(late.contractYearsFromSigning).toBeCloseTo(27, 6);
+    expect(late.runsPastLimit).toBe(true);
   });
-
   it("values a step of EK in the ledger when the loans are repaid inside the binding (K23)", () => {
     // A 150k flat at 1.900 €/Monat: every loan is gone after about five years, so the
     // Restschuld is zero on both sides. Read off the Restschuld, the step reported a
