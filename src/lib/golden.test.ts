@@ -18,7 +18,7 @@ import {
   CASE_PRESETS,
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
-  DEFAULT_RATES,
+  OFFER_RATES,
   EK_SCENARIOS,
 } from "./defaults";
 
@@ -118,7 +118,7 @@ describe("golden master", () => {
   it.each(DEFAULT_APARTMENT_CASES.map((apartment) => [apartment.label, apartment] as const))(
     "default apartment %s",
     (_label, apartment) => {
-      expect(headline(buildApartmentInputs(DEFAULT_INPUTS, apartment), DEFAULT_RATES)).toMatchSnapshot();
+      expect(headline(buildApartmentInputs(DEFAULT_INPUTS, apartment), OFFER_RATES)).toMatchSnapshot();
     },
   );
 

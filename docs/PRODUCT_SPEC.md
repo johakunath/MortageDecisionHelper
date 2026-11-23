@@ -210,11 +210,14 @@ The 40% threshold is an **adjustable heuristic**, not a universal bank rule.
 
 ## 13. Decision logic
 
-A scenario is **clean/feasible** only when **both** hold:
-1. cash remaining ≥ safety reserve target
-2. burden ratio ≤ the configured threshold (default 40%)
+A scenario is **clean/feasible** only when all hold (amended by A8):
+1. the monthly rate amortises the loan
+2. cash remaining ≥ 0, the purchase can be paid
+3. burden ratio ≤ the configured threshold (default 40%)
 
-**If none qualify** → say "Keine der drei Varianten ist tragbar", and explain whether the problem is a monthly rate that does not amortise, insufficient upfront cash, a reserve violation, an excessive monthly burden, or a combination.
+A reserve below the target and a contract that runs past the retirement deadline are **warnings**: shown in the verdict and in place, never a reason for "nicht tragbar" ([D44](DECISIONS.md)).
+
+**If none qualify** → say "Keine der drei Varianten ist tragbar", and explain whether the problem is a monthly rate that does not amortise, insufficient upfront cash, an excessive monthly burden, or a combination.
 
 **If several qualify** → list them all; the app names no preferred level ([D28](DECISIONS.md), which replaced "prefer 10% EK": since the move to 10/15/20 that rule named the lowest level, not the compromise).
 
@@ -258,7 +261,7 @@ Executed by `npm test` from `CASE_PRESETS` in `src/lib/defaults.ts`, which pin e
 
 | Case | Inputs (pinned) | Expected |
 |---|---|---|
-| **600k machbar** | 600.000 € · 8% Nebenkosten · capital 145.000 € · reserve 25.000 € · costs 760 € · net 9.000 € · rate 2.400 € · 10 J. | At least one level tragbar (10% EK, "gerade so"); the others named with their reason |
+| **600k machbar** | 600.000 € · 8% Nebenkosten · capital 145.000 € · reserve 25.000 € · costs 760 € · net 9.000 € · rate 2.400 € · 10 J. | At least one level tragbar (10% EK, "gerade so"; 15% with a reserve warning since D44); 20% named with its reason |
 | **720k grenzwertig** | 720.000 € · 8% · capital 200.000 € · reserve 25.000 € · costs 900 € · net 9.600 € · rate 2.900 € · 10 J. | Tragbar with visible warnings: 15% only "gerade so", 20% fails. Trade-offs **not** hidden behind a recommendation |
 | **850k Stress** | 850.000 € · 11,57% · capital 145.000 € · reserve 30.000 € · costs 950 € · net 8.500 € · rate 3.400 € · 10 J. | **"Keine der drei Varianten ist tragbar"**. No winner, not even the least-bad level. Must explain what would need to change |
 
@@ -318,3 +321,5 @@ Rationale in [DECISIONS.md D6](DECISIONS.md). This is a deliberate narrowing tow
 **A6: Calculation-integrity pass (2026-10-08).** Four decisions from [docs/REVIEW.md](REVIEW.md): no single recommendation ([D28](DECISIONS.md)), ETF comparisons after tax ([D29](DECISIONS.md)), every comparison on one common date from one ledger ([D30](DECISIONS.md)), and a refinancing stress line under the Restschuld ([D31](DECISIONS.md)).
 
 **A7: Owner's choices from the mockups (2026-10-08).** Return per EK step in the matrix and as a chart ([D32](DECISIONS.md)), the Warten bottom line on one date with its tipping points ([D33](DECISIONS.md), answering §2.3), and a personal runtime limit ([D34](DECISIONS.md)).
+
+**A8: Reserve and retirement deadline warn, never block (2026-11-23).** The owners: both are negotiable. Some banks accept Sondertilgung against the deadline, and the reserve is their own buffer. §13 now blocks only on an amortising rate, enough cash for the purchase and the burden threshold ([D44](DECISIONS.md)).

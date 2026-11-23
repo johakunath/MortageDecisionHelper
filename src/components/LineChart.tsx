@@ -8,6 +8,11 @@ export type ChartSeries = {
   /** CSS colour. Never the only carrier of identity — every line is also labelled. */
   color: string;
   dashed?: boolean;
+  /**
+   * Text at the line's end; defaults to `label`. "" draws none, for charts whose lines
+   * end on top of each other: the legend and the hover panel still name every line.
+   */
+  endLabel?: string;
   points: { x: number; y: number }[];
 };
 
@@ -253,14 +258,16 @@ export default function LineChart({
                   strokeDasharray={s.dashed ? "6 4" : undefined}
                   opacity={s.dashed ? 0.7 : 1}
                 />
-                <text
-                  x={Math.min(sx(last.x) + 6, WIDTH - PAD.right + 6)}
-                  y={sy(last.y) + 4}
-                  className="chart-series-label"
-                  fill={s.color}
-                >
-                  {s.label}
-                </text>
+                {(s.endLabel ?? s.label) ? (
+                  <text
+                    x={Math.min(sx(last.x) + 6, WIDTH - PAD.right + 6)}
+                    y={sy(last.y) + 4}
+                    className="chart-series-label"
+                    fill={s.color}
+                  >
+                    {s.endLabel ?? s.label}
+                  </text>
+                ) : null}
               </g>
             );
           })}

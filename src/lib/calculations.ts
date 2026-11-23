@@ -65,6 +65,22 @@ export type MortgageInputs = {
    */
   monthlyPayment: number;
   fixedRateYears: number;
+  /**
+   * A KfW loan inside the financing: its fixed amount and Sollzins. Owned by the
+   * apartment (0 = none). The model blends it with the bank's rate into one rate per EK
+   * level, weighted by amount; the KfW part is fixed, so more EK only shrinks the bank
+   * part and the blend differs by EK level (D42, ASSUMPTIONS §4.19).
+   */
+  kfwAmount: number;
+  kfwRate: number;
+  /** The KfW loan's term in years, its repayment-free year included (D44). */
+  kfwTermYears: number;
+  /**
+   * Months from signing to moving in (Neubau). The Zinsbindung starts at signing, but
+   * the annuity starts only at handover, so the loan amortises for this much less of
+   * the binding. 0 for a flat that is moved into at once. Owned by the apartment (D42).
+   */
+  moveInMonths: number;
   annualSpecialRepayment: number;
   annualSpecialRepayments: number[];
   specialRepaymentLimitRate: number;
@@ -116,6 +132,36 @@ export function normaliseFixedPeriod(fixedRateYears: number): FixedPeriod {
   return fixedRateYears <= 12.5 ? 10 : 15;
 }
 
+/**
+ * One Sollzins for a loan made of a bank part and a fixed KfW part, weighted by amount.
+ * Exact for the interest of the first month; afterwards an approximation, because the
+ * two parts would amortise at their own pace (ASSUMPTIONS §4.19).
+ */
+export function blendedRate(
+  bankRatePct: number,
+  loan: number,
+  kfwAmount: number,
+  kfwRatePct: number,
+): number {
+  if (loan <= 0 || kfwAmount <= 0) return bankRatePct;
+  const kfw = Math.min(kfwAmount, loan);
+  return (kfw * kfwRatePct + (loan - kfw) * bankRatePct) / loan;
+}
+
+/**
+ * The months the loan amortises inside the Zinsbindung: the binding minus the time
+ * until the flat is handed over (D42). Every horizon "within the binding" uses this;
+ * only the rate lookup still reads `fixedRateYears`, because the bank prices the
+ * binding it signs, not the part of it that is left after the handover.
+ */
+export function bindingMonths(inputs: Pick<MortgageInputs, "fixedRateYears" | "moveInMonths">): number {
+  return Math.max(0, Math.round(inputs.fixedRateYears * 12) - Math.max(0, Math.round(inputs.moveInMonths ?? 0)));
+}
+
+export function bindingYears(inputs: Pick<MortgageInputs, "fixedRateYears" | "moveInMonths">): number {
+  return bindingMonths(inputs) / 12;
+}
+
 export function rateFor(
   rates: InterestRates,
   fixedRateYears: number,
@@ -154,6 +200,12 @@ export type MortgageSimulationParams = {
   fixedRateYears: number;
   specialPlan: SpecialPlan;
   specialRepaymentLimitRate: number;
+  /**
+   * Months of the same loan already behind this simulation, for a follow-up that
+   * continues it (the refinancing). Sondertilgung then falls on the original loan's
+   * year-ends and reads the plan at the original year index. 0 = a new loan.
+   */
+  monthOffset?: number;
   /**
    * Called once per simulated month with what was paid. Read-only: it observes the
    * schedule and cannot change it, so the offer-pinned amortisation stays exactly as
@@ -200,7 +252,7 @@ export type MortgageSimulation = {
  * cover the monthly interest produces a loan that never amortises, and reporting that
  * as "80 years" would be a number pretending to be an answer.
  */
-export type ConstraintId = "payment" | "cash" | "reserve" | "burden";
+export type ConstraintId = "payment" | "cash" | "reserve" | "runtime" | "burden";
 
 export type ConstraintCheck = {
   id: ConstraintId;
@@ -220,11 +272,25 @@ export type ConstraintCheck = {
 
 export type ScenarioDiagnosis = {
   checks: ConstraintCheck[];
+  /** Failed checks that make a scenario not tragbar: payment, cash, burden. */
   failed: ConstraintId[];
+  /**
+   * Failed checks that are shown but do not block (D44): the reserve target and the
+   * retirement deadline. Both are negotiable; the couple decides, not the code.
+   */
+  warnings: ConstraintId[];
 };
 
+/** The constraints that make a scenario not tragbar. Reserve and runtime only warn (D44). */
+export const BLOCKING_CONSTRAINTS: ConstraintId[] = ["payment", "cash", "burden"];
+
 export type ScenarioResult = ScenarioBase & {
+  /** The rate the loan pays on average at the start: the bank's, blended with KfW. */
   interestRate: number;
+  /** The bank's own Sollzins for this EK level. Equals `interestRate` without KfW. */
+  bankRate: number;
+  /** The KfW part of `loan` (0 = none). Modelled as a loan of its own (D44). */
+  kfwPart: number;
   /** Derived from the monthly payment, not entered — differs per EK level. */
   repaymentRate: number;
   downPayment: number;
@@ -244,8 +310,16 @@ export type ScenarioResult = ScenarioBase & {
    * UI has to say so. See docs/ASSUMPTIONS.md K14.
    */
   paymentSubstituted: boolean;
-  /** Runs past `maxRuntimeYears`. A warning shown in the status, never a failed check. */
+  /**
+   * Not repaid within `maxRuntimeYears` of signing at the regular rate, the bank's
+   * usual condition (repaid by retirement). A warning, not a failed constraint: some
+   * banks accept the couple's Sondertilgung against it (D44, superseding D43).
+   */
   runsPastLimit: boolean;
+  /** Years from signing until repaid at the regular rate, without any Sondertilgung. */
+  contractYearsFromSigning: number;
+  /** Years from signing until repaid with the Sondertilgung plan that is running. */
+  debtFreeYearsFromSigning: number;
   feasible: boolean;
   diagnosis: ScenarioDiagnosis;
   status: string;
@@ -366,6 +440,29 @@ export type ApartmentCase = {
    * `ownerExtraMonthly`. A number the couple can look up, which "Eigentumskosten" was not.
    */
   hausgeld: number;
+  /**
+   * Kaufnebenkosten in % of this apartment's price. Per apartment because the Makler
+   * is a property of the offer: one flat with Käuferprovision (11,57%) and one sold
+   * directly by the developer (8%) differ by ~23.000 € on 650k (D40).
+   */
+  closingCostRate: number;
+  /** KfW loan amount, Sollzins and term for this apartment; amount 0 = none (D42, D44). */
+  kfwAmount: number;
+  kfwRate: number;
+  kfwTermYears: number;
+  /** Months from signing to handover; 0 = moved into at once (D42). */
+  moveInMonths: number;
+  /**
+   * The parking space's share of `purchasePrice`, which already includes it. Read only
+   * to show what the space costs; the model finances the whole price (D42).
+   */
+  parkingPrice: number;
+  /**
+   * The Monatsrate of this apartment's loan, the same for all three EK levels. Per
+   * apartment because a rate sized for a 405k loan does not even cover the interest on
+   * a 590k one; one global rate made every larger flat "nicht tragbar" by construction (D40).
+   */
+  monthlyPayment: number;
   annualSpecialRepayments: number[];
   /** Free text: address, Makler, link to the Exposé. Never read by the model. */
   note?: string;
@@ -473,6 +570,7 @@ export function simulateMortgage({
   fixedRateYears,
   specialPlan,
   specialRepaymentLimitRate,
+  monthOffset = 0,
   onMonth,
 }: MortgageSimulationParams): MortgageSimulation {
   const safePrincipal = Math.max(0, principal);
@@ -490,6 +588,9 @@ export function simulateMortgage({
     };
   }
 
+  // Rounded once: a binding shortened by a handover delay is a fractional number of
+  // years, and `months === years * 12` must not hinge on floating-point luck.
+  const fixedMonths = Math.round(fixedRateYears * 12);
   const monthlyRate = Math.max(0, interestRatePct) / 100 / 12;
   const regularMonthlyPayment = monthlyAnnuity(
     safePrincipal,
@@ -524,13 +625,14 @@ export function simulateMortgage({
     balance -= principalPart;
     interestTotal += interest;
 
-    if (months <= fixedRateYears * 12) {
+    if (months <= fixedMonths) {
       interestFixed += interest;
     }
 
     let appliedSpecial = 0;
-    if (months % 12 === 0 && balance > 0.01) {
-      const yearIndex = months / 12 - 1;
+    const loanMonth = months + monthOffset;
+    if (loanMonth % 12 === 0 && balance > 0.01) {
+      const yearIndex = loanMonth / 12 - 1;
       const requestedSpecial = requestedSpecialForYear(specialPlan, yearIndex);
       const cappedSpecial = Math.min(requestedSpecial, maxAnnualSpecial);
       usedAnnualSpecialRepayments[yearIndex] = cappedSpecial;
@@ -549,7 +651,7 @@ export function simulateMortgage({
       balance: Math.max(0, balance),
     });
 
-    if (months === fixedRateYears * 12) {
+    if (months === fixedMonths) {
       remainingAfterFixed = Math.max(0, balance);
     }
 
@@ -573,13 +675,159 @@ export function simulateMortgage({
     interestTotal,
     interestFixed,
     remainingAfterFixed:
-      months < fixedRateYears * 12 ? Math.max(0, balance) : remainingAfterFixed,
+      months < fixedMonths ? Math.max(0, balance) : remainingAfterFixed,
     runtimeYears: months / 12,
     maxAnnualSpecial,
     usedAnnualSpecial,
     usedAnnualSpecialRepayments,
     yearly,
   };
+}
+
+/**
+ * KfW 300's repayment-free start (D44): one year, as the owners were told. The term is
+ * the apartment's `kfwTermYears`, counted from the start of repayment and including
+ * this year.
+ */
+export const KFW_GRACE_MONTHS = 12;
+
+/** The KfW part's monthly annuity after its repayment-free months. */
+export function kfwAnnuity(principal: number, ratePct: number, termYears: number): number {
+  if (principal <= 0) return 0;
+  const months = Math.max(1, Math.round(termYears * 12) - KFW_GRACE_MONTHS);
+  const monthly = Math.max(0, ratePct) / 1200;
+  if (monthly === 0) return principal / months;
+  return (principal * monthly) / (1 - Math.pow(1 + monthly, -months));
+}
+
+export type SplitLoanParams = {
+  bankPrincipal: number;
+  bankRatePct: number;
+  kfwPrincipal: number;
+  kfwRatePct: number;
+  kfwTermYears: number;
+  /**
+   * The total Monatsrate once the KfW part repays: its annuity plus the bank's. The
+   * bank part gets the rest and keeps it; in the KfW's repayment-free year the couple
+   * pays only the KfW interest on top, so the first year is cheaper.
+   */
+  monthlyPayment: number;
+  fixedRateYears: number;
+  specialPlan: SpecialPlan;
+  /** Cap as a share of the ORIGINAL BANK loan: KfW 300 takes no Sondertilgung. */
+  specialRepaymentLimitRate: number;
+  /** Points added to both rates after this many months: the refinancing stress. */
+  rateShift?: { afterMonths: number; points: number };
+  onMonth?: (entry: MortgageMonth) => void;
+};
+
+/**
+ * A bank loan and a KfW loan, run side by side and reported as one (D44). Each has its
+ * own rate and annuity; the KfW part repays nothing in its first year, and Sondertilgung
+ * only ever goes into the bank part. The result has the same shape as a single loan, so
+ * every chart and the ledger read it unchanged. `amortises` is false when either part
+ * never falls (its payment does not cover its interest).
+ */
+export function simulateSplitLoan(params: SplitLoanParams): MortgageSimulation & { amortises: boolean } {
+  let bank = Math.max(0, params.bankPrincipal);
+  let kfw = Math.max(0, params.kfwPrincipal);
+  const principal = bank + kfw;
+  const kfwPayment = kfwAnnuity(kfw, params.kfwRatePct, params.kfwTermYears);
+  const bankPayment = params.monthlyPayment - kfwPayment;
+  const fixedMonths = Math.round(params.fixedRateYears * 12);
+  const maxAnnualSpecial = bank * (Math.max(0, params.specialRepaymentLimitRate) / 100);
+  const usedAnnualSpecial = Math.min(requestedSpecialForYear(params.specialPlan, 0), maxAnnualSpecial);
+  const planPays = planEverPays(params.specialPlan);
+  const usedAnnualSpecialRepayments: number[] = [];
+  const yearly: YearlyMortgagePoint[] = [{ year: 0, balance: principal, interestTotal: 0 }];
+
+  let interestTotal = 0;
+  let interestFixed = 0;
+  let remainingAfterFixed = principal;
+  let months = 0;
+  let amortises = true;
+
+  while (bank + kfw > 0.01 && months < 80 * 12) {
+    months += 1;
+    const shift = params.rateShift && months > params.rateShift.afterMonths ? params.rateShift.points : 0;
+    const bankInterest = (bank * Math.max(0, params.bankRatePct + shift)) / 1200;
+    const kfwInterest = (kfw * Math.max(0, params.kfwRatePct + shift)) / 1200;
+    const bankPart = bank > 0.01 ? Math.min(bank, Math.max(0, bankPayment - bankInterest)) : 0;
+    const kfwPart =
+      kfw > 0.01 && months > KFW_GRACE_MONTHS ? Math.min(kfw, Math.max(0, kfwPayment - kfwInterest)) : 0;
+    bank -= bankPart;
+    kfw -= kfwPart;
+    const interest = bankInterest + kfwInterest;
+    interestTotal += interest;
+    if (months <= fixedMonths) interestFixed += interest;
+
+    let appliedSpecial = 0;
+    if (months % 12 === 0 && bank > 0.01) {
+      const yearIndex = months / 12 - 1;
+      const capped = Math.min(requestedSpecialForYear(params.specialPlan, yearIndex), maxAnnualSpecial);
+      usedAnnualSpecialRepayments[yearIndex] = capped;
+      appliedSpecial = Math.min(bank, capped);
+      bank -= appliedSpecial;
+    }
+
+    params.onMonth?.({
+      month: months,
+      interest,
+      principal: bankPart + kfwPart,
+      special: appliedSpecial,
+      balance: Math.max(0, bank + kfw),
+    });
+
+    if (months === fixedMonths) remainingAfterFixed = Math.max(0, bank + kfw);
+    if (months % 12 === 0 || bank + kfw <= 0.01) {
+      yearly.push({ year: months / 12, balance: Math.max(0, bank + kfw), interestTotal });
+    }
+
+    const bankStuck = bank > 0.01 && bankPayment <= bankInterest && !planPays;
+    const kfwStuck = kfw > 0.01 && months > KFW_GRACE_MONTHS && kfwPayment <= kfwInterest;
+    if (bankStuck || kfwStuck) {
+      amortises = false;
+      break;
+    }
+  }
+  if (bank + kfw > 0.01) amortises = false;
+
+  return {
+    regularMonthlyPayment: params.monthlyPayment,
+    interestTotal,
+    interestFixed,
+    remainingAfterFixed: months < fixedMonths ? Math.max(0, bank + kfw) : remainingAfterFixed,
+    runtimeYears: months / 12,
+    maxAnnualSpecial,
+    usedAnnualSpecial,
+    usedAnnualSpecialRepayments,
+    yearly,
+    amortises,
+  };
+}
+
+/** The smallest total Monatsrate at which both parts are repaid within `horizonYears`. */
+function minimumSplitPayment(
+  base: Omit<SplitLoanParams, "monthlyPayment">,
+  horizonYears = 60,
+): number {
+  const bankFloor = monthlyAnnuity(
+    base.bankPrincipal,
+    base.bankRatePct,
+    repaymentRateFromRuntimeYears(base.bankRatePct, horizonYears),
+  );
+  let low = 0;
+  let high = kfwAnnuity(base.kfwPrincipal, base.kfwRatePct, base.kfwTermYears) + bankFloor;
+  const runtimeAt = (payment: number) => {
+    const run = simulateSplitLoan({ ...base, monthlyPayment: payment });
+    return run.amortises ? run.runtimeYears : Infinity;
+  };
+  for (let i = 0; i < 30; i += 1) {
+    const mid = (low + high) / 2;
+    if (runtimeAt(mid) > horizonYears) low = mid;
+    else high = mid;
+  }
+  return high;
 }
 
 /**
@@ -673,19 +921,42 @@ export function buildScenario(
     inputs.renovation,
     inputs.moving,
   );
-  const interestRate = rateFor(rates, inputs.fixedRateYears, base.id);
+  const bankRate = rateFor(rates, inputs.fixedRateYears, base.id);
+  const kfwPart = Math.min(Math.max(0, inputs.kfwAmount), loan);
+  const interestRate = blendedRate(bankRate, loan, inputs.kfwAmount, inputs.kfwRate);
   // Same € every month at every EK level; the Tilgungssatz is what moves. Verified
   // against the broker's Tilgungsplan: 405.000 € at 3,87 % and 1.900 €/month yields
-  // 1,759630 % and reproduces their 10-year figures to the cent.
-  const repaymentRate = repaymentRateFromMonthlyPayment(loan, interestRate, inputs.monthlyPayment);
-  const mortgage = simulateMortgage({
-    principal: loan,
-    interestRatePct: interestRate,
-    repaymentRatePct: repaymentRate,
-    fixedRateYears: inputs.fixedRateYears,
-    specialPlan,
-    specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
-  });
+  // 1,759630 % and reproduces their 10-year figures to the cent. With KfW it is only a
+  // display figure: the two parts amortise on their own (D44).
+  const repaymentRate =
+    kfwPart > 0
+      ? Math.max(0, (inputs.monthlyPayment * 1200) / loan - interestRate)
+      : repaymentRateFromMonthlyPayment(loan, interestRate, inputs.monthlyPayment);
+  const splitBase =
+    kfwPart > 0
+      ? {
+          bankPrincipal: loan - kfwPart,
+          bankRatePct: bankRate,
+          kfwPrincipal: kfwPart,
+          kfwRatePct: inputs.kfwRate,
+          kfwTermYears: inputs.kfwTermYears,
+          fixedRateYears: bindingYears(inputs),
+          specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+        }
+      : null;
+  const split = splitBase
+    ? simulateSplitLoan({ ...splitBase, monthlyPayment: inputs.monthlyPayment, specialPlan })
+    : null;
+  const mortgage: MortgageSimulation =
+    split ??
+    simulateMortgage({
+      principal: loan,
+      interestRatePct: interestRate,
+      repaymentRatePct: repaymentRate,
+      fixedRateYears: bindingYears(inputs),
+      specialPlan,
+      specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+    });
   const cashLeft = inputs.availableCapital - cashNeeded;
   const reserveGap = cashLeft - inputs.reserveTarget;
   const allInMonthly = mortgage.regularMonthlyPayment + inputs.monthlyOwnershipCosts;
@@ -698,25 +969,44 @@ export function buildScenario(
   const maxBurdenRatio = inputs.maxBurdenRate / 100;
   // Interest-only floor: below this the balance never falls, whatever the plan says.
   const interestOnlyPayment = (loan * interestRate) / 1200;
-  const amortises = inputs.monthlyPayment > interestOnlyPayment && mortgage.runtimeYears <= 60;
+  const amortises = split
+    ? split.amortises && mortgage.runtimeYears <= 60
+    : inputs.monthlyPayment > interestOnlyPayment && mortgage.runtimeYears <= 60;
   // The bar the check actually applies: the smallest annuity that clears the loan
   // inside the 60-year horizon, under the same plan the pass condition is read from.
   // Reporting the shortfall against `interestOnlyPayment` instead produced a POSITIVE
   // gap for a payment that clears the interest but would take 80 years — and the UI
   // printed that as an amount still missing. K17.
-  const minimumPayment = minimumPaymentForLifetime(
-    loan,
-    interestRate,
-    inputs.fixedRateYears,
-    specialPlan,
-    inputs.specialRepaymentLimitRate,
-  );
+  const minimumPayment = splitBase
+    ? minimumSplitPayment({ ...splitBase, specialPlan })
+    : minimumPaymentForLifetime(
+        loan,
+        interestRate,
+        bindingYears(inputs),
+        specialPlan,
+        inputs.specialRepaymentLimitRate,
+      );
   // `repaymentRateFromMonthlyPayment` floors the Tilgungssatz at 0,01%. Detect that
   // floor from the unrounded implied rate rather than from a euro tolerance: close to
   // the boundary the substituted annuity can differ by only a few cents, but the
   // derived Laufzeit, Zinsen and Restschuld still belong to a payment nobody entered.
   const impliedRepaymentRate = (inputs.monthlyPayment * 1200) / loan - interestRate;
-  const paymentSubstituted = loan > 0 && impliedRepaymentRate < 0.01;
+  const paymentSubstituted = !split && loan > 0 && impliedRepaymentRate < 0.01;
+  const delayYears = Math.max(0, inputs.moveInMonths) / 12;
+  // The contract as the bank reads it: the regular rate, no Sondertilgung, from signing.
+  const contractRun = splitBase
+    ? simulateSplitLoan({ ...splitBase, monthlyPayment: inputs.monthlyPayment, specialPlan: { kind: "none" } })
+    : null;
+  const contractYears = contractRun
+    ? contractRun.amortises
+      ? contractRun.runtimeYears
+      : Infinity
+    : inputs.monthlyPayment > interestOnlyPayment
+      ? runtimeYearsFromRepaymentRate(interestRate, repaymentRate)
+      : Infinity;
+  const contractYearsFromSigning = delayYears + contractYears;
+  const debtFreeYearsFromSigning = amortises ? delayYears + mortgage.runtimeYears : Infinity;
+  const runtimeWithinLimit = contractYearsFromSigning <= inputs.maxRuntimeYears + 1e-9;
   const checks: ConstraintCheck[] = [
     // Does the rate repay the loan at all, within a lifetime?
     {
@@ -736,6 +1026,16 @@ export function buildScenario(
       required: inputs.reserveTarget,
       gap: cashLeft - inputs.reserveTarget,
     },
+    // Repaid by retirement, as banks usually require? Counted from signing, so a
+    // Neubau's wait counts, and without Sondertilgung, as the bank reads the contract.
+    // A warning: some banks accept the couple's Sondertilgung against it (D44).
+    {
+      id: "runtime",
+      passed: runtimeWithinLimit,
+      actual: contractYearsFromSigning,
+      required: inputs.maxRuntimeYears,
+      gap: inputs.maxRuntimeYears - contractYearsFromSigning,
+    },
     // Is the monthly load bearable?
     {
       id: "burden",
@@ -745,14 +1045,16 @@ export function buildScenario(
       gap: maxBurdenRatio - burdenRatio,
     },
   ];
-  const failed = checks.filter((check) => !check.passed).map((check) => check.id);
-  const diagnosis: ScenarioDiagnosis = { checks, failed };
+  const failing = checks.filter((check) => !check.passed).map((check) => check.id);
+  const failed = failing.filter((id) => BLOCKING_CONSTRAINTS.includes(id));
+  const warnings = failing.filter((id) => !BLOCKING_CONSTRAINTS.includes(id));
+  const diagnosis: ScenarioDiagnosis = { checks, failed, warnings };
 
-  // Feasibility keys off the payment, reserve and burden checks; `cash` is a strictly
-  // worse subset of `reserve` and exists to tell the two failures apart in the UI.
-  const feasible =
-    amortises && cashLeft >= inputs.reserveTarget && burdenRatio <= maxBurdenRatio;
-  const runsPastLimit = mortgage.runtimeYears > inputs.maxRuntimeYears + 1e-9;
+  // Tragbar: the rate repays the loan, the money covers the purchase, the monthly load
+  // stays under the couple's limit. The reserve target and the retirement deadline are
+  // shown as warnings and never block (D44): both are the couple's call.
+  const feasible = amortises && cashLeft >= 0 && burdenRatio <= maxBurdenRatio;
+  const runsPastLimit = !runtimeWithinLimit;
 
   // Plain-language labels: these are read aloud between two non-experts, so they say
   // what is wrong rather than naming an internal constraint.
@@ -764,15 +1066,14 @@ export function buildScenario(
   } else if (failed.includes("cash")) {
     status = "Geld reicht nicht";
     statusTone = "red";
-  } else if (failed.includes("reserve")) {
-    status = "Reserve zu dünn";
-    statusTone = "red";
   } else if (failed.includes("burden")) {
     status = "Rate zu hoch";
     statusTone = "amber";
-  } else if (runsPastLimit) {
-    // Tragbar, but not debt-free by the couple's own limit (D34).
-    status = "Läuft zu lange";
+  } else if (warnings.includes("reserve")) {
+    status = "Reserve unter Ziel";
+    statusTone = "amber";
+  } else if (warnings.includes("runtime")) {
+    status = "Läuft über die Grenze";
     statusTone = "amber";
   } else if (cashLeft < inputs.reserveTarget * 1.5) {
     status = "Gerade so tragbar";
@@ -782,6 +1083,8 @@ export function buildScenario(
   return {
     ...base,
     interestRate,
+    bankRate,
+    kfwPart,
     repaymentRate,
     downPayment,
     loan,
@@ -795,6 +1098,8 @@ export function buildScenario(
     mortgage,
     paymentSubstituted,
     runsPastLimit,
+    contractYearsFromSigning,
+    debtFreeYearsFromSigning,
     feasible,
     diagnosis,
     status,
@@ -837,10 +1142,89 @@ export function buildApartmentInputs(
   return {
     ...baseInputs,
     purchasePrice: apartment.purchasePrice,
+    closingCostRate: apartment.closingCostRate,
+    monthlyPayment: apartment.monthlyPayment,
+    kfwAmount: apartment.kfwAmount,
+    kfwRate: apartment.kfwRate,
+    kfwTermYears: apartment.kfwTermYears,
+    moveInMonths: apartment.moveInMonths,
     renovation: apartment.renovation,
     monthlyOwnershipCosts: apartment.hausgeld + baseInputs.ownerExtraMonthly,
     annualSpecialRepayment,
     annualSpecialRepayments: apartment.annualSpecialRepayments,
+  };
+}
+
+/**
+ * Share of the loan assumed drawn, on average, while a Neubau is built (MaBV tranches).
+ * A guess, not a payment plan: it only feeds `constructionInterest` (ASSUMPTIONS §4.20).
+ */
+export const CONSTRUCTION_DRAW_SHARE = 0.5;
+
+export type ApartmentColumn = {
+  apartment: ApartmentCase;
+  inputs: MortgageInputs;
+  /** This apartment at the chosen EK level, with its own Sondertilgung plan. */
+  scenario: ScenarioResult;
+  /** The same loan with no Sondertilgung at all. */
+  withoutSpecial: ScenarioResult;
+  /** The bank's own rate for this EK level, before any KfW blend. */
+  bankRate: number;
+  /** The KfW part's own monthly annuity after its free year; the bank gets the rest. */
+  kfwMonthly: number;
+  /** Months the loan amortises inside the Zinsbindung (binding minus handover delay). */
+  bindingMonths: number;
+  /** Rough Bauzeit- and Bereitstellungszinsen until handover. 0 without a delay. */
+  constructionInterest: number;
+  /** Sondertilgung actually paid inside the binding. */
+  specialInBinding: number;
+  /** Years from signing until debt-free: the handover delay plus the runtime. */
+  debtFreeAfterYears: number;
+  /** The parking space's share of the Monatsrate, at this EK level. */
+  parkingMonthly: number;
+  /** Cash the parking space needs at signing: its share of EK and Kaufnebenkosten. */
+  parkingCash: number;
+};
+
+/**
+ * One apartment at one EK level, as the side-by-side comparison shows it (D42). Each
+ * column picks its own EK level, so "Lindenstraße at 10% against BUWOG at 15%" is a
+ * question the screen can answer — the limitation D3 recorded.
+ */
+export function apartmentColumn(
+  apartment: ApartmentCase,
+  base: ScenarioBase,
+  baseInputs: MortgageInputs,
+  rates: InterestRates,
+): ApartmentColumn {
+  const inputs = buildApartmentInputs(baseInputs, apartment);
+  const scenario = buildScenario(base, inputs, rates);
+  const withoutSpecial = buildScenario(base, inputs, rates, { kind: "none" });
+  const months = bindingMonths(inputs);
+  const constructionInterest =
+    ((scenario.loan * scenario.interestRate) / 100) *
+    (Math.max(0, inputs.moveInMonths) / 12) *
+    CONSTRUCTION_DRAW_SHARE;
+  const specialInBinding = scenario.mortgage.usedAnnualSpecialRepayments
+    .slice(0, Math.floor(months / 12))
+    .reduce((sum, amount) => sum + (amount ?? 0), 0);
+  // The Monatsrate scales with the loan at a fixed EK share, so the space carries its
+  // share of the price; at signing it needs its share of EK and Kaufnebenkosten.
+  const parkingShare = inputs.purchasePrice > 0 ? apartment.parkingPrice / inputs.purchasePrice : 0;
+
+  return {
+    apartment,
+    inputs,
+    scenario,
+    withoutSpecial,
+    bankRate: scenario.bankRate,
+    kfwMonthly: kfwAnnuity(scenario.kfwPart, inputs.kfwRate, inputs.kfwTermYears),
+    bindingMonths: months,
+    constructionInterest,
+    specialInBinding,
+    debtFreeAfterYears: Math.max(0, inputs.moveInMonths) / 12 + scenario.mortgage.runtimeYears,
+    parkingMonthly: scenario.mortgage.regularMonthlyPayment * parkingShare,
+    parkingCash: apartment.parkingPrice * ((base.ekRate + inputs.closingCostRate) / 100),
   };
 }
 
@@ -887,7 +1271,7 @@ function constraintsFailedInAll(scenarios: ScenarioResult[]): ConstraintId[] {
     return [];
   }
 
-  const candidates: ConstraintId[] = ["payment", "cash", "reserve", "burden"];
+  const candidates: ConstraintId[] = BLOCKING_CONSTRAINTS;
   return candidates.filter((id) =>
     scenarios.every((scenario) => scenario.diagnosis.failed.includes(id)),
   );
@@ -910,7 +1294,7 @@ function findNarrowestMiss(scenarios: ScenarioResult[]): DecisionDiagnosis["narr
   const closest = infeasible.reduce((best, scenario) =>
     scenario.diagnosis.failed.length < best.diagnosis.failed.length ? scenario : best,
   );
-  const priority: ConstraintId[] = ["payment", "cash", "reserve", "burden"];
+  const priority: ConstraintId[] = BLOCKING_CONSTRAINTS;
   const blocker = priority.find((id) => closest.diagnosis.failed.includes(id));
   if (!blocker) {
     return null;
@@ -949,7 +1333,7 @@ export function compareEkScenarios(
   inputs: MortgageInputs,
 ): EkTradeoff {
   const extraCashRequired = to.cashNeeded - from.cashNeeded;
-  const horizonYears = inputs.fixedRateYears;
+  const horizonYears = bindingYears(inputs);
   const interestSavedFixed = from.mortgage.interestFixed - to.mortgage.interestFixed;
   const etfForegoneGross = opportunityCost(
     Math.max(0, extraCashRequired),
@@ -1016,7 +1400,7 @@ export function ekStepReturn(
   to: ScenarioResult,
   inputs: MortgageInputs,
 ): EkStepReturn {
-  const years = inputs.fixedRateYears;
+  const years = bindingYears(inputs);
   const extraCash = to.cashNeeded - from.cashNeeded;
   const debtReduction = from.mortgage.remainingAfterFixed - to.mortgage.remainingAfterFixed;
   if (extraCash <= 0 || years <= 0) {
@@ -1269,7 +1653,7 @@ export function buildWaitScenario(
   rates: InterestRates,
   waitMonths: number = inputs.waitMonths,
   /** The common date. Pass one value for every column of a table. */
-  horizonMonths: number = Math.max(inputs.fixedRateYears * 12, waitMonths),
+  horizonMonths: number = Math.max(bindingMonths(inputs), waitMonths),
 ): WaitScenario {
   const years = waitMonths / 12;
   const { futurePrice, adjustedInterestRate, purchaseRates } = purchaseAfterWaiting(
@@ -1338,7 +1722,7 @@ export function buildWaitScenarios(
 ): WaitScenario[] {
   // One date for every column, so the table compares like with like even if someone
   // types a Wartezeit longer than the binding.
-  const horizonMonths = Math.max(inputs.fixedRateYears * 12, ...months);
+  const horizonMonths = Math.max(bindingMonths(inputs), ...months);
   return months.map((waitMonths) =>
     buildWaitScenario(selectedBase, inputs, rates, waitMonths, horizonMonths),
   );
@@ -1379,7 +1763,7 @@ export function waitTippingPoints(
   rates: InterestRates,
   waitMonths: number = inputs.waitMonths,
 ): WaitTippingPoint[] {
-  const horizonMonths = Math.max(inputs.fixedRateYears * 12, waitMonths);
+  const horizonMonths = Math.max(bindingMonths(inputs), waitMonths);
   const delta = (assumption: WaitAssumption, value: number) => {
     const varied = { ...inputs, [assumption]: value };
     return (
@@ -1502,7 +1886,7 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
   const waitMonths = Math.max(0, Math.round(params.waitMonths ?? 0));
   const horizonMonths = Math.max(
     waitMonths,
-    Math.round(params.horizonMonths ?? inputs.fixedRateYears * 12),
+    Math.round(params.horizonMonths ?? bindingMonths(inputs)),
   );
   const specialPlan = params.specialPlan ?? planFromInputs(inputs);
   const monthlyReturn = Math.pow(1 + inputs.etfReturnRate / 100, 1 / 12) - 1;
@@ -1548,7 +1932,7 @@ export function scenarioWealthAtHorizon(
   scenario: ScenarioResult,
   inputs: MortgageInputs,
   specialPlan: SpecialPlan = planFromInputs(inputs),
-  horizonMonths: number = Math.round(inputs.fixedRateYears * 12),
+  horizonMonths: number = bindingMonths(inputs),
 ): WealthAtHorizon {
   return ownUntilHorizon(scenario, inputs, specialPlan, {
     horizonMonths,
@@ -1588,20 +1972,36 @@ function ownUntilHorizon(
   const paidToBank = new Array<number>(loanMonths + 1).fill(0);
   const specialByMonth = new Array<number>(loanMonths + 1).fill(0);
   let debt = purchase.loan;
-  simulateMortgage({
-    principal: purchase.loan,
-    interestRatePct: purchase.interestRate,
-    repaymentRatePct: purchase.repaymentRate,
-    fixedRateYears: inputs.fixedRateYears,
-    specialPlan,
-    specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
-    onMonth: (entry) => {
-      if (entry.month > loanMonths) return;
-      paidToBank[entry.month] = entry.interest + entry.principal;
-      specialByMonth[entry.month] = entry.special;
-      debt = entry.balance;
-    },
-  });
+  const onMonth = (entry: MortgageMonth) => {
+    if (entry.month > loanMonths) return;
+    paidToBank[entry.month] = entry.interest + entry.principal;
+    specialByMonth[entry.month] = entry.special;
+    debt = entry.balance;
+  };
+  if (purchase.kfwPart > 0) {
+    simulateSplitLoan({
+      bankPrincipal: purchase.loan - purchase.kfwPart,
+      bankRatePct: purchase.bankRate,
+      kfwPrincipal: purchase.kfwPart,
+      kfwRatePct: inputs.kfwRate,
+      kfwTermYears: inputs.kfwTermYears,
+      monthlyPayment: purchase.mortgage.regularMonthlyPayment,
+      fixedRateYears: bindingYears(inputs),
+      specialPlan,
+      specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+      onMonth,
+    });
+  } else {
+    simulateMortgage({
+      principal: purchase.loan,
+      interestRatePct: purchase.interestRate,
+      repaymentRatePct: purchase.repaymentRate,
+      fixedRateYears: bindingYears(inputs),
+      specialPlan,
+      specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+      onMonth,
+    });
+  }
   if (loanMonths === 0) debt = purchase.loan;
 
   let specialPaid = 0;
@@ -1658,14 +2058,43 @@ export type RefinanceStress = {
  * Restschuld onward with the rest of the yearly plan, so only the rate differs.
  */
 export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs): RefinanceStress {
-  const fixedYears = inputs.fixedRateYears;
+  const fixedYears = bindingYears(inputs);
   const remaining = scenario.mortgage.remainingAfterFixed;
   const stressRate = Math.max(0, scenario.interestRate + inputs.refiStressShift);
   const payment = scenario.mortgage.regularMonthlyPayment;
-  const laterPlan: SpecialPlan = {
-    kind: "path",
-    years: inputs.annualSpecialRepayments.slice(Math.round(fixedYears)),
-  };
+  // The whole plan, read on the original loan's calendar through `monthOffset`: with a
+  // handover delay the binding ends mid-year, and slicing the plan by whole years
+  // dropped or shifted a Sondertilgung, so even the same-rate baseline ran longer
+  // than the scenario itself (Codex review of PR #11).
+  const laterPlan: SpecialPlan = { kind: "path", years: inputs.annualSpecialRepayments };
+  const offsetMonths = bindingMonths(inputs);
+
+  if (scenario.kfwPart > 0 && remaining > 0.01 && Number.isFinite(remaining)) {
+    // Two loans: run the whole schedule again with both rates shifted from the end of
+    // the binding, so each part keeps its own annuity and calendar (D44).
+    const stressed = simulateSplitLoan({
+      bankPrincipal: scenario.loan - scenario.kfwPart,
+      bankRatePct: scenario.bankRate,
+      kfwPrincipal: scenario.kfwPart,
+      kfwRatePct: inputs.kfwRate,
+      kfwTermYears: inputs.kfwTermYears,
+      monthlyPayment: payment,
+      fixedRateYears: fixedYears,
+      specialPlan: planFromInputs(inputs),
+      specialRepaymentLimitRate: inputs.specialRepaymentLimitRate,
+      rateShift: { afterMonths: bindingMonths(inputs), points: inputs.refiStressShift },
+    });
+    const runtimeYearsAtSameRate = scenario.mortgage.runtimeYears;
+    const runtimeYearsStressed = stressed.amortises ? stressed.runtimeYears : Infinity;
+    return {
+      applies: true,
+      stressRate,
+      coversInterest: stressed.amortises,
+      runtimeYearsAtSameRate,
+      runtimeYearsStressed,
+      extraYears: runtimeYearsStressed - runtimeYearsAtSameRate,
+    };
+  }
 
   if (remaining <= 0.01 || !Number.isFinite(remaining)) {
     const runtime = scenario.mortgage.runtimeYears;
@@ -1688,6 +2117,7 @@ export function refinanceStress(scenario: ScenarioResult, inputs: MortgageInputs
       repaymentRatePct: repaymentRateFromMonthlyPayment(remaining, ratePct, payment),
       fixedRateYears: 0,
       specialPlan: laterPlan,
+      monthOffset: offsetMonths,
       // The cap stays a share of the ORIGINAL loan, as everywhere else in the model.
       // The follow-up runs on the Restschuld, so the rate is rescaled to the same € cap;
       // otherwise even the same-rate baseline ran longer than the scenario itself.

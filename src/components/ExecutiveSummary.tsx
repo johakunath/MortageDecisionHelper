@@ -5,7 +5,7 @@ import type {
   ScenarioResult,
 } from "../lib/calculations";
 import { GLOSSARY } from "../lib/glossary";
-import { formatEur, formatPct } from "../lib/format";
+import { formatCalendarYear, formatEur, formatPct } from "../lib/format";
 import { InfoTip } from "./ui";
 
 type ExecutiveSummaryProps = {
@@ -19,6 +19,7 @@ const CONSTRAINT_LABELS: Record<ConstraintId, string> = {
   payment: "die Monatsrate tilgt das Darlehen nicht ab",
   cash: "das Geld reicht nicht für den Kauf",
   reserve: "die Sicherheitsreserve wird unterschritten",
+  runtime: "das Darlehen ist bis zu eurer Grenze nicht abbezahlt",
   burden: "die Monatsbelastung ist zu hoch",
 };
 
@@ -39,6 +40,30 @@ function describeMiss(constraint: ConstraintId, gap: number): string {
     return `der Monatsrate fehlen ${formatEur(missing)} pro Monat, um das Darlehen in einem Leben abzuzahlen.`;
   }
   return `es fehlen ${formatEur(missing)}.`;
+}
+
+/**
+ * What a tragbar scenario still asks the couple to accept (D44): a reserve below their
+ * target, or a contract that runs past the retirement deadline. Shown in the verdict,
+ * so a warning is never hidden behind a green headline. The calendar year assumes
+ * signing today, as the comparison section does.
+ */
+function describeWarnings(scenario: ScenarioResult, inputs: MortgageInputs, startYear: number): string[] {
+  const notes: string[] = [];
+  if (scenario.diagnosis.warnings.includes("reserve")) {
+    notes.push(
+      `nur ${formatEur(Math.max(0, scenario.cashLeft))} Reserve statt ${formatEur(inputs.reserveTarget)}`,
+    );
+  }
+  if (scenario.diagnosis.warnings.includes("runtime")) {
+    const withPlan = Number.isFinite(scenario.debtFreeYearsFromSigning)
+      ? `, mit eurer Sondertilgung ≈ ${formatCalendarYear(startYear + scenario.debtFreeYearsFromSigning)}`
+      : "";
+    notes.push(
+      `ohne Sondertilgung erst ≈ ${formatCalendarYear(startYear + scenario.contractYearsFromSigning)} schuldenfrei, eure Grenze ist ≈ ${formatCalendarYear(startYear + inputs.maxRuntimeYears)}${withPlan}`,
+    );
+  }
+  return notes;
 }
 
 /** "10%", "10% und 15%", "10%, 15% und 20%". The levels, in the order given. */
@@ -80,9 +105,8 @@ export default function ExecutiveSummary({ scenarios, decision, inputs, selected
           <InfoTip text={GLOSSARY.cleanScenario} term="Tragbar" />
         </h2>
         <p>
-          Tragbar heißt für euch: die Rate zahlt das Darlehen ab, nach dem Kauf bleiben
-          mindestens <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig{" "}
-          <em>und</em> die Monatsrate bleibt unter{" "}
+          Tragbar heißt für euch: die Rate zahlt das Darlehen ab, euer Geld reicht für den
+          Kauf <em>und</em> die Monatsrate bleibt unter{" "}
           <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto. Alles zusammen
           schafft hier keine Variante.
           {diagnosis.failedInAll.length > 0 ? <> Bei allen dreien gilt: {describeBlockers(diagnosis.failedInAll)}.</> : null}
@@ -102,6 +126,11 @@ export default function ExecutiveSummary({ scenarios, decision, inputs, selected
   // names the lowest level: one spouse's side of the argument, chosen by code (D28).
   const feasible = decision.feasibleScenarios;
   const blocked = scenarios.filter((scenario) => !scenario.feasible);
+  const now = new Date();
+  const startYear = now.getFullYear() + now.getMonth() / 12;
+  const warned = feasible
+    .map((scenario) => ({ scenario, notes: describeWarnings(scenario, inputs, startYear) }))
+    .filter((entry) => entry.notes.length > 0);
   const headline =
     blocked.length === 0
       ? "Alle drei Varianten sind tragbar"
@@ -125,14 +154,26 @@ export default function ExecutiveSummary({ scenarios, decision, inputs, selected
           .
         </p>
       ) : null}
+      {warned.length > 0 ? (
+        <ul className="verdict-warnings">
+          {warned.map(({ scenario, notes }) => (
+            <li key={scenario.id}>
+              <span aria-hidden="true">! </span>
+              <strong>{scenario.label}:</strong> {notes.join("; ")}.
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {/* The definition is one click away rather than on screen: it is the same every
           time, and it pushed the doors below the fold (D37). */}
       <details className="verdict-details">
         <summary>Was heißt tragbar?</summary>
         <p>
-          Die Rate zahlt das Darlehen ab, nach dem Kauf bleiben mindestens{" "}
-          <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve übrig und die Monatsrate
+          Die Rate zahlt das Darlehen ab, euer Geld reicht für den Kauf und die Monatsrate
           bleibt unter <strong>{formatPct(inputs.maxBurdenRate)}</strong> vom Haushaltsnetto.
+          Weniger als <strong>{formatEur(inputs.reserveTarget)}</strong> Reserve oder eine
+          Laufzeit über eure Grenze zeigt die App als Hinweis, nicht als Ausschluss: das
+          entscheidet ihr, und manche Banken rechnen eure Sondertilgung mit.
           Gewählt ist <strong>{selected.label}</strong> mit {formatPct(selected.burdenRatio * 100)}{" "}
           Belastung.
         </p>

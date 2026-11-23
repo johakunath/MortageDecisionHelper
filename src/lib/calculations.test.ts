@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   afterTaxAnnualReturn,
+  apartmentColumn,
+  bindingMonths,
+  blendedRate,
+  kfwAnnuity,
+  simulateSplitLoan,
+  type MortgageMonth,
+  type SpecialPlan,
   buildApartmentInputs,
   buildScenario,
   buildScenarios,
@@ -15,6 +22,7 @@ import {
   interestForPlan,
   monthlyAnnuity,
   normaliseFixedPeriod,
+  planFromInputs,
   rateFor,
   refinanceStress,
   repaymentRateFromMonthlyPayment,
@@ -34,6 +42,7 @@ import {
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
   DEFAULT_RATES,
+  OFFER_RATES,
   EK_SCENARIOS,
 } from "./defaults";
 
@@ -100,7 +109,7 @@ describe("calculation engine", () => {
 
     // The split did not move a single default figure: the old totals were 640/690/760 €.
     expect(
-      DEFAULT_APARTMENT_CASES.map(
+      DEFAULT_APARTMENT_CASES.slice(0, 3).map(
         (flat) => buildApartmentInputs(DEFAULT_INPUTS, flat).monthlyOwnershipCosts,
       ),
     ).toEqual([640, 690, 760]);
@@ -142,6 +151,155 @@ describe("calculation engine", () => {
     expect(decision.feasibleScenarios.length).toBeGreaterThan(0);
   });
 
+  it("takes the Kaufnebenkosten from the apartment, not from a global (D40)", () => {
+    const withMakler = buildApartmentInputs(
+      { ...DEFAULT_INPUTS, closingCostRate: 3 },
+      { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, closingCostRate: 11.57 },
+    );
+    const direct = buildApartmentInputs(
+      { ...DEFAULT_INPUTS, closingCostRate: 3 },
+      { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, closingCostRate: 8 },
+    );
+    const [makler] = buildScenarios(EK_SCENARIOS, withMakler, OFFER_RATES);
+    const [developer] = buildScenarios(EK_SCENARIOS, direct, OFFER_RATES);
+    // The Shortlist Sheet's own figure for BUWOG: 52.408 € on 655.100 €.
+    expect(developer.closingCosts).toBeCloseTo(52408, 0);
+    expect(makler.closingCosts - developer.closingCosts).toBeCloseTo(655100 * 0.0357, 0);
+  });
+
+  it("blends a fixed KfW loan into one rate per EK level (D42)", () => {
+    // More EK shrinks only the bank part, so the blend falls with EK: one average for
+    // all three levels would understate what extra EK saves.
+    expect(blendedRate(4.3, 589590, 170000, 1.3)).toBeCloseTo(3.435, 3);
+    expect(blendedRate(4.0, 524080, 170000, 1.3)).toBeCloseTo(3.124, 3);
+    expect(blendedRate(4.3, 100000, 170000, 1.3)).toBeCloseTo(1.3, 6);
+    expect(blendedRate(4.3, 500000, 0, 1.3)).toBe(4.3);
+
+    const flat = { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, kfwAmount: 170000, kfwRate: 1.3, monthlyPayment: 2700 };
+    const [ek10] = buildScenarios(EK_SCENARIOS, buildApartmentInputs(DEFAULT_INPUTS, flat), DEFAULT_RATES);
+    expect(ek10.interestRate).toBeCloseTo(blendedRate(DEFAULT_RATES[10].ek10, 589590, 170000, 1.3), 9);
+  });
+
+  it("runs KfW as a loan of its own: a repayment-free year, its own annuity, no Sondertilgung (D44)", () => {
+    const kfwOnly = (plan: SpecialPlan) => {
+      const balances: number[] = [];
+      const run = simulateSplitLoan({
+        bankPrincipal: 0,
+        bankRatePct: 4.3,
+        kfwPrincipal: 170000,
+        kfwRatePct: 1.3,
+        kfwTermYears: 30,
+        monthlyPayment: kfwAnnuity(170000, 1.3, 30),
+        fixedRateYears: 10,
+        specialPlan: plan,
+        specialRepaymentLimitRate: 5,
+        onMonth: (entry) => balances.push(entry.balance),
+      });
+      return { run, balances };
+    };
+    const { run, balances } = kfwOnly({ kind: "none" });
+    // Interest only for twelve months, then repaid exactly at the end of its 30-year term.
+    expect(balances[11]).toBeCloseTo(170000, 6);
+    expect(balances[12]).toBeLessThan(170000);
+    expect(run.runtimeYears).toBeCloseTo(30, 9);
+    // Sondertilgung cannot touch the KfW part: its cap is a share of the bank part only.
+    const withPlan = kfwOnly({ kind: "flat", annual: 20000 });
+    expect(withPlan.run.maxAnnualSpecial).toBe(0);
+    expect(withPlan.run.runtimeYears).toBeCloseTo(30, 9);
+  });
+
+  it("pays each part's own rate and puts Sondertilgung into the bank part (D44)", () => {
+    const flat = { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, kfwAmount: 170000, kfwRate: 1.3, monthlyPayment: 2976 };
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, flat);
+    const [ek10] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    expect(ek10.kfwPart).toBe(170000);
+    expect(ek10.bankRate).toBe(DEFAULT_RATES[10].ek10);
+
+    let firstMonth: MortgageMonth | null = null;
+    simulateSplitLoan({
+      bankPrincipal: ek10.loan - 170000,
+      bankRatePct: ek10.bankRate,
+      kfwPrincipal: 170000,
+      kfwRatePct: 1.3,
+      kfwTermYears: 20,
+      monthlyPayment: 2976,
+      fixedRateYears: 10,
+      specialPlan: { kind: "none" },
+      specialRepaymentLimitRate: 5,
+      onMonth: (entry) => {
+        firstMonth ??= entry;
+      },
+    });
+    const bankPart = ek10.loan - 170000;
+    expect(firstMonth!.interest).toBeCloseTo((bankPart * 4.3) / 1200 + (170000 * 1.3) / 1200, 6);
+    // In the KfW's free year only the bank part repays: the rate minus the KfW annuity.
+    expect(firstMonth!.principal).toBeCloseTo(2976 - kfwAnnuity(170000, 1.3, 20) - (bankPart * 4.3) / 1200, 6);
+    // The 5 % cap is taken on the bank part, not the whole loan.
+    expect(ek10.mortgage.maxAnnualSpecial).toBeCloseTo(bankPart * 0.05, 6);
+    // The same-rate refinancing baseline is the scenario itself.
+    expect(refinanceStress(ek10, inputs).runtimeYearsAtSameRate).toBeCloseTo(ek10.mortgage.runtimeYears, 9);
+  });
+
+  it("amortises a Neubau only for the part of the binding after handover (D42)", () => {
+    const flat = { ...DEFAULT_APARTMENT_CASES[0], moveInMonths: 19 };
+    const delayed = buildApartmentInputs(DEFAULT_INPUTS, flat);
+    const atOnce = buildApartmentInputs(DEFAULT_INPUTS, { ...flat, moveInMonths: 0 });
+    expect(bindingMonths(delayed)).toBe(101);
+    expect(bindingMonths(atOnce)).toBe(120);
+
+    const [late] = buildScenarios(EK_SCENARIOS, delayed, OFFER_RATES);
+    const [now] = buildScenarios(EK_SCENARIOS, atOnce, OFFER_RATES);
+    // Same loan, same rate, same runtime from handover; but at the end of the binding
+    // 19 fewer months have been repaid, so more is left to refinance.
+    expect(late.mortgage.runtimeYears).toBeCloseTo(now.mortgage.runtimeYears, 9);
+    expect(late.mortgage.remainingAfterFixed).toBeGreaterThan(now.mortgage.remainingAfterFixed + 10000);
+    // Equal to the balance after month 101 of the undelayed loan.
+    const after101 = simulateMortgage({
+      principal: now.loan,
+      interestRatePct: now.interestRate,
+      repaymentRatePct: now.repaymentRate,
+      fixedRateYears: 101 / 12,
+      specialPlan: planFromInputs(atOnce),
+      specialRepaymentLimitRate: atOnce.specialRepaymentLimitRate,
+    }).remainingAfterFixed;
+    expect(late.mortgage.remainingAfterFixed).toBeCloseTo(after101, 6);
+  });
+
+  it("keeps the refinancing baseline on the loan's own calendar after a handover delay", () => {
+    // At the same rate, refinancing changes nothing, so the baseline must run exactly
+    // as long as the scenario, whatever month the binding ends in.
+    for (const moveInMonths of [0, 5, 12, 17, 19, 23]) {
+      const inputs = buildApartmentInputs(DEFAULT_INPUTS, { ...DEFAULT_APARTMENT_CASES[0], moveInMonths });
+      for (const scenario of buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES)) {
+        const stress = refinanceStress(scenario, inputs);
+        if (!stress.applies) continue;
+        expect(stress.runtimeYearsAtSameRate).toBeCloseTo(scenario.mortgage.runtimeYears, 9);
+      }
+    }
+  });
+
+  it("builds a comparison column with construction interest and the parking space's share (D42)", () => {
+    const flat = {
+      ...DEFAULT_APARTMENT_CASES[0],
+      purchasePrice: 520000,
+      closingCostRate: 11.57,
+      monthlyPayment: 2460,
+      moveInMonths: 12,
+      parkingPrice: 26000,
+    };
+    const column = apartmentColumn(flat, EK_SCENARIOS[0], DEFAULT_INPUTS, DEFAULT_RATES);
+    // 468.000 € × 4,3 % × 1 Jahr × halb abgerufen.
+    expect(column.constructionInterest).toBeCloseTo(468000 * 0.043 * 0.5, 6);
+    // 5 % of the price: 5 % of the rate; and 10 % EK + 11,57 % KNK of 26.000 €.
+    expect(column.parkingMonthly).toBeCloseTo(column.scenario.mortgage.regularMonthlyPayment * 0.05, 6);
+    expect(column.parkingCash).toBeCloseTo(26000 * 0.2157, 6);
+    expect(column.withoutSpecial.mortgage.remainingAfterFixed).toBeGreaterThan(
+      column.scenario.mortgage.remainingAfterFixed,
+    );
+    expect(column.debtFreeAfterYears).toBeCloseTo(1 + column.scenario.mortgage.runtimeYears, 9);
+    expect(column.specialInBinding).toBe(9 * 6000);
+  });
+
   it("compares apartment cases with independent prices and Sondertilgung paths", () => {
     const results = compareApartmentCases(
       [
@@ -151,6 +309,13 @@ describe("calculation engine", () => {
           purchasePrice: 600000,
           renovation: 0,
           hausgeld: 610,
+          closingCostRate: 8,
+          monthlyPayment: 2900,
+          kfwAmount: 0,
+          kfwRate: 0,
+          kfwTermYears: 20,
+          moveInMonths: 0,
+          parkingPrice: 0,
           annualSpecialRepayments: [0, 0, 0],
         },
         {
@@ -159,6 +324,13 @@ describe("calculation engine", () => {
           purchasePrice: 700000,
           renovation: 10000,
           hausgeld: 810,
+          closingCostRate: 11.57,
+          monthlyPayment: 2900,
+          kfwAmount: 0,
+          kfwRate: 0,
+          kfwTermYears: 20,
+          moveInMonths: 0,
+          parkingPrice: 0,
           annualSpecialRepayments: [10000, 10000, 10000],
         },
       ],
@@ -179,7 +351,7 @@ describe("calculation engine", () => {
 
   it("does not subtract rent from capital while waiting (D4)", () => {
     const inputs = { ...DEFAULT_INPUTS, waitMonths: 12, waitSavingsMonthly: 1500 };
-    const wait = buildWaitScenario(MIDDLE, inputs, DEFAULT_RATES);
+    const wait = buildWaitScenario(MIDDLE, inputs, OFFER_RATES);
 
     expect(wait.saved).toBe(18000);
     expect(wait.adjustedAvailableCapital).toBe(inputs.availableCapital + 18000);
@@ -194,8 +366,8 @@ describe("calculation engine", () => {
     // not an interest delta over 25+ years plus rent, which left out ownership costs,
     // principal, and what capital earns while waiting.
     const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const columns = buildWaitScenarios(LOWEST, inputs, DEFAULT_RATES, [0, 12, 24]);
-    const now = wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES });
+    const columns = buildWaitScenarios(LOWEST, inputs, OFFER_RATES, [0, 12, 24]);
+    const now = wealthAtHorizon({ base: LOWEST, inputs, rates: OFFER_RATES });
 
     expect(new Set(columns.map((column) => column.wealth.horizonMonths)).size).toBe(1);
     expect(columns[0].deltaWealth).toBe(0);
@@ -207,7 +379,7 @@ describe("calculation engine", () => {
 
   it("names the assumption values at which waiting stops paying off (spec 2.3)", () => {
     const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const points = waitTippingPoints(LOWEST, inputs, DEFAULT_RATES, 12);
+    const points = waitTippingPoints(LOWEST, inputs, OFFER_RATES, 12);
     const byKey = Object.fromEntries(points.map((point) => [point.assumption, point]));
 
     expect(byKey.waitRateShift.assumed).toBe(-0.3);
@@ -218,12 +390,12 @@ describe("calculation engine", () => {
     // At each tipping point the two paths really do end level.
     for (const point of points) {
       const varied = { ...inputs, [point.assumption]: point.flipsAt as number };
-      const wait = buildWaitScenario(LOWEST, varied, DEFAULT_RATES, 12);
+      const wait = buildWaitScenario(LOWEST, varied, OFFER_RATES, 12);
       expect(Math.abs(wait.deltaWealth)).toBeLessThan(1);
     }
 
     // Buying now has nothing to tip.
-    expect(waitTippingPoints(LOWEST, inputs, DEFAULT_RATES, 0).every((p) => p.flipsAt === null)).toBe(true);
+    expect(waitTippingPoints(LOWEST, inputs, OFFER_RATES, 0).every((p) => p.flipsAt === null)).toBe(true);
   });
 
   it("stops special repayments after the entered path ends (K2)", () => {
@@ -258,10 +430,13 @@ describe("calculation engine", () => {
   it("lists every tragbar level instead of preferring one (D28)", () => {
     // The offer flat: 10% and 15% EK carry the reserve, 20% does not. The old rule
     // named "10% EK" as the recommendation, which since D15 is the lowest level.
-    const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const decision = evaluateDecision(buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES));
+    // Pinned: this test is about listing, not about the retirement deadline (D43), which
+    // the offer's 1.900 € rate misses at 10% EK (30 years without Sondertilgung).
+    const inputs = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 35 };
+    const decision = evaluateDecision(buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES));
 
-    expect(decision.feasibleScenarios.map((scenario) => scenario.id)).toEqual(["ek10", "ek15"]);
+    // 20% EK leaves less than the reserve target, which only warns since D44.
+    expect(decision.feasibleScenarios.map((scenario) => scenario.id)).toEqual(["ek10", "ek15", "ek20"]);
     expect("recommendation" in decision).toBe(false);
   });
 
@@ -313,30 +488,34 @@ describe("calculation engine", () => {
     const reserveOnly = buildScenario(
       MIDDLE,
       { ...roomy, availableCapital: cashNeeded + roomy.reserveTarget / 2 },
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
     const cannotAfford = buildScenario(
       MIDDLE,
       { ...roomy, availableCapital: cashNeeded - 10000 },
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
 
+    // A thin reserve warns, it does not block (D44); a purchase the money cannot cover does.
     expect(reserveOnly.cashLeft).toBeGreaterThan(0);
-    expect(reserveOnly.diagnosis.failed).toContain("reserve");
-    expect(reserveOnly.diagnosis.failed).not.toContain("cash");
+    expect(reserveOnly.diagnosis.warnings).toContain("reserve");
+    expect(reserveOnly.diagnosis.failed).toEqual([]);
+    expect(reserveOnly.feasible).toBe(true);
+    expect(reserveOnly.status).toBe("Reserve unter Ziel");
 
     expect(cannotAfford.cashLeft).toBeLessThan(0);
     expect(cannotAfford.diagnosis.failed).toContain("cash");
+    expect(cannotAfford.feasible).toBe(false);
   });
 
   it("measures the break-even against the target without Sondertilgung (D1)", () => {
-    const withoutSpecial = interestForPlan(HIGHEST, DEFAULT_INPUTS, DEFAULT_RATES, {
+    const withoutSpecial = interestForPlan(HIGHEST, DEFAULT_INPUTS, OFFER_RATES, {
       kind: "none",
     });
     const withPath = interestForPlan(
       HIGHEST,
       DEFAULT_INPUTS,
-      DEFAULT_RATES,
+      OFFER_RATES,
       { kind: "path", years: DEFAULT_INPUTS.annualSpecialRepayments },
     );
 
@@ -348,13 +527,13 @@ describe("calculation engine", () => {
       LOWEST,
       withoutSpecial,
       DEFAULT_INPUTS,
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
     const againstPath = requiredSpecialToMatch(
       LOWEST,
       withPath,
       DEFAULT_INPUTS,
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
 
     expect(againstBaseline.amount).not.toBeNull();
@@ -362,7 +541,7 @@ describe("calculation engine", () => {
   });
 
   it("nets mortgage interest saved against foregone ETF growth over one horizon", () => {
-    const scenarios = buildScenarios(EK_SCENARIOS, DEFAULT_INPUTS, DEFAULT_RATES);
+    const scenarios = buildScenarios(EK_SCENARIOS, DEFAULT_INPUTS, OFFER_RATES);
     const [least, ...rest] = scenarios;
     const most = rest[rest.length - 1];
     const tradeoff = compareEkScenarios(least, most, DEFAULT_INPUTS);
@@ -390,7 +569,7 @@ describe("calculation engine", () => {
     // The offer flat, 10% against 20% EK. Interest saved is tax-free for an owner-occupier;
     // ETF gains are not. Left untaxed, the comparison read "für mehr Liquidität".
     const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const scenarios = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    const scenarios = buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES);
     const taxed = compareEkScenarios(scenarios[0], scenarios[2], inputs);
     const untaxed = compareEkScenarios(scenarios[0], scenarios[2], { ...inputs, etfTaxRate: 0 });
 
@@ -419,8 +598,8 @@ describe("calculation engine", () => {
       etfReturnRate: 0,
       etfTaxRate: 0,
     };
-    const now = wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES });
-    const wait = wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES, waitMonths: 12 });
+    const now = wealthAtHorizon({ base: LOWEST, inputs, rates: OFFER_RATES });
+    const wait = wealthAtHorizon({ base: LOWEST, inputs, rates: OFFER_RATES, waitMonths: 12 });
 
     expect(now.propertyValue).toBeCloseTo(wait.propertyValue, 6);
     expect(wait.rentPaid).toBe(23640);
@@ -428,11 +607,11 @@ describe("calculation engine", () => {
     expect(Math.round(wait.wealth - now.wealth)).toBe(-8028);
 
     const invested = { ...inputs, etfReturnRate: 5, etfTaxRate: 18.4625 };
-    const nowInvested = wealthAtHorizon({ base: LOWEST, inputs: invested, rates: DEFAULT_RATES });
+    const nowInvested = wealthAtHorizon({ base: LOWEST, inputs: invested, rates: OFFER_RATES });
     const waitInvested = wealthAtHorizon({
       base: LOWEST,
       inputs: invested,
-      rates: DEFAULT_RATES,
+      rates: OFFER_RATES,
       waitMonths: 12,
     });
     expect(waitInvested.wealth).toBeGreaterThan(nowInvested.wealth);
@@ -444,7 +623,7 @@ describe("calculation engine", () => {
     // the same money in the ETF the verdict depends on the ETF assumption: 5% before
     // tax (≈4,2% after) beats a 3,87% loan, 2% does not.
     const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const effect = specialPlanEffect(LOWEST, inputs, DEFAULT_RATES);
+    const effect = specialPlanEffect(LOWEST, inputs, OFFER_RATES);
 
     expect(effect.horizonMonths).toBe(120);
     expect(effect.paid).toBeCloseTo(60000, 6);
@@ -452,7 +631,7 @@ describe("calculation engine", () => {
     expect(effect.debtReduction).toBeCloseTo(effect.paid + effect.interestSaved, 6);
     expect(effect.wealthDelta).toBeLessThan(0);
 
-    const cautious = specialPlanEffect(LOWEST, { ...inputs, etfReturnRate: 2 }, DEFAULT_RATES);
+    const cautious = specialPlanEffect(LOWEST, { ...inputs, etfReturnRate: 2 }, OFFER_RATES);
     expect(cautious.wealthDelta).toBeGreaterThan(0);
   });
 
@@ -460,7 +639,7 @@ describe("calculation engine", () => {
     // Offer flat, same Monatsrate, Anschlusszins 2 points above today's: the less
     // Eigenkapital, the more debt meets the new rate and the longer the loan runs.
     const offer = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const stresses = buildScenarios(EK_SCENARIOS, offer, DEFAULT_RATES).map((scenario) => ({
+    const stresses = buildScenarios(EK_SCENARIOS, offer, OFFER_RATES).map((scenario) => ({
       scenario,
       stress: refinanceStress(scenario, offer),
     }));
@@ -474,13 +653,13 @@ describe("calculation engine", () => {
 
     // Wohnung C at 10% EK: 1.900 € no longer even covers the interest on the Restschuld.
     const flatC = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[2]);
-    const tight = refinanceStress(buildScenario(LOWEST, flatC, DEFAULT_RATES), flatC);
+    const tight = refinanceStress(buildScenario(LOWEST, flatC, OFFER_RATES), flatC);
     expect(tight.coversInterest).toBe(false);
     expect(tight.runtimeYearsStressed).toBe(Infinity);
 
     // Repaid inside the binding: nothing to refinance, nothing to stress.
     const small = { ...offer, purchasePrice: 150000 };
-    const repaid = refinanceStress(buildScenario(LOWEST, small, DEFAULT_RATES), small);
+    const repaid = refinanceStress(buildScenario(LOWEST, small, OFFER_RATES), small);
     expect(repaid.applies).toBe(false);
     expect(repaid.extraYears).toBe(0);
   });
@@ -490,7 +669,7 @@ describe("calculation engine", () => {
     // drop to 3,76 on the whole loan. Against a 5% ETF (≈4,2% after tax) the first step
     // loses and the second wins, which a 10-vs-20 headline alone cannot show.
     const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const [ek10, ek15, ek20] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    const [ek10, ek15, ek20] = buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES);
     const first = ekStepReturn(ek10, ek15, inputs);
     const second = ekStepReturn(ek15, ek20, inputs);
     const span = ekStepReturn(ek10, ek20, inputs);
@@ -508,31 +687,32 @@ describe("calculation engine", () => {
     expect(ekStepReturn(ek15, ek10, inputs).annualReturn).toBeNull();
   });
 
-  it("flags a tragbar scenario that runs past the couple's own limit (D34)", () => {
-    // The offer flat runs 24,1 / 21,7 / 19,2 years. With a 20-year limit the first two
-    // are flagged and stay tragbar: the runtime assumes today's rate for the whole term,
-    // so it warns rather than fails.
-    const inputs = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 20 };
-    const [ek10, ek15, ek20] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
-
+  it("warns, never blocks, when the contract runs past the retirement deadline (D44)", () => {
+    // The offer flat at the offer's own rate runs about 30,1 years without Sondertilgung;
+    // the broker's Tilgungsplan says "30 Jahre 2 Monate".
+    const offer = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 26 };
+    const [ek10] = buildScenarios(EK_SCENARIOS, offer, OFFER_RATES);
+    expect(ek10.contractYearsFromSigning).toBeCloseTo(30.1, 1);
     expect(ek10.runsPastLimit).toBe(true);
+    expect(ek10.diagnosis.warnings).toContain("runtime");
     expect(ek10.feasible).toBe(true);
-    expect(ek10.status).toBe("Läuft zu lange");
+    expect(ek10.status).toBe("Läuft über die Grenze");
     expect(ek10.statusTone).toBe("amber");
-    expect(ek15.runsPastLimit).toBe(true);
-    expect(ek20.runsPastLimit).toBe(false);
-    // A failed constraint still names itself first.
-    expect(ek20.status).toBe("Reserve zu dünn");
+    // With the 6.000 €/Jahr plan it is repaid well inside the deadline: the figure some
+    // banks accept, and the one the warning puts next to the contract.
+    expect(ek10.debtFreeYearsFromSigning).toBeLessThan(26);
 
-    // The default limit leaves the offer flat unflagged at every level.
-    const defaults = buildScenarios(
-      EK_SCENARIOS,
-      buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
-      DEFAULT_RATES,
+    // Sondertilgung never changes the contract reading itself.
+    const generous = { ...offer, annualSpecialRepayments: offer.annualSpecialRepayments.map(() => 20000) };
+    expect(buildScenarios(EK_SCENARIOS, generous, OFFER_RATES)[0].contractYearsFromSigning).toBeCloseTo(
+      ek10.contractYearsFromSigning,
+      9,
     );
-    expect(defaults.every((scenario) => !scenario.runsPastLimit)).toBe(true);
-  });
 
+    // A Neubau's wait counts: the deadline is a date, measured from signing.
+    const late = buildScenarios(EK_SCENARIOS, { ...offer, moveInMonths: 12 }, OFFER_RATES)[0];
+    expect(late.contractYearsFromSigning).toBeCloseTo(ek10.contractYearsFromSigning + 1, 9);
+  });
   it("values a step of EK in the ledger when the loans are repaid inside the binding (K23)", () => {
     // A 150k flat at 1.900 €/Monat: every loan is gone after about five years, so the
     // Restschuld is zero on both sides. Read off the Restschuld, the step reported a
@@ -542,15 +722,15 @@ describe("calculation engine", () => {
       ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
       purchasePrice: 150000,
     };
-    const [ek10, , ek20] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    const [ek10, , ek20] = buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES);
     expect(ek10.mortgage.runtimeYears).toBeLessThan(inputs.fixedRateYears);
     expect(ek20.mortgage.runtimeYears).toBeLessThan(inputs.fixedRateYears);
 
     const step = ekStepReturn(ek10, ek20, inputs);
     const tradeoff = compareEkScenarios(ek10, ek20, inputs);
     const gap =
-      wealthAtHorizon({ base: HIGHEST, inputs, rates: DEFAULT_RATES }).wealth -
-      wealthAtHorizon({ base: LOWEST, inputs, rates: DEFAULT_RATES }).wealth;
+      wealthAtHorizon({ base: HIGHEST, inputs, rates: OFFER_RATES }).wealth -
+      wealthAtHorizon({ base: LOWEST, inputs, rates: OFFER_RATES }).wealth;
 
     expect(step.debtReduction).toBe(0);
     expect(step.annualReturn).toBeGreaterThan(3);
@@ -562,9 +742,9 @@ describe("calculation engine", () => {
   it("values a built scenario exactly as the ledger values the same purchase", () => {
     const inputs = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[1]);
     for (const base of EK_SCENARIOS) {
-      const built = buildScenario(base, inputs, DEFAULT_RATES);
+      const built = buildScenario(base, inputs, OFFER_RATES);
       expect(scenarioWealthAtHorizon(built, inputs).wealth).toBeCloseTo(
-        wealthAtHorizon({ base, inputs, rates: DEFAULT_RATES }).wealth,
+        wealthAtHorizon({ base, inputs, rates: OFFER_RATES }).wealth,
         6,
       );
     }
@@ -578,7 +758,7 @@ describe("calculation engine", () => {
       ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]),
       annualSpecialRepayments: Array(25).fill(15000),
     };
-    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const scenario = buildScenario(LOWEST, inputs, OFFER_RATES);
     const stress = refinanceStress(scenario, inputs);
     expect(stress.runtimeYearsAtSameRate).toBeCloseTo(scenario.mortgage.runtimeYears, 6);
     expect(stress.extraYears).toBeGreaterThan(0);
@@ -602,7 +782,7 @@ describe("calculation engine", () => {
   });
 
   it("builds buy-now and waiting periods side by side", () => {
-    const columns = buildWaitScenarios(MIDDLE, DEFAULT_INPUTS, DEFAULT_RATES, [0, 12, 24]);
+    const columns = buildWaitScenarios(MIDDLE, DEFAULT_INPUTS, OFFER_RATES, [0, 12, 24]);
 
     expect(columns).toHaveLength(3);
     expect(columns[0].waitMonths).toBe(0);
@@ -621,7 +801,7 @@ describe("calculation engine", () => {
       EK_SCENARIOS,
       LOWEST.id,
       DEFAULT_INPUTS,
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
 
     // The selected row is the reference, so it has no catch-up of its own.
@@ -639,21 +819,21 @@ describe("calculation engine", () => {
   it("names the side that has to pay to close the gap", () => {
     // From the lowest EK level, a higher one is cheaper even without Sondertilgung —
     // so it is OUR side that would have to pay to catch up.
-    const fromLowest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, DEFAULT_RATES);
+    const fromLowest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, OFFER_RATES);
     const higher = fromLowest.rows.find((row) => row.base.id === HIGHEST.id)!;
     expect(higher.deltaToSelection).toBeLessThan(0);
     expect(higher.catchUp!.payer).toBe("selection");
 
     // From the highest EK level with a plan running, the lower one is behind and it is
     // THAT row which would have to pay. The direction must actually flip.
-    const fromHighest = compareSpecialScenarios(EK_SCENARIOS, HIGHEST.id, DEFAULT_INPUTS, DEFAULT_RATES);
+    const fromHighest = compareSpecialScenarios(EK_SCENARIOS, HIGHEST.id, DEFAULT_INPUTS, OFFER_RATES);
     const lower = fromHighest.rows.find((row) => row.base.id === LOWEST.id)!;
     expect(lower.deltaToSelection).toBeGreaterThan(0);
     expect(lower.catchUp!.payer).toBe("row");
   });
 
   it("decides 'covered' on the modelled path, not on the plan's average (D22)", () => {
-    const fromLowest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, DEFAULT_RATES);
+    const fromLowest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, OFFER_RATES);
     const higher = fromLowest.rows.find((row) => row.base.id === HIGHEST.id)!;
     const catchUp = higher.catchUp!;
 
@@ -679,7 +859,7 @@ describe("calculation engine", () => {
       annualSpecialRepayments: Array.from({ length: 30 }, () => 20000),
       annualSpecialRepayment: 20000,
     };
-    const comparison = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, generous, DEFAULT_RATES);
+    const comparison = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, generous, OFFER_RATES);
     const higher = comparison.rows.find((row) => row.base.id === HIGHEST.id)!;
 
     // With the selection now cheaper than the untouched higher level, the payer flips to
@@ -691,7 +871,7 @@ describe("calculation engine", () => {
   });
 
   it("raises the required catch-up as the target gets cheaper", () => {
-    const modest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, DEFAULT_RATES);
+    const modest = compareSpecialScenarios(EK_SCENARIOS, LOWEST.id, DEFAULT_INPUTS, OFFER_RATES);
     const modestNeeded = modest.rows.find((row) => row.base.id === MIDDLE.id)!.catchUp!;
 
     // A higher EK level is a cheaper target still, so reaching it costs our side more.
@@ -707,23 +887,23 @@ describe("calculation engine", () => {
 
   it("resolves the Sollzins by EK level and Zinsbindung independently", () => {
     // Both axes matter: same EK level, different binding, different rate.
-    expect(rateFor(DEFAULT_RATES, 10, "ek10")).toBe(DEFAULT_RATES[10].ek10);
-    expect(rateFor(DEFAULT_RATES, 15, "ek10")).toBe(DEFAULT_RATES[15].ek10);
-    expect(rateFor(DEFAULT_RATES, 10, "ek10")).not.toBe(rateFor(DEFAULT_RATES, 15, "ek10"));
+    expect(rateFor(OFFER_RATES, 10, "ek10")).toBe(OFFER_RATES[10].ek10);
+    expect(rateFor(OFFER_RATES, 15, "ek10")).toBe(OFFER_RATES[15].ek10);
+    expect(rateFor(OFFER_RATES, 10, "ek10")).not.toBe(rateFor(OFFER_RATES, 15, "ek10"));
 
     // The offer prices 10% and 15% EK identically at a 15-year binding. The model must
     // carry that through rather than assuming more Eigenkapital is always cheaper.
-    expect(rateFor(DEFAULT_RATES, 15, "ek15")).toBe(rateFor(DEFAULT_RATES, 15, "ek10"));
+    expect(rateFor(OFFER_RATES, 15, "ek15")).toBe(rateFor(OFFER_RATES, 15, "ek10"));
 
     // An unsupported binding — e.g. a state saved when 20 years was still offered —
     // must land on a real column instead of producing undefined.
     expect(normaliseFixedPeriod(20)).toBe(15);
     expect(normaliseFixedPeriod(5)).toBe(10);
-    expect(rateFor(DEFAULT_RATES, 20, "ek20")).toBe(DEFAULT_RATES[15].ek20);
+    expect(rateFor(OFFER_RATES, 20, "ek20")).toBe(OFFER_RATES[15].ek20);
   });
 
   it("holds the monthly rate constant and lets Tilgung and runtime move (D14)", () => {
-    const scenarios = buildScenarios(EK_SCENARIOS, DEFAULT_INPUTS, DEFAULT_RATES);
+    const scenarios = buildScenarios(EK_SCENARIOS, DEFAULT_INPUTS, OFFER_RATES);
 
     for (const scenario of scenarios) {
       expect(scenario.mortgage.regularMonthlyPayment).toBeCloseTo(DEFAULT_INPUTS.monthlyPayment, 6);
@@ -741,7 +921,7 @@ describe("calculation engine", () => {
     const scenario = buildScenario(
       LOWEST,
       { ...DEFAULT_INPUTS, monthlyPayment: 200 },
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
 
     expect(scenario.diagnosis.failed).toContain("payment");
@@ -778,7 +958,7 @@ describe("calculation engine", () => {
 
   it("measures the payment shortfall against the 60-year bar, not the interest (K17)", () => {
     const loan = DEFAULT_INPUTS.purchasePrice * 0.9;
-    const interestOnly = (loan * DEFAULT_RATES[10].ek10) / 1200;
+    const interestOnly = (loan * OFFER_RATES[10].ek10) / 1200;
 
     // Just above the interest-only floor: the loan DOES amortise — in about 80 years.
     // Reporting the gap against the interest made it positive, and the UI printed that
@@ -788,7 +968,7 @@ describe("calculation engine", () => {
       monthlyPayment: Math.ceil(interestOnly) + 5,
       annualSpecialRepayments: [],
     };
-    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const scenario = buildScenario(LOWEST, inputs, OFFER_RATES);
     const check = scenario.diagnosis.checks.find((entry) => entry.id === "payment")!;
 
     expect(scenario.mortgage.runtimeYears).toBeGreaterThan(60);
@@ -802,7 +982,7 @@ describe("calculation engine", () => {
     const atTheBar = buildScenario(
       LOWEST,
       { ...inputs, monthlyPayment: Math.ceil(check.required) },
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
     expect(atTheBar.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(true);
   });
@@ -815,7 +995,7 @@ describe("calculation engine", () => {
       monthlyPayment: 1350,
       annualSpecialRepayments: Array.from({ length: 10 }, () => 2000),
     };
-    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const scenario = buildScenario(LOWEST, inputs, OFFER_RATES);
     const check = scenario.diagnosis.checks.find((entry) => entry.id === "payment")!;
 
     expect(check.passed).toBe(false);
@@ -828,12 +1008,12 @@ describe("calculation engine", () => {
     const atTheBar = buildScenario(
       LOWEST,
       { ...inputs, monthlyPayment: Math.ceil(check.required) },
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
     const justUnder = buildScenario(
       LOWEST,
       { ...inputs, monthlyPayment: Math.floor(check.required) - 1 },
-      DEFAULT_RATES,
+      OFFER_RATES,
     );
     expect(atTheBar.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(true);
     expect(justUnder.diagnosis.checks.find((entry) => entry.id === "payment")!.passed).toBe(false);
@@ -841,7 +1021,7 @@ describe("calculation engine", () => {
 
   it("flags a Monatsrate the model had to raise to simulate at all (K14)", () => {
     const inputs = { ...DEFAULT_INPUTS, monthlyPayment: 1200 };
-    const scenario = buildScenario(LOWEST, inputs, DEFAULT_RATES);
+    const scenario = buildScenario(LOWEST, inputs, OFFER_RATES);
 
     // 405.000 € at 3,87% costs about 1.306 €/Monat in interest alone, so 1.200 € can
     // never repay it. The Tilgungssatz floor means the model simulates a higher rate.
@@ -851,7 +1031,7 @@ describe("calculation engine", () => {
 
     // A rate that does amortise is simulated exactly as entered — no silent bump, and
     // therefore nothing for the UI to warn about.
-    const honest = buildScenario(LOWEST, DEFAULT_INPUTS, DEFAULT_RATES);
+    const honest = buildScenario(LOWEST, DEFAULT_INPUTS, OFFER_RATES);
     expect(honest.paymentSubstituted).toBe(false);
     expect(honest.mortgage.regularMonthlyPayment).toBeCloseTo(DEFAULT_INPUTS.monthlyPayment, 6);
 
@@ -863,7 +1043,7 @@ describe("calculation engine", () => {
     const boundary = buildScenario(LOWEST, {
       ...DEFAULT_INPUTS,
       monthlyPayment: minimumModelledPayment - 0.25,
-    }, DEFAULT_RATES);
+    }, OFFER_RATES);
     expect(boundary.mortgage.regularMonthlyPayment - boundary.diagnosis.checks[0].actual)
       .toBeCloseTo(0.25, 6);
     expect(boundary.paymentSubstituted).toBe(true);

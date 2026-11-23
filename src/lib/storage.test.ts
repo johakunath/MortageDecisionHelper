@@ -8,9 +8,18 @@ import {
   saveExists,
   saveNamed,
   storageAvailable,
+  upgradeShippedRates,
   writeBundleSaves,
 } from "./storage";
-import { DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
+import {
+  DEFAULT_INPUTS,
+  DEFAULT_RATES,
+  DEFAULT_RATES_NOTE,
+  EK_SCENARIOS,
+  OFFER_RATES,
+  OFFER_RATES_NOTE,
+  SHORTLIST_APARTMENT_CASES,
+} from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -244,5 +253,78 @@ describe("persistence", () => {
     const bundle = { ...buildBundle(defaultState()), saves: { gut: defaultState(), kaputt: { version: 2 } } };
     const parsed = parseBundle(JSON.stringify(bundle))!;
     expect(Object.keys(parsed.saves)).toEqual(["gut"]);
+  });
+
+  it("adds the Shortlist flats to older saves once, and keeps their global KNK (D40)", () => {
+    const state = defaultState();
+    const shortlistIds = SHORTLIST_APARTMENT_CASES.map((apartment) => apartment.id);
+    const stored = {
+      ...state,
+      inputs: { ...state.inputs, closingCostRate: 8 },
+      apartmentCases: state.apartmentCases
+        .filter((apartment) => !shortlistIds.includes(apartment.id))
+        .map(({ closingCostRate: _rate, ...rest }) => rest),
+    };
+    window.localStorage.setItem("mdh:save:pre-d40", JSON.stringify(stored));
+
+    const loaded = loadNamed("pre-d40")!;
+    expect(loaded.apartmentCases.map((apartment) => apartment.id)).toEqual([
+      "flat-a",
+      "flat-b",
+      "flat-c",
+      ...shortlistIds,
+    ]);
+    // The old global rate was what every stored apartment used.
+    expect(loaded.apartmentCases[0].closingCostRate).toBe(8);
+    expect(loaded.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!.closingCostRate).toBe(8);
+    expect(loaded.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!.closingCostRate).toBe(11.57);
+
+    // An edited Shortlist flat survives a round trip and is not added a second time.
+    const edited = {
+      ...loaded,
+      apartmentCases: loaded.apartmentCases.map((apartment) =>
+        apartment.id === "lindenstrasse-31g-we49" ? { ...apartment, purchasePrice: 505000 } : apartment,
+      ),
+    };
+    saveNamed("edited", edited);
+    const again = loadNamed("edited")!;
+    expect(again.apartmentCases).toHaveLength(5);
+    expect(again.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!.purchasePrice).toBe(505000);
+  });
+
+  it("moves an untouched offer grid to the current assumption, but never a chosen one (D41)", () => {
+    const offer = { ...defaultState(), rates: OFFER_RATES, ratesNote: OFFER_RATES_NOTE };
+    expect(upgradeShippedRates(offer).rates).toEqual(DEFAULT_RATES);
+    expect(upgradeShippedRates(offer).ratesNote).toBe(DEFAULT_RATES_NOTE);
+
+    // Their own note means they chose these rates.
+    const chosen = { ...offer, ratesNote: "Angebot Baudarlehen24 nochmal geprüft" };
+    expect(upgradeShippedRates(chosen)).toBe(chosen);
+
+    // One edited rate means it is no longer the shipped grid.
+    const edited = { ...offer, rates: { ...OFFER_RATES, 10: { ...OFFER_RATES[10], ek10: 3.9 } } };
+    expect(upgradeShippedRates(edited)).toBe(edited);
+
+    // Named saves are not upgraded: one may hold the offer on purpose.
+    saveNamed("Angebot August", offer);
+    expect(loadNamed("Angebot August")!.rates).toEqual(OFFER_RATES);
+  });
+
+  it("never borrows KfW, handover delay or parking from another flat (D42)", () => {
+    const state = defaultState();
+    const strip = ({ kfwAmount: _k, kfwRate: _r, moveInMonths: _m, parkingPrice: _p, ...rest }: (typeof state.apartmentCases)[number]) => rest;
+    const own = { ...strip(state.apartmentCases[0]), id: "flat-own", label: "Eigene" };
+    const stored = {
+      ...state,
+      // A flat of their own at index 4, where BUWOG sits in the defaults, and BUWOG
+      // stored before these fields existed.
+      apartmentCases: [...state.apartmentCases.slice(0, 3).map(strip), strip(state.apartmentCases[3]), own, strip(state.apartmentCases[4])],
+    };
+    window.localStorage.setItem("mdh:save:pre-d42", JSON.stringify(stored));
+
+    const loaded = loadNamed("pre-d42")!;
+    const byId = (id: string) => loaded.apartmentCases.find((a) => a.id === id)!;
+    expect(byId("flat-own")).toMatchObject({ kfwAmount: 0, kfwRate: 0, moveInMonths: 0, parkingPrice: 0 });
+    expect(byId("buwog-arbor-h2-we08")).toMatchObject({ kfwAmount: 170000, kfwRate: 1.3, moveInMonths: 19, parkingPrice: 30000 });
   });
 });

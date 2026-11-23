@@ -29,6 +29,11 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   monthlyPayment: 1900,
   // 10 Jahre: die kürzere der beiden angebotenen Bindungen und die günstigere.
   fixedRateYears: 10,
+  // Gehören der Wohnung (D42); global nur für die QA-Presets ohne Wohnung.
+  kfwAmount: 0,
+  kfwRate: 0,
+  kfwTermYears: 20,
+  moveInMonths: 0,
   annualSpecialRepayment: 6000,
   annualSpecialRepayments: [6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000],
   specialRepaymentLimitRate: 5,
@@ -44,21 +49,35 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   etfTaxRate: 18.4625,
   // Stresstest, keine Prognose: 2 Prozentpunkte über dem heutigen Sollzins.
   refiStressShift: 2,
-  // Persönliche Grenze: schuldenfrei bis zum Renteneintritt des Älteren. Im Feld änderbar.
+  // Bankbedingung: schuldenfrei bis zur Rente mit 67 (Jahrgang 1985, also 2052), gezählt
+  // ab Unterschrift Ende 2026, ohne Sondertilgung (D43). Im Feld änderbar.
   maxRuntimeYears: 26,
 };
 
 /**
  * Sollzinsen aus dem Finanzierungsangebot vom 07.08.2026, Varianten 1A–3B
- * (90% / 85% / 80% Finanzierung × 10 / 15 Jahre Zinsbindung).
+ * (90% / 85% / 80% Finanzierung × 10 / 15 Jahre Zinsbindung). Nicht mehr die
+ * Voreinstellung, aber der Satz, gegen den `offer.test.ts` die Engine prüft, und der
+ * Satz, an dem `storage.ts` unveränderte alte Stände erkennt.
  *
  * Sie fallen über die EK-Stufen NICHT gleichmäßig: 15% EK kauft gegenüber 10% fast
  * nichts, bei 15 Jahren Bindung exakt nichts. Der Sprung kommt erst bei 80%
  * Beleihung. Nichts im Modell darf Monotonie unterstellen.
  */
-export const DEFAULT_RATES: InterestRates = {
+export const OFFER_RATES: InterestRates = {
   10: { ek10: 3.87, ek15: 3.86, ek20: 3.76 },
   15: { ek10: 4.06, ek15: 4.06, ek20: 3.96 },
+};
+
+export const OFFER_RATES_NOTE = "Finanzierungsangebot vom 07.08.2026 (Varianten 1A–3B)";
+
+/**
+ * Annahme der Eigentümer vom 22.11.2026, bis die neuen Bankangebote da sind (D41):
+ * 10 Jahre 4,3 / 4,2 / 4,0 %. 15 Jahre kosten laut den Eigentümern je 0,2 Punkte mehr.
+ */
+export const DEFAULT_RATES: InterestRates = {
+  10: { ek10: 4.3, ek15: 4.2, ek20: 4.0 },
+  15: { ek10: 4.5, ek15: 4.4, ek20: 4.2 },
 };
 
 /**
@@ -66,12 +85,81 @@ export const DEFAULT_RATES: InterestRates = {
  * without a date reads as current when it may be months old. Free text rather than a
  * date field because one grid can mix quotes from several sources and days (D36).
  */
-export const DEFAULT_RATES_NOTE = "Finanzierungsangebot vom 07.08.2026 (Varianten 1A–3B)";
+export const DEFAULT_RATES_NOTE =
+  "Annahme vom 22.11.2026, noch kein Angebot: 10 J. 4,3 / 4,2 / 4,0 % · 15 J. je +0,2 Pkt.";
 
 export const EK_SCENARIOS: ScenarioBase[] = [
   { id: "ek10", ekRate: 10, label: "10% EK" },
   { id: "ek15", ekRate: 15, label: "15% EK" },
   { id: "ek20", ekRate: 20, label: "20% EK" },
+];
+
+/**
+ * The two flats marked "Vergleichen? Ja" in the couple's Shortlist Sheet (Stand
+ * 22.11.2026). Prices include the parking space and Kaufnebenkosten are computed on
+ * that total, exactly as the Sheet's own formulas do; "Renovierung" is the 12k kitchen
+ * both lack. Stable ids, so `storage.ts` can add them to saves made before they existed
+ * without ever adding them twice (D40).
+ */
+export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
+  {
+    id: "lindenstrasse-31g-we49",
+    label: "Lindenstraße 31G",
+    // 495.000 € Wohnung + 25.000 € TG-Stellplatz.
+    purchasePrice: 520000,
+    renovation: 12000,
+    // Laut Exposé; Makler: wegen WEG-Investitionen ca. zwei Jahre erhöht.
+    hausgeld: 630,
+    closingCostRate: 11.57,
+    // Geschätzt, kein Angebot: die kleinste Rate, mit der 468.000 € bei 4,3 % ohne
+    // Sondertilgung in 26 Jahren getilgt sind (Bankbedingung: bis zur Rente, D43).
+    // Nötig 2.494 €, aufgerundet; ≈ 2,1 % Anfangstilgung.
+    monthlyPayment: 2500,
+    kfwAmount: 0,
+    kfwRate: 0,
+    kfwTermYears: 20,
+    moveInMonths: 0,
+    parkingPrice: 25000,
+    annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
+    note:
+      "Lindenstraße 31G, Haus 3 / WE49, 93,6 m², 4. OG rechts, Bj. 1998, Energie D. " +
+      "Kaufpreis = 495.000 € + 25.000 € TG. Mit Makler (3,57 %). Renovierung = Einbauküche 12k " +
+      "(Küchenöffnung 7–8k nicht enthalten). Hausgeld 630 € laut Exposé, evtl. später niedriger. " +
+      "Quelle: Shortlist-Sheet, Stand 23.11.2026.",
+  },
+  {
+    id: "buwog-arbor-h2-we08",
+    label: "BUWOG Arbor WE08",
+    // 625.100 € Aktionspreis (bis Beurkundung 30.11.2026) + 30.000 € Stellplatz.
+    purchasePrice: 655100,
+    renovation: 12000,
+    // BUWOG-Schätzung 3,50 €/m², kein finaler Wirtschaftsplan.
+    hausgeld: 331,
+    // Provisionsfrei: 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch.
+    closingCostRate: 8,
+    // Geschätzt, kein Angebot: höchstens 40 % vom Haushaltsnetto mit Hausgeld (2.980 €
+    // läge 1 € darüber). Bank 4,3 % und KfW 300 als zwei Darlehen (D44): die KfW-Rate
+    // über 20 Jahre nimmt davon ≈ 842 €. Ohne Sondertilgung läuft das bis ≈ 2056, über
+    // die Rente hinaus; mit 6.000 €/Jahr bis ≈ 2051. Pünktlich ohne Sondertilgung
+    // bräuchte ≈ 3.160 €, über 40 %. Siehe D44.
+    monthlyPayment: 2976,
+    // KfW 300 bis 170.000 € bei zwei Kindern, Zins laut Sheet angenommen, keine Zusage.
+    kfwAmount: 170000,
+    kfwRate: 1.3,
+    // Laut Interhyp (20.05.2026) wählbar, im Gespräch 20 Jahre; 30 Jahre ginge, endete
+    // aber 2058, nach der Rente. Inkl. 1 tilgungsfreiem Jahr.
+    kfwTermYears: 20,
+    // Unterschrift Dezember 2026, Übergabe vsl. Juni 2028.
+    moveInMonths: 19,
+    parkingPrice: 30000,
+    annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
+    note:
+      "An der Filmfabrik 9, Haus 2 WE08, 94,6 m², 2. OG Nordost, Neubau EH40, Bezug vsl. Juni 2028. " +
+      "Kaufpreis = 625.100 € Aktionspreis (bis 30.11.2026) + 30.000 € Stellplatz. Provisionsfrei. " +
+      "Renovierung = Einbauküche 12k. Hausgeld 331 € nur BUWOG-Schätzung. KfW 300 170k zu 1,3 % " +
+      "angenommen (keine Zusage; 1 tilgungsfreies Jahr, keine Sondertilgung auf KfW). Einzug in 19 Monaten: " +
+      "Zinsbindung läuft ab Unterschrift, Tilgung erst ab Übergabe. Bauzeitzinsen nur geschätzt. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
+  },
 ];
 
 /**
@@ -88,6 +176,13 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 450000,
     renovation: 0,
     hausgeld: 550,
+    closingCostRate: DEFAULT_INPUTS.closingCostRate,
+    monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
+    kfwAmount: 0,
+    kfwRate: 0,
+    kfwTermYears: 20,
+    moveInMonths: 0,
+    parkingPrice: 0,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -96,6 +191,13 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 500000,
     renovation: 10000,
     hausgeld: 600,
+    closingCostRate: DEFAULT_INPUTS.closingCostRate,
+    monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
+    kfwAmount: 0,
+    kfwRate: 0,
+    kfwTermYears: 20,
+    moveInMonths: 0,
+    parkingPrice: 0,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -104,8 +206,19 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     purchasePrice: 600000,
     renovation: 5000,
     hausgeld: 670,
+    closingCostRate: DEFAULT_INPUTS.closingCostRate,
+    monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
+    kfwAmount: 0,
+    kfwRate: 0,
+    kfwTermYears: 20,
+    moveInMonths: 0,
+    parkingPrice: 0,
     annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
   },
+  ...SHORTLIST_APARTMENT_CASES.map((apartment) => ({
+    ...apartment,
+    annualSpecialRepayments: [...apartment.annualSpecialRepayments],
+  })),
 ];
 
 export type PresetId = "case600" | "case720" | "case850";
@@ -137,6 +250,10 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9000,
       monthlyPayment: 2400,
       fixedRateYears: 10,
+      kfwAmount: 0,
+      kfwRate: 0,
+      kfwTermYears: 20,
+      moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
       maxRuntimeYears: 35,
@@ -157,6 +274,10 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       householdNetIncome: 9600,
       monthlyPayment: 2900,
       fixedRateYears: 10,
+      kfwAmount: 0,
+      kfwRate: 0,
+      kfwTermYears: 20,
+      moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
       maxRuntimeYears: 35,
@@ -180,6 +301,10 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       // Reserve und Belastung reißen und trotzdem niemand zum Sieger erklärt wird.
       monthlyPayment: 3400,
       fixedRateYears: 10,
+      kfwAmount: 0,
+      kfwRate: 0,
+      kfwTermYears: 20,
+      moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
       maxRuntimeYears: 35,
@@ -201,6 +326,7 @@ export const SECTIONS = [
   { id: "progress", number: 4, label: "Verlauf" },
   { id: "special", number: 5, label: "Sondertilgung" },
   { id: "wait", number: 6, label: "Warten" },
+  { id: "compare", number: 7, label: "Wohnungen vergleichen" },
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];

@@ -6,6 +6,7 @@ exports[`golden master > QA preset case600 1`] = `
     "failedInAll": [],
     "feasible": [
       "ek10",
+      "ek15",
     ],
     "noSafeScenario": false,
   },
@@ -23,13 +24,13 @@ exports[`golden master > QA preset case600 1`] = `
     },
     "ek15": {
       "cashLeft": 7000,
-      "feasible": false,
+      "feasible": true,
       "interestFixed": 165185,
       "interestTotal": 269334,
       "loan": 510000,
       "remainingAfterFixed": 327185,
       "runtimeYears": 25,
-      "status": "Reserve zu dünn",
+      "status": "Reserve unter Ziel",
       "stressExtraYears": 3.75,
     },
     "ek20": {
@@ -250,7 +251,6 @@ exports[`golden master > QA preset case850 1`] = `
   "decision": {
     "failedInAll": [
       "cash",
-      "reserve",
       "burden",
     ],
     "feasible": [],
@@ -376,6 +376,7 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
     "feasible": [
       "ek10",
       "ek15",
+      "ek20",
     ],
     "noSafeScenario": false,
   },
@@ -388,7 +389,7 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
       "loan": 405000,
       "remainingAfterFixed": 246314,
       "runtimeYears": 24.08,
-      "status": "Tragbar",
+      "status": "Läuft über die Grenze",
       "stressExtraYears": 3.17,
     },
     "ek15": {
@@ -399,18 +400,18 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
       "loan": 382500,
       "remainingAfterFixed": 212822,
       "runtimeYears": 21.67,
-      "status": "Gerade so tragbar",
+      "status": "Läuft über die Grenze",
       "stressExtraYears": 1.92,
     },
     "ek20": {
       "cashLeft": 2935,
-      "feasible": false,
+      "feasible": true,
       "interestFixed": 104294,
       "interestTotal": 136631,
       "loan": 360000,
       "remainingAfterFixed": 176294,
       "runtimeYears": 19.17,
-      "status": "Reserve zu dünn",
+      "status": "Reserve unter Ziel",
       "stressExtraYears": 1.17,
     },
   },
@@ -492,12 +493,257 @@ exports[`golden master > default apartment Angebot 450k 1`] = `
 }
 `;
 
+exports[`golden master > default apartment BUWOG Arbor WE08 1`] = `
+{
+  "decision": {
+    "failedInAll": [],
+    "feasible": [
+      "ek10",
+    ],
+    "noSafeScenario": false,
+  },
+  "scenarios": {
+    "ek10": {
+      "cashLeft": 15082,
+      "feasible": true,
+      "interestFixed": 130144,
+      "interestTotal": 209184,
+      "loan": 589590,
+      "remainingAfterFixed": 379051,
+      "runtimeYears": 21.33,
+      "status": "Reserve unter Ziel",
+      "stressExtraYears": 2.5,
+    },
+    "ek15": {
+      "cashLeft": -17673,
+      "feasible": false,
+      "interestFixed": 117242,
+      "interestTotal": 170617,
+      "loan": 556835,
+      "remainingAfterFixed": 333393,
+      "runtimeYears": 20,
+      "status": "Geld reicht nicht",
+      "stressExtraYears": 1.75,
+    },
+    "ek20": {
+      "cashLeft": -50428,
+      "feasible": false,
+      "interestFixed": 101939,
+      "interestTotal": 135168,
+      "loan": 524080,
+      "remainingAfterFixed": 285336,
+      "runtimeYears": 20,
+      "status": "Geld reicht nicht",
+      "stressExtraYears": 1.75,
+    },
+  },
+  "special": {
+    "catchUp": [
+      {
+        "amount": null,
+        "id": "ek10",
+        "payer": null,
+        "planCovers": null,
+      },
+      {
+        "amount": 772,
+        "id": "ek15",
+        "payer": "row",
+        "planCovers": true,
+      },
+      {
+        "amount": 9818,
+        "id": "ek20",
+        "payer": "selection",
+        "planCovers": false,
+      },
+    ],
+    "effectInBinding": {
+      "debtReduction": 56061,
+      "paid": 48000,
+      "wealthDelta": -477,
+    },
+    "planSaving": -61716,
+  },
+  "tradeoff": {
+    "etfForegone": 27124,
+    "extraCashRequired": 65510,
+    "interestSavedFixed": 28205,
+    "netAdvantageFixed": 1081,
+  },
+  "wait": [
+    {
+      "cashLeftAfterPurchase": 15082,
+      "deltaWealth": 0,
+      "months": 0,
+    },
+    {
+      "cashLeftAfterPurchase": 38383,
+      "deltaWealth": 317,
+      "months": 12,
+    },
+    {
+      "cashLeftAfterPurchase": 62919,
+      "deltaWealth": -9599,
+      "months": 24,
+    },
+  ],
+  "waitWealthDelta": [
+    {
+      "delta": 317,
+      "months": 12,
+    },
+    {
+      "delta": -9599,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": -15523,
+      "wealth": 379340,
+    },
+    "ek15": {
+      "liquidAfterTax": -61840,
+      "wealth": 378680,
+    },
+    "ek20": {
+      "liquidAfterTax": -108157,
+      "wealth": 380420,
+    },
+  },
+}
+`;
+
+exports[`golden master > default apartment Lindenstraße 31G 1`] = `
+{
+  "decision": {
+    "failedInAll": [],
+    "feasible": [
+      "ek10",
+    ],
+    "noSafeScenario": false,
+  },
+  "scenarios": {
+    "ek10": {
+      "cashLeft": 20836,
+      "feasible": true,
+      "interestFixed": 143281,
+      "interestTotal": 196201,
+      "loan": 468000,
+      "remainingAfterFixed": 251281,
+      "runtimeYears": 20.17,
+      "status": "Gerade so tragbar",
+      "stressExtraYears": 1.42,
+    },
+    "ek15": {
+      "cashLeft": -5164,
+      "feasible": false,
+      "interestFixed": 130597,
+      "interestTotal": 166773,
+      "loan": 442000,
+      "remainingAfterFixed": 212597,
+      "runtimeYears": 18.33,
+      "status": "Geld reicht nicht",
+      "stressExtraYears": 0.92,
+    },
+    "ek20": {
+      "cashLeft": -31164,
+      "feasible": false,
+      "interestFixed": 114566,
+      "interestTotal": 136200,
+      "loan": 416000,
+      "remainingAfterFixed": 170566,
+      "runtimeYears": 16.42,
+      "status": "Geld reicht nicht",
+      "stressExtraYears": 0.5,
+    },
+  },
+  "special": {
+    "catchUp": [
+      {
+        "amount": null,
+        "id": "ek10",
+        "payer": null,
+        "planCovers": null,
+      },
+      {
+        "amount": 1521,
+        "id": "ek15",
+        "payer": "row",
+        "planCovers": true,
+      },
+      {
+        "amount": 7889,
+        "id": "ek20",
+        "payer": "selection",
+        "planCovers": false,
+      },
+    ],
+    "effectInBinding": {
+      "debtReduction": 71834,
+      "paid": 60000,
+      "wealthDelta": -777,
+    },
+    "planSaving": -54502,
+  },
+  "tradeoff": {
+    "etfForegone": 26665,
+    "extraCashRequired": 52000,
+    "interestSavedFixed": 28715,
+    "netAdvantageFixed": 2050,
+  },
+  "wait": [
+    {
+      "cashLeftAfterPurchase": 20836,
+      "deltaWealth": 0,
+      "months": 0,
+    },
+    {
+      "cashLeftAfterPurchase": 44252,
+      "deltaWealth": 9233,
+      "months": 12,
+    },
+    {
+      "cashLeftAfterPurchase": 68905,
+      "deltaWealth": 5057,
+      "months": 24,
+    },
+  ],
+  "waitWealthDelta": [
+    {
+      "delta": 9233,
+      "months": 12,
+    },
+    {
+      "delta": 5057,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": -4087,
+      "wealth": 378510,
+    },
+    "ek15": {
+      "liquidAfterTax": -43419,
+      "wealth": 377861,
+    },
+    "ek20": {
+      "liquidAfterTax": -82751,
+      "wealth": 380560,
+    },
+  },
+}
+`;
+
 exports[`golden master > default apartment Wohnung B 1`] = `
 {
   "decision": {
     "failedInAll": [],
     "feasible": [
       "ek10",
+      "ek15",
     ],
     "noSafeScenario": false,
   },
@@ -510,18 +756,18 @@ exports[`golden master > default apartment Wohnung B 1`] = `
       "loan": 450000,
       "remainingAfterFixed": 312538,
       "runtimeYears": 29.58,
-      "status": "Läuft zu lange",
+      "status": "Läuft über die Grenze",
       "stressExtraYears": 8.33,
     },
     "ek15": {
       "cashLeft": 2150,
-      "feasible": false,
+      "feasible": true,
       "interestFixed": 138305,
       "interestTotal": 234256,
       "loan": 425000,
       "remainingAfterFixed": 275305,
       "runtimeYears": 26.33,
-      "status": "Reserve zu dünn",
+      "status": "Reserve unter Ziel",
       "stressExtraYears": 4.75,
     },
     "ek20": {
@@ -617,22 +863,22 @@ exports[`golden master > default apartment Wohnung B 1`] = `
 exports[`golden master > default apartment Wohnung C 1`] = `
 {
   "decision": {
-    "failedInAll": [
-      "reserve",
+    "failedInAll": [],
+    "feasible": [
+      "ek10",
     ],
-    "feasible": [],
-    "noSafeScenario": true,
+    "noSafeScenario": false,
   },
   "scenarios": {
     "ek10": {
       "cashLeft": 10580,
-      "feasible": false,
+      "feasible": true,
       "interestFixed": 196843,
       "interestTotal": 635469,
       "loan": 540000,
       "remainingAfterFixed": 460843,
       "runtimeYears": 49.5,
-      "status": "Reserve zu dünn",
+      "status": "Reserve unter Ziel",
       "stressExtraYears": "never",
     },
     "ek15": {

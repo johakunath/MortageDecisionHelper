@@ -156,7 +156,7 @@ export default function SondertilgungPanel({
   }
 
   const otherRows = comparison.rows.filter((row) => !row.isSelected);
-  const years = formatNumber(planEffect.horizonMonths / 12, 0);
+  const years = formatNumber(planEffect.horizonMonths / 12, 1);
   const groups: BarGroup[] = comparison.rows.map((row) => ({
     id: row.base.id,
     label: row.base.label,

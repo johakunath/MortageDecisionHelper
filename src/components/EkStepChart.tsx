@@ -1,5 +1,5 @@
-import { afterTaxAnnualReturn, ekStepReturn, type MortgageInputs, type ScenarioResult } from "../lib/calculations";
-import { formatPct } from "../lib/format";
+import { afterTaxAnnualReturn, bindingYears, ekStepReturn, type MortgageInputs, type ScenarioResult } from "../lib/calculations";
+import { formatNumber, formatPct } from "../lib/format";
 
 type EkStepChartProps = {
   scenarios: ScenarioResult[];
@@ -35,7 +35,7 @@ export default function EkStepChart({ scenarios, inputs }: EkStepChartProps) {
 
   if (steps.length === 0) return null;
 
-  const etfNet = afterTaxAnnualReturn(inputs.etfReturnRate, inputs.etfTaxRate, inputs.fixedRateYears);
+  const etfNet = afterTaxAnnualReturn(inputs.etfReturnRate, inputs.etfTaxRate, bindingYears(inputs));
   const values = [...steps.map((entry) => entry.step.annualReturn as number), etfNet];
   const lo = Math.min(0, Math.floor(Math.min(...values)));
   const hi = Math.max(1, Math.ceil(Math.max(...values) + 0.5));
@@ -46,7 +46,7 @@ export default function EkStepChart({ scenarios, inputs }: EkStepChartProps) {
   const ticks = Array.from({ length: hi - lo + 1 }, (_, index) => lo + index);
   const etfX = x(etfNet);
 
-  const caption = `Rendite je EK-Stufe in ${inputs.fixedRateYears} Jahren, steuerfrei, gegen den ETF nach Steuer (${formatPct(etfNet)} p.a.)`;
+  const caption = `Rendite je EK-Stufe in ${formatNumber(bindingYears(inputs))} Jahren, steuerfrei, gegen den ETF nach Steuer (${formatPct(etfNet)} p.a.)`;
 
   return (
     <figure className="chart-figure ek-step-chart">

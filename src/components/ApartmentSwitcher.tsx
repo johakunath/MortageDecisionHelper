@@ -3,7 +3,17 @@ import { formatEur } from "../lib/format";
 import { GLOSSARY } from "../lib/glossary";
 import { Button, InputField, StatusPill } from "./ui";
 
-type ApartmentEditableKey = "label" | "note" | "purchasePrice" | "renovation" | "hausgeld";
+type ApartmentEditableKey =
+  | "label"
+  | "note"
+  | "purchasePrice"
+  | "renovation"
+  | "hausgeld"
+  | "parkingPrice"
+  | "kfwAmount"
+  | "kfwRate"
+  | "kfwTermYears"
+  | "moveInMonths";
 
 type ApartmentSwitcherProps = {
   results: ApartmentComparisonResult[];
@@ -55,9 +65,15 @@ export default function ApartmentSwitcher({
           >
             <span className="apartment-chip-label">{result.apartment.label}</span>
             <span className="apartment-chip-price">{formatEur(result.apartment.purchasePrice)}</span>
-            <StatusPill tone={result.decision.noSafeScenario ? "red" : "green"}>
-              {result.decision.noSafeScenario ? "nicht tragbar" : "tragbar"}
-            </StatusPill>
+            {/* At the EK level on screen: tragbar with a reserve or deadline warning reads
+                amber, so a green chip never hides one (D44). */}
+            {result.decision.noSafeScenario ? (
+              <StatusPill tone="red">nicht tragbar</StatusPill>
+            ) : result.selectedScenario.feasible && result.selectedScenario.diagnosis.warnings.length > 0 ? (
+              <StatusPill tone="amber">tragbar, mit Hinweis</StatusPill>
+            ) : (
+              <StatusPill tone="green">tragbar</StatusPill>
+            )}
           </button>
         ))}
         <Button variant="action" onClick={onAdd}>+ Neue Wohnung</Button>
@@ -104,6 +120,14 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
           highlight
         />
         <InputField
+          label="davon Stellplatz"
+          value={apartment.parkingPrice}
+          min={0}
+          onChange={(value) => onChange({ parkingPrice: Math.max(0, value) })}
+          info={GLOSSARY.parkingPrice}
+          hint="steckt im Kaufpreis · 0 = keiner"
+        />
+        <InputField
           label="Renovierung"
           value={apartment.renovation}
           onChange={(value) => onChange({ renovation: value })}
@@ -119,6 +143,43 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
           onChange={(value) => onChange({ hausgeld: value })}
           info={GLOSSARY.hausgeld}
           hint={`+ ${formatEur(ownerExtraMonthly)} Grundsteuer und eigene Rücklage = ${formatEur(apartment.hausgeld + ownerExtraMonthly)} im Monat`}
+        />
+        <InputField
+          label="KfW-Darlehen"
+          value={apartment.kfwAmount}
+          min={0}
+          onChange={(value) => onChange({ kfwAmount: Math.max(0, value) })}
+          info={GLOSSARY.kfwAmount}
+          hint="0 = keins"
+        />
+        <InputField
+          label="KfW-Zins"
+          value={apartment.kfwRate}
+          suffix="%"
+          step={0.05}
+          min={0}
+          onChange={(value) => onChange({ kfwRate: Math.max(0, value) })}
+          info={GLOSSARY.kfwRate}
+        />
+        <InputField
+          label="KfW-Laufzeit"
+          value={apartment.kfwTermYears}
+          suffix="Jahre"
+          step={1}
+          min={2}
+          onChange={(value) => onChange({ kfwTermYears: Math.max(2, Math.round(value)) })}
+          info={GLOSSARY.kfwTermYears}
+          hint="inkl. 1 tilgungsfreiem Jahr"
+        />
+        <InputField
+          label="Monate bis Einzug"
+          value={apartment.moveInMonths}
+          suffix="Monate"
+          step={1}
+          min={0}
+          onChange={(value) => onChange({ moveInMonths: Math.max(0, Math.round(value)) })}
+          info={GLOSSARY.moveInMonths}
+          hint="0 = sofort · Neubau: bis zur Übergabe"
         />
       </div>
     </details>

@@ -529,7 +529,7 @@ Every status now names *what is wrong* rather than which internal constraint fai
 
 ## D34: A tragbar scenario that runs past the couple's own limit is flagged, not failed
 
-**Date:** 2026-10-08 · **Status:** accepted
+**Date:** 2026-10-08 · **Status:** superseded by [D43](#d43-repaid-by-retirement-is-a-bank-condition-not-a-warning)
 
 **Context.** Feasibility only failed a loan that would not be repaid inside 60 years. Wohnung C at 10% EK ran 49,5 years at 1.900 €/Monat with no warning. The owners gave their birth years; the older partner reaches the statutory retirement age of 67 about 26 years after a 2026 purchase.
 
@@ -606,3 +606,77 @@ A database service (Supabase, Firebase) was rejected: a new dependency, an accou
 **Decision.** Two fixed-height buttons at the header's right edge: **Laden** (download icon) and **Speichern** (floppy icon). Speichern shows "● neu" when the screen or a named save differs from what was last loaded or saved, compared through a key-order-independent serialisation. Confirmations, conflicts and messages open in `SyncPopover`, rendered next to the header, because the header's clip-path would cut it and its growth would break `--header-height`. Unconnected, the header shows one "Sheet verbinden" button that opens the settings in §2. The token field gains an eye toggle, also once connected, so it can be read off and typed on the other device.
 
 **Consequence.** Header still measures 50px at 1280 / 1000 / 820 / 560px and on an iPhone 13 (390px), with no horizontal scroll. Below 880px the buttons drop their words (the icons carry aria-labels); below 620px the topbar leaves its centred grid so the apartment name keeps its width; below 440px the brand dot goes.
+
+---
+
+## D40: Kaufnebenkosten and Monatsrate move onto the apartment; the two Shortlist flats ship as defaults
+
+**Date:** 2026-11-22 · **Status:** accepted · **Refines** [D3](#d3--apartments-are-a-context-switcher-plus-a-read-only-comparison-table), [D12](#d12--kaufnebenkosten-two-presets-and-1157-as-default)
+
+**Context.** The owner wanted the two flats marked "Vergleichen? Ja" in their Shortlist Sheet (Lindenstraße 31G, BUWOG Arbor H2 WE08) selectable without retyping. Two inputs were global and could not hold both: the Lindenstraße flat carries 3,57% Käuferprovision (11,57% KNK), BUWOG sells directly (8%), a 23.400 € difference on 655.100 €; and the one Monatsrate of 1.900 € was sized for the 405k offer loan and does not cover the interest on BUWOG's 590k loan, so BUWOG would have read "nicht tragbar" by construction.
+
+**Decision.** `ApartmentCase` gains `closingCostRate` and `monthlyPayment`; `buildApartmentInputs` takes both from the apartment. The controls stay where they were in §2 but write to the active apartment, and their hints say "gilt nur für die gewählte Wohnung". Older saves revive each apartment with the global value they used, so no stored figure moves. The two flats are appended to the defaults with stable ids, and `reviveState` appends them to any autosave, named save or Sheet state that lacks them, matched by id, so an edited copy is never overwritten or duplicated.
+
+Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000 € = 495.000 + 25.000 TG; 655.100 € = 625.100 Aktionspreis + 30.000 Stellplatz), renovation is the 12.000 € kitchen both lack, Hausgeld 630 € (Exposé) and 331 € (BUWOG estimate). Monatsraten are estimates ([ASSUMPTIONS §4.17](ASSUMPTIONS.md)).
+
+**Consequence.** The golden snapshots for the three existing apartments are unchanged; two new ones pin the Shortlist flats. KfW 300, Bereitstellungszinsen and rent until BUWOG's 2028 handover remain outside the model.
+
+
+---
+
+## D41: Default Sollzinsen move to the owners' current assumption; the August offer stays pinned
+
+**Date:** 2026-11-22 · **Status:** accepted · **Refines** [D36](#d36-the-sollzinsen-carry-their-stand-und-quelle-apartments-can-be-named)
+
+**Context.** Rates had risen since the offer of 07.08.2026. Until new quotes arrive, the owners assume 4,3 / 4,2 / 4,0 % for 10 Jahre at 10 / 15 / 20 % EK.
+
+**Decision.** `DEFAULT_RATES` becomes that grid; the 15-year column is an estimate, +0,2 points as in the August offer. The offer's grid stays as `OFFER_RATES`: the golden master, the invariants and every test that describes the offer now name it explicitly, so they keep testing the offer rather than whatever the default happens to be. The screen's working state (autosave, the Sheet's current state) that still holds the untouched offer grid moves to the new assumption on load; named saves and grids with a note the couple wrote are left as they are.
+
+**Consequence.** No golden snapshot changed. Wohnung C, a placeholder at the old 1.900 € rate, no longer amortises at 4,3 % and reads "nicht tragbar".
+
+---
+
+## D42: Two flats side by side, with KfW blend, Neubau handover and the parking space's cost
+
+**Date:** 2026-11-22 · **Status:** accepted · **Refines** [D3](#d3--apartments-are-a-context-switcher-plus-a-read-only-comparison-table), [D40](#d40-kaufnebenkosten-and-monatsrate-move-onto-the-apartment-the-two-shortlist-flats-ship-as-defaults)
+
+**Context.** The owners want to compare Lindenstraße 31G and BUWOG Arbor WE08, not one after the other. BUWOG has a KfW 300 loan and is handed over about 19 months after signing; the couple disagree whether to buy the parking spaces. Of two mockups the owner chose a table plus one shared Restschuld chart.
+
+**Decision.**
+- **New section 7 "Wohnungen vergleichen"**: two columns, each with its own flat and its own EK level (the "A at 10% vs B at 15%" limitation D3 recorded). Read-only, rows from `apartmentColumn`. Restschuld and interest are read on one date for both, the end of the Zinsbindung counted from signing, so rule 5 holds. The chart puts both flats on one time axis from signing; a Neubau's line starts at handover.
+- **KfW per apartment** (`kfwAmount`, `kfwRate`), blended with the bank's rate per EK level by `blendedRate`. The owner proposed entering a hand-computed weighted average; the app computes it instead, because the KfW part is fixed, so the blend differs by EK level, and one average for all three would understate what extra EK saves. Bank rates stay one shared grid: they depend on the loan-to-value, not on the flat.
+- **`moveInMonths` per apartment**: the binding is priced in full but the loan amortises only after handover (`bindingMonths`). Every horizon "within the binding" uses it, so the page's own figures for a Neubau cover the shorter amortising period and its Restschuld at refinancing is higher. Bauzeitzinsen are an estimate shown in the comparison, not a cash deduction ([ASSUMPTIONS §4.20](ASSUMPTIONS.md)).
+- **`parkingPrice` per apartment**, a share of the price already in it, so the comparison shows what the space costs per month and at signing. The tool does not decide; it prices the question.
+
+**Consequence.** With no KfW and no delay the engine is unchanged: the golden snapshots for the three older flats and the QA presets did not move, and the invariants hold for BUWOG with both. Only BUWOG's and Lindenstraße's own snapshots changed, because their inputs did. `LineChart` gains an optional `endLabel`, since four lines ending at zero would print their names on top of each other.
+
+---
+
+## D43: Repaid by retirement is a bank condition, not a warning
+
+**Date:** 2026-11-23 · **Status:** superseded by [D44](#d44-reserve-and-retirement-deadline-warn-kfw-and-bank-run-as-two-loans) · **Supersedes** [D34](#d34-a-tragbar-scenario-that-runs-past-the-couples-own-limit-is-flagged-not-failed)
+
+**Context.** The bank requires the loan to be repaid by the owner's retirement at 67 (born 1985, so 2052). D34 had made the runtime limit a yellow warning measured with Sondertilgung from the first repayment, on the grounds that the runtime rests on today's rate. A bank decides on the contract: the regular rate, no Sondertilgung, from signing.
+
+**Decision.** A fifth constraint, `runtime`: at the regular rate and without Sondertilgung, the loan must be repaid within `maxRuntimeYears` of signing, and a Neubau's wait until handover counts. Failing it makes a scenario not tragbar ("Läuft zu lange", red), and the verdict names the Monatsrate still missing, in €/Monat like the payment check. The default stays 26 years (end of 2026 to 2052).
+
+The owner expected that the bank's household calculation would need less than 2 % Tilgung. The deadline points the other way: Lindenstraße needs at least 2.494 €/Monat (≈ 2,1 %), BUWOG at least 2.976 € (≈ 2,6 % on its blended rate) because its 19 months of construction come off the 26 years. The shortlist flats ship with those minimums. The bank's own household calculation is not modelled; the 40 % burden rule stays the app's proxy for it.
+
+**Consequence.** The August offer's 1.900 € on 405.000 € runs about 30 years and no longer passes at 10 % EK; the three older flats now read "Keine der drei Varianten ist tragbar" at the default rates. Their golden snapshots changed only in status and feasibility fields, no euro figure. The refinancing stress follow-up now keeps the original loan's Sondertilgung calendar (`monthOffset`), found by the Codex review of PR #11: with a handover delay that is not a whole number of years, the old slicing dropped or shifted a Sondertilgung.
+
+---
+
+## D44: Reserve and retirement deadline warn; KfW and bank run as two loans
+
+**Date:** 2026-11-23 · **Status:** accepted · **Supersedes** [D43](#d43-repaid-by-retirement-is-a-bank-condition-not-a-warning), refines [D42](#d42-two-flats-side-by-side-with-kfw-blend-neubau-handover-and-the-parking-spaces-cost)
+
+**Context.** The owners overruled D43 the same day: their broker says some banks accept Sondertilgung against the retirement deadline, and they plan about 6.000 €/Jahr for at least the first five years. The reserve target is their own buffer, also negotiable. They also asked for the KfW and bank loans to be modelled separately, without complicating the screen.
+
+**Decision.**
+- **Tragbar** = the rate amortises, the cash covers the purchase, the burden stays under the threshold (`BLOCKING_CONSTRAINTS`). The reserve and the deadline move to `diagnosis.warnings`. A warned scenario is amber everywhere: its status ("Reserve unter Ziel", "Läuft über die Grenze"), the apartment chip ("tragbar, mit Hinweis") and a list in the verdict that names the reserve left, the contract's end year, the deadline and the end year with the couple's Sondertilgung. CLAUDE.md rule 1 and PRODUCT_SPEC §13 are amended (A8).
+- **Two loans** (`simulateSplitLoan`): the KfW part has its own rate, one repayment-free year and an annuity over the apartment's `kfwTermYears` (default 20, from the broker call of 20.05.2026; the only new field). The bank part receives the rest of the one Monatsrate and all Sondertilgung, capped at 5 % of the bank part. The result has the single-loan shape, so the ledger, the charts and the comparison read it unchanged; single loans keep the offer-pinned `simulateMortgage`. The refinancing stress reruns the two-loan schedule with both rates shifted from the end of the binding. The blended rate remains only as a display figure.
+
+**What the split changed.** With the blend, BUWOG's 2.976 € seemed to meet 2052. As two loans the KfW's fixed ≈ 842 € leaves the bank part ≈ 1,8 % Tilgung: the contract runs to ≈ 2056, with 6.000 €/Jahr to ≈ 2051. Meeting 2052 without Sondertilgung would take ≈ 3.160 €, 42 % of net income. A 30-year KfW term would end in 2058 whatever the bank rate. This is exactly the case the owners describe: it works only if the bank accepts the Sondertilgung.
+
+**Consequence.** Golden snapshots of the flats without KfW changed only in verdict fields; Lindenstraße and the 720k preset did not change at all; 850k still reads "Keine der drei Varianten ist tragbar". The invariant "Sondertilgung is neutral at the loan's rate" now uses the bank's rate, since that is the part Sondertilgung repays. Labels that printed the binding as a raw number now format it ("8,4 Jahre").
+

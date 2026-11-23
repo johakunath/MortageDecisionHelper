@@ -133,7 +133,7 @@ export default function ProgressSection({
         <Readout
           label="Vermögen"
           value={formatEur(selectedWealth.wealth)}
-          sub={`nach ${formatNumber(selectedWealth.horizonMonths / 12, 0)} J.: Wohnung − Restschuld + freies Kapital nach Steuer · gleicher Stichtag für alle Stufen`}
+          sub={`nach ${formatNumber(selectedWealth.horizonMonths / 12, 1)} J.: Wohnung − Restschuld + freies Kapital nach Steuer · gleicher Stichtag für alle Stufen`}
           info={GLOSSARY.wealthAtHorizon}
         />
         <Readout

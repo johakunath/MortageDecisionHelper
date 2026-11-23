@@ -1,5 +1,14 @@
 import { normaliseFixedPeriod, type ApartmentCase, type InterestRates, type MortgageInputs, type ScenarioId } from "./calculations";
-import { DEFAULT_APARTMENT_CASES, DEFAULT_INPUTS, DEFAULT_RATES, DEFAULT_RATES_NOTE, EK_SCENARIOS } from "./defaults";
+import {
+  DEFAULT_APARTMENT_CASES,
+  DEFAULT_INPUTS,
+  DEFAULT_RATES,
+  DEFAULT_RATES_NOTE,
+  EK_SCENARIOS,
+  OFFER_RATES,
+  OFFER_RATES_NOTE,
+  SHORTLIST_APARTMENT_CASES,
+} from "./defaults";
 
 /**
  * Everything the user can change, in one serialisable shape.
@@ -143,10 +152,20 @@ function reviveRateRow(
  * the four values it is allowed to own — and keys from older shapes (`selectedScenarioId`)
  * do not ride along into the live state.
  */
-function reviveApartment(stored: unknown, index: number, ownerExtra: number): ApartmentCase {
+function reviveApartment(
+  stored: unknown,
+  index: number,
+  ownerExtra: number,
+  globalClosingCostRate: number,
+  globalMonthlyPayment: number,
+): ApartmentCase {
   const raw = (stored ?? {}) as Record<string, unknown>;
   const fallback =
     DEFAULT_APARTMENT_CASES[Math.min(index, DEFAULT_APARTMENT_CASES.length - 1)];
+  // Fields added in D42 fall back to the shipped flat with the same id, else to "none":
+  // borrowing a KfW loan or a Neubau delay from whichever flat sits at the same index
+  // would invent facts about a flat the couple entered themselves.
+  const sameId = DEFAULT_APARTMENT_CASES.find((apartment) => apartment.id === raw.id);
 
   return {
     id: typeof raw.id === "string" && raw.id.length > 0 ? raw.id : `flat-${index + 1}`,
@@ -154,6 +173,15 @@ function reviveApartment(stored: unknown, index: number, ownerExtra: number): Ap
     purchasePrice: reviveNumber(raw.purchasePrice, fallback.purchasePrice),
     renovation: reviveNumber(raw.renovation, fallback.renovation),
     hausgeld: reviveHausgeld(raw, fallback.hausgeld, ownerExtra),
+    // Saves before D40 had one global KNK rate and Monatsrate; they were what every
+    // apartment used, so they stay what each of them uses.
+    closingCostRate: Math.max(0, reviveNumber(raw.closingCostRate, globalClosingCostRate)),
+    monthlyPayment: Math.max(1, reviveNumber(raw.monthlyPayment, globalMonthlyPayment)),
+    kfwAmount: Math.max(0, reviveNumber(raw.kfwAmount, sameId?.kfwAmount ?? 0)),
+    kfwRate: Math.max(0, reviveNumber(raw.kfwRate, sameId?.kfwRate ?? 0)),
+    kfwTermYears: Math.max(2, reviveNumber(raw.kfwTermYears, sameId?.kfwTermYears ?? 20)),
+    moveInMonths: Math.max(0, Math.round(reviveNumber(raw.moveInMonths, sameId?.moveInMonths ?? 0))),
+    parkingPrice: Math.max(0, reviveNumber(raw.parkingPrice, sameId?.parkingPrice ?? 0)),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
     ...(typeof raw.note === "string" && raw.note.length > 0 ? { note: raw.note } : {}),
   };
@@ -185,7 +213,25 @@ function ratesEqual(a: InterestRates, b: InterestRates): boolean {
  */
 function reviveRatesNote(stored: unknown, rates: InterestRates): string {
   if (typeof stored === "string") return stored;
-  return ratesEqual(rates, DEFAULT_RATES) ? DEFAULT_RATES_NOTE : "";
+  if (ratesEqual(rates, DEFAULT_RATES)) return DEFAULT_RATES_NOTE;
+  return ratesEqual(rates, OFFER_RATES) ? OFFER_RATES_NOTE : "";
+}
+
+/**
+ * The working state still holding the August offer, untouched, moves to the current
+ * rate assumption (D41). Only the screen's own state (autosave, the Sheet's current
+ * state): a named save holding the offer may hold it on purpose, so it is left alone.
+ * A note the couple wrote themselves means they chose these rates, so it is kept too.
+ */
+export function upgradeShippedRates(state: PersistedState): PersistedState {
+  const untouched =
+    ratesEqual(state.rates, OFFER_RATES) && (state.ratesNote === OFFER_RATES_NOTE || state.ratesNote === "");
+  if (!untouched) return state;
+  return {
+    ...state,
+    rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
+    ratesNote: DEFAULT_RATES_NOTE,
+  };
 }
 
 /** The EK level a v1 save was sitting on, read off its legacy id ("ek5" → 5). */
@@ -248,6 +294,24 @@ function migrateV1(parsed: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
+ * The Shortlist flats (D40) are appended to any state that lacks them, so they appear
+ * in an existing autosave, a named save or the Sheet without retyping. Matched by id:
+ * once present, a flat the couple has edited is never overwritten or added again.
+ */
+function withShortlistApartments(cases: ApartmentCase[]): ApartmentCase[] {
+  const missing = SHORTLIST_APARTMENT_CASES.filter(
+    (shortlisted) => !cases.some((apartment) => apartment.id === shortlisted.id),
+  );
+  return [
+    ...cases,
+    ...missing.map((apartment) => ({
+      ...apartment,
+      annualSpecialRepayments: [...apartment.annualSpecialRepayments],
+    })),
+  ];
+}
+
+/**
  * Rebuilds a usable state from stored text, or returns null.
  * Nothing is trusted: missing fields fall back to the defaults, and present-but-unusable
  * ones do too. See `reviveNumber`.
@@ -263,8 +327,10 @@ function reviveState(raw: string): PersistedState | null {
     if (!Array.isArray(storedCases) || storedCases.length === 0) return null;
 
     const inputs = reviveInputs(parsed.inputs);
-    const apartmentCases: ApartmentCase[] = storedCases.map((stored, index) =>
-      reviveApartment(stored, index, inputs.ownerExtraMonthly),
+    const apartmentCases: ApartmentCase[] = withShortlistApartments(
+      storedCases.map((stored, index) =>
+        reviveApartment(stored, index, inputs.ownerExtraMonthly, inputs.closingCostRate, inputs.monthlyPayment),
+      ),
     );
     const activeApartmentId = apartmentCases.some((a) => a.id === parsed.activeApartmentId)
       ? (parsed.activeApartmentId as string)
@@ -291,7 +357,8 @@ function reviveState(raw: string): PersistedState | null {
 
 export function loadAutosave(): PersistedState | null {
   const raw = safeGet(AUTOSAVE_KEY);
-  return raw ? reviveState(raw) : null;
+  const state = raw ? reviveState(raw) : null;
+  return state ? upgradeShippedRates(state) : null;
 }
 
 export function writeAutosave(state: PersistedState): void {
@@ -381,8 +448,9 @@ export function parseBundle(text: string): Omit<Bundle, "current"> & { current: 
   try {
     const parsed = JSON.parse(text) as Record<string, unknown> | null;
     if (!parsed || parsed.app !== "mortgage-decision-helper" || parsed.bundleVersion !== 1) return null;
-    const current = reviveState(JSON.stringify(parsed.current ?? null));
-    if (!current) return null;
+    const revivedCurrent = reviveState(JSON.stringify(parsed.current ?? null));
+    if (!revivedCurrent) return null;
+    const current = upgradeShippedRates(revivedCurrent);
 
     const saves: Record<string, PersistedState> = {};
     const storedSaves = (parsed.saves ?? {}) as Record<string, unknown>;

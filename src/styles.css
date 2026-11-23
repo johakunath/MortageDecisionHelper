@@ -472,6 +472,7 @@ button {
 
 .apartment-chip-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: 10px;
 }
@@ -721,6 +722,26 @@ button {
 
 .verdict-miss {
   font-weight: 500;
+}
+
+/* Warnings inside a tragbar verdict (D44): visible, amber, never a blocker. */
+.verdict-warnings {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  list-style: none;
+  border-left: 3px solid var(--amber);
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.verdict-warnings li + li {
+  margin-top: 4px;
+}
+
+.verdict-warnings span[aria-hidden] {
+  color: var(--amber);
+  font-weight: 700;
 }
 
 /* Tooltips inside a serif heading must not inherit its size. */
@@ -1330,6 +1351,59 @@ button {
 .tradeoff-table.is-dense th,
 .tradeoff-table.is-dense td {
   padding: 9px 10px;
+}
+
+/* Wohnungen nebeneinander (D42): flat picker, EK choice and status stacked per column. */
+.comparison-table thead th {
+  vertical-align: top;
+}
+
+.comparison-table thead th > * + * {
+  margin-top: 8px;
+}
+
+.comparison-table tbody th {
+  font-weight: 500;
+  color: var(--soft);
+  width: 30%;
+}
+
+.comparison-table td strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.comparison-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.comparison-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-pick select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-weight: 600;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.comparison-swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
 }
 
 /*

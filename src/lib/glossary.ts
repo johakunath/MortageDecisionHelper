@@ -14,7 +14,7 @@ export const GLOSSARY = {
   availableCapital:
     "Alles, was ihr für den Kauf einsetzen könntet: Konto, Tagesgeld, Festgeld und ETFs, die ihr verkaufen würdet. ETFs mit dem Betrag nach Steuer eintragen: beim Verkauf geht auf die Kursgewinne Abgeltungsteuer ab. Die genaue Aufteilung pflegt ihr im EK-Tracker.",
   reserveTarget:
-    "Was nach dem Kauf übrig bleiben soll — für Notfälle, Reparaturen, Autowechsel. Eure persönliche Grenze, keine Bankvorgabe.",
+    "Was nach dem Kauf übrig bleiben soll — für Notfälle, Reparaturen, Autowechsel. Eure persönliche Grenze, keine Bankvorgabe. Bleibt weniger übrig, zeigt die App einen Hinweis, schließt die Variante aber nicht aus.",
   renovation: "Was direkt nach dem Kauf gemacht werden muss, bevor ihr einzieht.",
   moving: "Umzug, Küche, Möbel — einmalige Kosten rund um den Einzug.",
   currentWarmRent:
@@ -25,6 +25,17 @@ export const GLOSSARY = {
     "Was ein Eigentümer zusätzlich zum Hausgeld trägt: die Grundsteuer, die ihr direkt an die Gemeinde zahlt (für eine Wohnung grob 300 bis 500 € im Jahr), und eine eigene Rücklage für Bad, Böden, Fenster und Geräte in eurer Wohnung, die die Rücklage der Gemeinschaft nicht abdeckt. Die 90 € sind eine Schätzung: etwa 35 € Grundsteuer und 55 € Rücklage.",
 
   // --- Finanzierung ---
+  parkingPrice:
+    "Welcher Teil des Kaufpreises auf den Stellplatz entfällt. Er steckt schon im Kaufpreis; das Feld zeigt nur, was der Stellplatz euch monatlich und beim Kauf kostet.",
+  kfwAmount:
+    "Ein Förderdarlehen der KfW, z. B. KfW 300 für Familien beim Neubau. Es ersetzt einen Teil des Bankdarlehens und läuft als eigenes Darlehen: eigener Zins, ein tilgungsfreies Jahr, danach eine feste Rate, keine Sondertilgung. Eure Sondertilgung geht immer in das Bankdarlehen. Weil der KfW-Teil fest ist, senkt mehr Eigenkapital nur den teureren Bankteil.",
+  kfwRate: "Der Sollzins des KfW-Darlehens laut Förderzusage oder Angebot.",
+  kfwTermYears:
+    "Über wie viele Jahre das KfW-Darlehen abbezahlt wird, das erste, tilgungsfreie Jahr eingerechnet. Danach ist es weg. Kürzer heißt: höherer KfW-Anteil an der Rate, aber früher schuldenfrei. Die KfW-Rate ist fest, der Rest eurer Monatsrate geht an die Bank.",
+  moveInMonths:
+    "Monate von der Unterschrift bis zur Übergabe, bei einem Neubau oft ein bis zwei Jahre. Die Zinsbindung läuft ab Unterschrift, die Tilgung beginnt aber meist erst nach der Übergabe. Deshalb bleibt am Ende der Zinsbindung mehr Restschuld übrig. Bis zum Einzug zahlt ihr weiter Miete statt Rate.",
+  constructionInterest:
+    "Grobe Schätzung der Zinsen, die während der Bauzeit auf die schon ausgezahlten Raten anfallen (Bauzeitzinsen), plus Bereitstellungszinsen. Angenommen: im Schnitt ist die Hälfte des Darlehens ausgezahlt. Den echten Wert nennt die Bank mit dem Zahlungsplan.",
   householdNetIncome: "Was monatlich nach Steuern und Sozialabgaben bei euch beiden zusammen ankommt.",
   monthlyPayment:
     "Was ihr monatlich ans Darlehen zahlt — für jede Eigenkapitalstufe gleich, weil euer Budget sich durch mehr Eigenkapital nicht ändert. Bei mehr Eigenkapital ist das Darlehen kleiner, also steckt mehr von derselben Rate in der Tilgung und ihr seid früher schuldenfrei. Genauso rechnet auch die Bank in ihren Angeboten.",
@@ -47,7 +58,7 @@ export const GLOSSARY = {
   refiStressShift:
     "Um wie viele Prozentpunkte der Zins nach der Zinsbindung höher liegen könnte als heute. Kein Forecast, sondern ein Stresstest: Wie viel länger würde dieselbe Monatsrate dann brauchen, bis ihr schuldenfrei seid? Weniger Restschuld heißt weniger Risiko an dieser Stelle.",
   maxRuntimeYears:
-    "Spätestens nach so vielen Jahren soll das Darlehen abbezahlt sein, zum Beispiel bis zum Renteneintritt des Älteren von euch. Varianten, die länger laufen, bleiben tragbar, werden aber gelb markiert: die Laufzeit hängt am heutigen Zins und ist deshalb eine Schätzung.",
+    "Spätestens so viele Jahre nach der Unterschrift soll das Darlehen abbezahlt sein; Banken verlangen meist: bis zur Rente. Gerechnet wird wie bei der Bank mit der regulären Rate, ohne Sondertilgung, und bei einem Neubau zählt die Bauzeit mit. Läuft eine Variante länger, zeigt die App einen Hinweis und daneben, wann ihr mit eurer Sondertilgung fertig wärt. Manche Banken akzeptieren das.",
   maxBurdenRate:
     "Wie viel eures Haushaltsnettos maximal in die Wohnung fließen darf. 40% ist eine verbreitete Faustregel, keine Bankregel — ihr könnt sie anpassen.",
   propertyGrowthRate: "Angenommene jährliche Wertsteigerung der Immobilie. Bewusst konservativ setzen.",
@@ -82,7 +93,7 @@ export const GLOSSARY = {
 
   // --- Regeln ---
   cleanScenario:
-    "Ein Weg gilt als tragbar, wenn drei Dinge gleichzeitig stimmen: die Monatsrate zahlt das Darlehen in einem Leben ab, nach dem Kauf bleibt mindestens eure Reserve übrig, und die Monatsbelastung bleibt unter eurer selbstgesetzten Grenze. „Gerade so tragbar“ heißt: tragbar, aber es bleibt weniger als das Anderthalbfache eurer Reserve übrig.",
+    "Ein Weg gilt als tragbar, wenn drei Dinge gleichzeitig stimmen: die Monatsrate zahlt das Darlehen in einem Leben ab, euer Geld reicht für den Kauf, und die Monatsbelastung bleibt unter eurer selbstgesetzten Grenze. Eine Reserve unter eurem Ziel und eine Laufzeit über eure Grenze sind Hinweise, keine Ausschlüsse. „Gerade so tragbar“ heißt: tragbar, aber es bleibt weniger als das Anderthalbfache eurer Reserve übrig.",
   waitSavings:
     "Was monatlich wirklich zusätzlich aufs Konto wandert — nach Miete und normalen Ausgaben. Die Miete wird separat ausgewiesen und nicht noch einmal abgezogen.",
 } as const;

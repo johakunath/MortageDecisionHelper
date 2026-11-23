@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ApartmentComparison from "./components/ApartmentComparison";
 import ApartmentSwitcher, { ApartmentFacts } from "./components/ApartmentSwitcher";
 import CashBlock from "./components/CashBlock";
 import CompromiseFinder from "./components/CompromiseFinder";
@@ -62,7 +63,17 @@ import {
 } from "./lib/storage";
 
 type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
-type ApartmentNumericKey = "purchasePrice" | "renovation" | "hausgeld";
+type ApartmentNumericKey =
+  | "purchasePrice"
+  | "renovation"
+  | "hausgeld"
+  | "closingCostRate"
+  | "monthlyPayment"
+  | "kfwAmount"
+  | "kfwRate"
+  | "kfwTermYears"
+  | "moveInMonths"
+  | "parkingPrice";
 
 /**
  * Restored synchronously during the first render, not in an effect: loading in an
@@ -197,6 +208,13 @@ export default function App() {
   }, [selected.id, activeInputs, rates]);
 
   function updateInput(key: NumericInputKey, value: number) {
+    // Kaufnebenkosten (Makler or not) and the Monatsrate belong to the apartment, so
+    // their controls in §2 write to the active one rather than to a global every flat
+    // would share (D40).
+    if (key === "closingCostRate" || key === "monthlyPayment") {
+      updateApartmentCase(activeApartmentId, { [key]: value });
+      return;
+    }
     setInputs((current) => ({ ...current, [key]: value }));
   }
 
@@ -262,6 +280,13 @@ export default function App() {
         purchasePrice: DEFAULT_APARTMENT_CASES[0].purchasePrice,
         renovation: 0,
         hausgeld: DEFAULT_APARTMENT_CASES[0].hausgeld,
+        closingCostRate: activeApartment.closingCostRate,
+        monthlyPayment: activeApartment.monthlyPayment,
+        kfwAmount: 0,
+        kfwRate: 0,
+        kfwTermYears: 20,
+        moveInMonths: 0,
+        parkingPrice: 0,
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);
@@ -276,16 +301,15 @@ export default function App() {
     }
 
     const yearlyAmount = preset === "safety" ? 3000 : 12000;
-    setInputs((current) => ({
-      ...current,
-      ...(preset === "safety"
-        ? { reserveTarget: 35000, monthlyPayment: 1700 }
-        : { monthlyPayment: 2100 }),
-    }));
+    if (preset === "safety") setInputs((current) => ({ ...current, reserveTarget: 35000 }));
     setApartmentCases((current) =>
       current.map((apartment) =>
         apartment.id === activeApartmentId
-          ? { ...apartment, annualSpecialRepayments: apartment.annualSpecialRepayments.map(() => yearlyAmount) }
+          ? {
+              ...apartment,
+              monthlyPayment: preset === "safety" ? 1700 : 2100,
+              annualSpecialRepayments: apartment.annualSpecialRepayments.map(() => yearlyAmount),
+            }
           : apartment,
       ),
     );
@@ -565,6 +589,17 @@ export default function App() {
                 waitMonths={Math.max(0, Math.round(activeInputs.waitMonths))}
               />
             </details>
+          </section>
+
+          <section id="section-compare" ref={registerSection("compare")} className="page-section">
+            <div className="section-kicker">7 · Wohnungen vergleichen</div>
+            <ApartmentComparison
+              apartments={apartmentCases}
+              scenarios={EK_SCENARIOS}
+              inputs={inputs}
+              rates={rates}
+              selectedId={selected.id}
+            />
           </section>
         </main>
 

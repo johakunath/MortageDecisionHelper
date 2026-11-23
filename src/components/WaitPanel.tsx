@@ -48,7 +48,7 @@ function joinClauses(parts: string[]): string {
  * which that verdict would flip: the question spec §2.3 actually asks.
  */
 export default function WaitPanel({ scenarios, tippingPoints, waitMonths }: WaitPanelProps) {
-  const horizonYears = formatNumber((scenarios[0]?.wealth.horizonMonths ?? 0) / 12, 0);
+  const horizonYears = formatNumber((scenarios[0]?.wealth.horizonMonths ?? 0) / 12, 1);
   const rows: {
     label: string;
     note?: string;
