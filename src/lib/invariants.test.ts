@@ -109,7 +109,9 @@ describe("engine invariants", () => {
       // s. At equal effective rates and no tax the two paths must end level. Anything
       // else would mean the ledger books a cash flow on one side only.
       for (const base of EK_SCENARIOS) {
-        const rate = buildScenario(base, inputs, OFFER_RATES).interestRate;
+        // Sondertilgung only ever goes into the bank part (D44), so it saves the bank's
+        // rate; without KfW that is the loan's rate.
+        const rate = buildScenario(base, inputs, OFFER_RATES).bankRate;
         const effective = (Math.pow(1 + rate / 1200, 12) - 1) * 100;
         const neutral = { ...inputs, etfReturnRate: effective, etfTaxRate: 0 };
         const withPlan = wealthAtHorizon({ base, inputs: neutral, rates: OFFER_RATES });

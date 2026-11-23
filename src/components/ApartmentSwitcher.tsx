@@ -12,6 +12,7 @@ type ApartmentEditableKey =
   | "parkingPrice"
   | "kfwAmount"
   | "kfwRate"
+  | "kfwTermYears"
   | "moveInMonths";
 
 type ApartmentSwitcherProps = {
@@ -64,9 +65,15 @@ export default function ApartmentSwitcher({
           >
             <span className="apartment-chip-label">{result.apartment.label}</span>
             <span className="apartment-chip-price">{formatEur(result.apartment.purchasePrice)}</span>
-            <StatusPill tone={result.decision.noSafeScenario ? "red" : "green"}>
-              {result.decision.noSafeScenario ? "nicht tragbar" : "tragbar"}
-            </StatusPill>
+            {/* At the EK level on screen: tragbar with a reserve or deadline warning reads
+                amber, so a green chip never hides one (D44). */}
+            {result.decision.noSafeScenario ? (
+              <StatusPill tone="red">nicht tragbar</StatusPill>
+            ) : result.selectedScenario.feasible && result.selectedScenario.diagnosis.warnings.length > 0 ? (
+              <StatusPill tone="amber">tragbar, mit Hinweis</StatusPill>
+            ) : (
+              <StatusPill tone="green">tragbar</StatusPill>
+            )}
           </button>
         ))}
         <Button variant="action" onClick={onAdd}>+ Neue Wohnung</Button>
@@ -153,6 +160,16 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
           min={0}
           onChange={(value) => onChange({ kfwRate: Math.max(0, value) })}
           info={GLOSSARY.kfwRate}
+        />
+        <InputField
+          label="KfW-Laufzeit"
+          value={apartment.kfwTermYears}
+          suffix="Jahre"
+          step={1}
+          min={2}
+          onChange={(value) => onChange({ kfwTermYears: Math.max(2, Math.round(value)) })}
+          info={GLOSSARY.kfwTermYears}
+          hint="inkl. 1 tilgungsfreiem Jahr"
         />
         <InputField
           label="Monate bis Einzug"

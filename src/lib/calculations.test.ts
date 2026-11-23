@@ -4,6 +4,10 @@ import {
   apartmentColumn,
   bindingMonths,
   blendedRate,
+  kfwAnnuity,
+  simulateSplitLoan,
+  type MortgageMonth,
+  type SpecialPlan,
   buildApartmentInputs,
   buildScenario,
   buildScenarios,
@@ -176,6 +180,66 @@ describe("calculation engine", () => {
     expect(ek10.interestRate).toBeCloseTo(blendedRate(DEFAULT_RATES[10].ek10, 589590, 170000, 1.3), 9);
   });
 
+  it("runs KfW as a loan of its own: a repayment-free year, its own annuity, no Sondertilgung (D44)", () => {
+    const kfwOnly = (plan: SpecialPlan) => {
+      const balances: number[] = [];
+      const run = simulateSplitLoan({
+        bankPrincipal: 0,
+        bankRatePct: 4.3,
+        kfwPrincipal: 170000,
+        kfwRatePct: 1.3,
+        kfwTermYears: 30,
+        monthlyPayment: kfwAnnuity(170000, 1.3, 30),
+        fixedRateYears: 10,
+        specialPlan: plan,
+        specialRepaymentLimitRate: 5,
+        onMonth: (entry) => balances.push(entry.balance),
+      });
+      return { run, balances };
+    };
+    const { run, balances } = kfwOnly({ kind: "none" });
+    // Interest only for twelve months, then repaid exactly at the end of its 30-year term.
+    expect(balances[11]).toBeCloseTo(170000, 6);
+    expect(balances[12]).toBeLessThan(170000);
+    expect(run.runtimeYears).toBeCloseTo(30, 9);
+    // Sondertilgung cannot touch the KfW part: its cap is a share of the bank part only.
+    const withPlan = kfwOnly({ kind: "flat", annual: 20000 });
+    expect(withPlan.run.maxAnnualSpecial).toBe(0);
+    expect(withPlan.run.runtimeYears).toBeCloseTo(30, 9);
+  });
+
+  it("pays each part's own rate and puts Sondertilgung into the bank part (D44)", () => {
+    const flat = { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, kfwAmount: 170000, kfwRate: 1.3, monthlyPayment: 2976 };
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, flat);
+    const [ek10] = buildScenarios(EK_SCENARIOS, inputs, DEFAULT_RATES);
+    expect(ek10.kfwPart).toBe(170000);
+    expect(ek10.bankRate).toBe(DEFAULT_RATES[10].ek10);
+
+    let firstMonth: MortgageMonth | null = null;
+    simulateSplitLoan({
+      bankPrincipal: ek10.loan - 170000,
+      bankRatePct: ek10.bankRate,
+      kfwPrincipal: 170000,
+      kfwRatePct: 1.3,
+      kfwTermYears: 20,
+      monthlyPayment: 2976,
+      fixedRateYears: 10,
+      specialPlan: { kind: "none" },
+      specialRepaymentLimitRate: 5,
+      onMonth: (entry) => {
+        firstMonth ??= entry;
+      },
+    });
+    const bankPart = ek10.loan - 170000;
+    expect(firstMonth!.interest).toBeCloseTo((bankPart * 4.3) / 1200 + (170000 * 1.3) / 1200, 6);
+    // In the KfW's free year only the bank part repays: the rate minus the KfW annuity.
+    expect(firstMonth!.principal).toBeCloseTo(2976 - kfwAnnuity(170000, 1.3, 20) - (bankPart * 4.3) / 1200, 6);
+    // The 5 % cap is taken on the bank part, not the whole loan.
+    expect(ek10.mortgage.maxAnnualSpecial).toBeCloseTo(bankPart * 0.05, 6);
+    // The same-rate refinancing baseline is the scenario itself.
+    expect(refinanceStress(ek10, inputs).runtimeYearsAtSameRate).toBeCloseTo(ek10.mortgage.runtimeYears, 9);
+  });
+
   it("amortises a Neubau only for the part of the binding after handover (D42)", () => {
     const flat = { ...DEFAULT_APARTMENT_CASES[0], moveInMonths: 19 };
     const delayed = buildApartmentInputs(DEFAULT_INPUTS, flat);
@@ -249,6 +313,7 @@ describe("calculation engine", () => {
           monthlyPayment: 2900,
           kfwAmount: 0,
           kfwRate: 0,
+          kfwTermYears: 20,
           moveInMonths: 0,
           parkingPrice: 0,
           annualSpecialRepayments: [0, 0, 0],
@@ -263,6 +328,7 @@ describe("calculation engine", () => {
           monthlyPayment: 2900,
           kfwAmount: 0,
           kfwRate: 0,
+          kfwTermYears: 20,
           moveInMonths: 0,
           parkingPrice: 0,
           annualSpecialRepayments: [10000, 10000, 10000],
@@ -369,7 +435,8 @@ describe("calculation engine", () => {
     const inputs = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 35 };
     const decision = evaluateDecision(buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES));
 
-    expect(decision.feasibleScenarios.map((scenario) => scenario.id)).toEqual(["ek10", "ek15"]);
+    // 20% EK leaves less than the reserve target, which only warns since D44.
+    expect(decision.feasibleScenarios.map((scenario) => scenario.id)).toEqual(["ek10", "ek15", "ek20"]);
     expect("recommendation" in decision).toBe(false);
   });
 
@@ -429,12 +496,16 @@ describe("calculation engine", () => {
       OFFER_RATES,
     );
 
+    // A thin reserve warns, it does not block (D44); a purchase the money cannot cover does.
     expect(reserveOnly.cashLeft).toBeGreaterThan(0);
-    expect(reserveOnly.diagnosis.failed).toContain("reserve");
-    expect(reserveOnly.diagnosis.failed).not.toContain("cash");
+    expect(reserveOnly.diagnosis.warnings).toContain("reserve");
+    expect(reserveOnly.diagnosis.failed).toEqual([]);
+    expect(reserveOnly.feasible).toBe(true);
+    expect(reserveOnly.status).toBe("Reserve unter Ziel");
 
     expect(cannotAfford.cashLeft).toBeLessThan(0);
     expect(cannotAfford.diagnosis.failed).toContain("cash");
+    expect(cannotAfford.feasible).toBe(false);
   });
 
   it("measures the break-even against the target without Sondertilgung (D1)", () => {
@@ -616,31 +687,31 @@ describe("calculation engine", () => {
     expect(ekStepReturn(ek15, ek10, inputs).annualReturn).toBeNull();
   });
 
-  it("fails a scenario the bank would refuse: not repaid by retirement (D43)", () => {
+  it("warns, never blocks, when the contract runs past the retirement deadline (D44)", () => {
     // The offer flat at the offer's own rate runs about 30,1 years without Sondertilgung;
     // the broker's Tilgungsplan says "30 Jahre 2 Monate".
-    const offer = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]);
-    const [ek10] = buildScenarios(EK_SCENARIOS, { ...offer, maxRuntimeYears: 26 }, OFFER_RATES);
+    const offer = { ...buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[0]), maxRuntimeYears: 26 };
+    const [ek10] = buildScenarios(EK_SCENARIOS, offer, OFFER_RATES);
     expect(ek10.contractYearsFromSigning).toBeCloseTo(30.1, 1);
     expect(ek10.runsPastLimit).toBe(true);
-    expect(ek10.feasible).toBe(false);
-    expect(ek10.status).toBe("Läuft zu lange");
-    expect(ek10.statusTone).toBe("red");
+    expect(ek10.diagnosis.warnings).toContain("runtime");
+    expect(ek10.feasible).toBe(true);
+    expect(ek10.status).toBe("Läuft über die Grenze");
+    expect(ek10.statusTone).toBe("amber");
+    // With the 6.000 €/Jahr plan it is repaid well inside the deadline: the figure some
+    // banks accept, and the one the warning puts next to the contract.
+    expect(ek10.debtFreeYearsFromSigning).toBeLessThan(26);
 
-    // The gap is the Monatsrate still missing: paying it is repaid in exactly 26 years.
-    const gap = ek10.diagnosis.checks.find((check) => check.id === "runtime")!.gap;
-    const enough = { ...offer, maxRuntimeYears: 26, monthlyPayment: offer.monthlyPayment - gap };
-    const [fixed] = buildScenarios(EK_SCENARIOS, enough, OFFER_RATES);
-    expect(fixed.contractYearsFromSigning).toBeCloseTo(26, 6);
-
-    // Sondertilgung does not count: the bank cannot rely on it.
-    const generous = { ...offer, maxRuntimeYears: 26, annualSpecialRepayments: offer.annualSpecialRepayments.map(() => 20000) };
-    expect(buildScenarios(EK_SCENARIOS, generous, OFFER_RATES)[0].runsPastLimit).toBe(true);
+    // Sondertilgung never changes the contract reading itself.
+    const generous = { ...offer, annualSpecialRepayments: offer.annualSpecialRepayments.map(() => 20000) };
+    expect(buildScenarios(EK_SCENARIOS, generous, OFFER_RATES)[0].contractYearsFromSigning).toBeCloseTo(
+      ek10.contractYearsFromSigning,
+      9,
+    );
 
     // A Neubau's wait counts: the deadline is a date, measured from signing.
-    const late = buildScenarios(EK_SCENARIOS, { ...enough, moveInMonths: 12 }, OFFER_RATES)[0];
-    expect(late.contractYearsFromSigning).toBeCloseTo(27, 6);
-    expect(late.runsPastLimit).toBe(true);
+    const late = buildScenarios(EK_SCENARIOS, { ...offer, moveInMonths: 12 }, OFFER_RATES)[0];
+    expect(late.contractYearsFromSigning).toBeCloseTo(ek10.contractYearsFromSigning + 1, 9);
   });
   it("values a step of EK in the ledger when the loans are repaid inside the binding (K23)", () => {
     // A 150k flat at 1.900 €/Monat: every loan is gone after about five years, so the

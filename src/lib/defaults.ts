@@ -32,6 +32,7 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   // Gehören der Wohnung (D42); global nur für die QA-Presets ohne Wohnung.
   kfwAmount: 0,
   kfwRate: 0,
+  kfwTermYears: 20,
   moveInMonths: 0,
   annualSpecialRepayment: 6000,
   annualSpecialRepayments: [6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000],
@@ -116,6 +117,7 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     monthlyPayment: 2500,
     kfwAmount: 0,
     kfwRate: 0,
+    kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 25000,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
@@ -135,15 +137,18 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     hausgeld: 331,
     // Provisionsfrei: 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch.
     closingCostRate: 8,
-    // Geschätzt, kein Angebot: die kleinste Rate, mit der 589.590 € zum Mischzins aus
-    // Bank 4,3 % und KfW 300 (3,435 %) ohne Sondertilgung bis 26 Jahre nach Unterschrift
-    // getilgt sind; davon gehen 19 Monate Bauzeit ab (D43). Nötig 2.975,40 €, auf den Euro
-    // aufgerundet, denn 2.980 € läge mit Hausgeld 1 € über 40 % vom Haushaltsnetto.
-    // ≈ 2,6 % Anfangstilgung. Das tilgungsfreie KfW-Jahr ist nicht abgebildet.
+    // Geschätzt, kein Angebot: höchstens 40 % vom Haushaltsnetto mit Hausgeld (2.980 €
+    // läge 1 € darüber). Bank 4,3 % und KfW 300 als zwei Darlehen (D44): die KfW-Rate
+    // über 20 Jahre nimmt davon ≈ 842 €. Ohne Sondertilgung läuft das bis ≈ 2056, über
+    // die Rente hinaus; mit 6.000 €/Jahr bis ≈ 2051. Pünktlich ohne Sondertilgung
+    // bräuchte ≈ 3.160 €, über 40 %. Siehe D44.
     monthlyPayment: 2976,
     // KfW 300 bis 170.000 € bei zwei Kindern, Zins laut Sheet angenommen, keine Zusage.
     kfwAmount: 170000,
     kfwRate: 1.3,
+    // Laut Interhyp (20.05.2026) wählbar, im Gespräch 20 Jahre; 30 Jahre ginge, endete
+    // aber 2058, nach der Rente. Inkl. 1 tilgungsfreiem Jahr.
+    kfwTermYears: 20,
     // Unterschrift Dezember 2026, Übergabe vsl. Juni 2028.
     moveInMonths: 19,
     parkingPrice: 30000,
@@ -175,6 +180,7 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
     kfwAmount: 0,
     kfwRate: 0,
+    kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 0,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
@@ -189,6 +195,7 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
     kfwAmount: 0,
     kfwRate: 0,
+    kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 0,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
@@ -203,6 +210,7 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
     kfwAmount: 0,
     kfwRate: 0,
+    kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 0,
     annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
@@ -244,6 +252,7 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       fixedRateYears: 10,
       kfwAmount: 0,
       kfwRate: 0,
+      kfwTermYears: 20,
       moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
@@ -267,6 +276,7 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       fixedRateYears: 10,
       kfwAmount: 0,
       kfwRate: 0,
+      kfwTermYears: 20,
       moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.
@@ -293,6 +303,7 @@ export const CASE_PRESETS: Record<PresetId, CasePreset> = {
       fixedRateYears: 10,
       kfwAmount: 0,
       kfwRate: 0,
+      kfwTermYears: 20,
       moveInMonths: 0,
       // Gepinnt, nicht geerbt (D12): die Fixtures prüfen Tragbarkeit, nicht die
       // persönliche Laufzeitgrenze. Bei 26 Jahren würde 10% EK hier gelb.

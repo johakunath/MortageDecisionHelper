@@ -654,7 +654,7 @@ Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000
 
 ## D43: Repaid by retirement is a bank condition, not a warning
 
-**Date:** 2026-11-23 · **Status:** accepted · **Supersedes** [D34](#d34-a-tragbar-scenario-that-runs-past-the-couples-own-limit-is-flagged-not-failed)
+**Date:** 2026-11-23 · **Status:** superseded by [D44](#d44-reserve-and-retirement-deadline-warn-kfw-and-bank-run-as-two-loans) · **Supersedes** [D34](#d34-a-tragbar-scenario-that-runs-past-the-couples-own-limit-is-flagged-not-failed)
 
 **Context.** The bank requires the loan to be repaid by the owner's retirement at 67 (born 1985, so 2052). D34 had made the runtime limit a yellow warning measured with Sondertilgung from the first repayment, on the grounds that the runtime rests on today's rate. A bank decides on the contract: the regular rate, no Sondertilgung, from signing.
 
@@ -663,4 +663,20 @@ Figures as in the Sheet on 22.11.2026: prices include the parking space (520.000
 The owner expected that the bank's household calculation would need less than 2 % Tilgung. The deadline points the other way: Lindenstraße needs at least 2.494 €/Monat (≈ 2,1 %), BUWOG at least 2.976 € (≈ 2,6 % on its blended rate) because its 19 months of construction come off the 26 years. The shortlist flats ship with those minimums. The bank's own household calculation is not modelled; the 40 % burden rule stays the app's proxy for it.
 
 **Consequence.** The August offer's 1.900 € on 405.000 € runs about 30 years and no longer passes at 10 % EK; the three older flats now read "Keine der drei Varianten ist tragbar" at the default rates. Their golden snapshots changed only in status and feasibility fields, no euro figure. The refinancing stress follow-up now keeps the original loan's Sondertilgung calendar (`monthOffset`), found by the Codex review of PR #11: with a handover delay that is not a whole number of years, the old slicing dropped or shifted a Sondertilgung.
+
+---
+
+## D44: Reserve and retirement deadline warn; KfW and bank run as two loans
+
+**Date:** 2026-11-23 · **Status:** accepted · **Supersedes** [D43](#d43-repaid-by-retirement-is-a-bank-condition-not-a-warning), refines [D42](#d42-two-flats-side-by-side-with-kfw-blend-neubau-handover-and-the-parking-spaces-cost)
+
+**Context.** The owners overruled D43 the same day: their broker says some banks accept Sondertilgung against the retirement deadline, and they plan about 6.000 €/Jahr for at least the first five years. The reserve target is their own buffer, also negotiable. They also asked for the KfW and bank loans to be modelled separately, without complicating the screen.
+
+**Decision.**
+- **Tragbar** = the rate amortises, the cash covers the purchase, the burden stays under the threshold (`BLOCKING_CONSTRAINTS`). The reserve and the deadline move to `diagnosis.warnings`. A warned scenario is amber everywhere: its status ("Reserve unter Ziel", "Läuft über die Grenze"), the apartment chip ("tragbar, mit Hinweis") and a list in the verdict that names the reserve left, the contract's end year, the deadline and the end year with the couple's Sondertilgung. CLAUDE.md rule 1 and PRODUCT_SPEC §13 are amended (A8).
+- **Two loans** (`simulateSplitLoan`): the KfW part has its own rate, one repayment-free year and an annuity over the apartment's `kfwTermYears` (default 20, from the broker call of 20.05.2026; the only new field). The bank part receives the rest of the one Monatsrate and all Sondertilgung, capped at 5 % of the bank part. The result has the single-loan shape, so the ledger, the charts and the comparison read it unchanged; single loans keep the offer-pinned `simulateMortgage`. The refinancing stress reruns the two-loan schedule with both rates shifted from the end of the binding. The blended rate remains only as a display figure.
+
+**What the split changed.** With the blend, BUWOG's 2.976 € seemed to meet 2052. As two loans the KfW's fixed ≈ 842 € leaves the bank part ≈ 1,8 % Tilgung: the contract runs to ≈ 2056, with 6.000 €/Jahr to ≈ 2051. Meeting 2052 without Sondertilgung would take ≈ 3.160 €, 42 % of net income. A 30-year KfW term would end in 2058 whatever the bank rate. This is exactly the case the owners describe: it works only if the bank accepts the Sondertilgung.
+
+**Consequence.** Golden snapshots of the flats without KfW changed only in verdict fields; Lindenstraße and the 720k preset did not change at all; 850k still reads "Keine der drei Varianten ist tragbar". The invariant "Sondertilgung is neutral at the loan's rate" now uses the bank's rate, since that is the part Sondertilgung repays. Labels that printed the binding as a raw number now format it ("8,4 Jahre").
 

@@ -1,5 +1,5 @@
 import { afterTaxAnnualReturn, type EkTradeoff, type MortgageInputs } from "../lib/calculations";
-import { formatEur, formatPct, formatSignedEur, formatYears } from "../lib/format";
+import { formatEur, formatNumber, formatPct, formatSignedEur, formatYears } from "../lib/format";
 
 type TradeoffStatementProps = {
   tradeoff: EkTradeoff;
@@ -32,7 +32,7 @@ export default function TradeoffStatement({
       <summary>
         <strong>{to.label} statt {from.label}:</strong> netto{" "}
         <strong>{formatSignedEur(netAdvantageFixed)}</strong>{" "}
-        {favoursMore ? "für mehr Eigenkapital" : "für mehr Liquidität"} über {horizonYears} Jahre
+        {favoursMore ? "für mehr Eigenkapital" : "für mehr Liquidität"} über {formatNumber(horizonYears)} Jahre
         <span className="tradeoff-summary-more">Details</span>
       </summary>
       <p>
@@ -44,7 +44,7 @@ export default function TradeoffStatement({
         <strong>{to.label} statt {from.label}:</strong>{" "}
         {interestSavedFixed >= 0 ? "ihr spart" : "ihr zahlt"}{" "}
         <strong>{formatEur(Math.abs(interestSavedFixed))}</strong> Zinsen
-        {interestSavedFixed >= 0 ? "" : " mehr"} in den ersten {horizonYears} Jahren und
+        {interestSavedFixed >= 0 ? "" : " mehr"} in den ersten {formatNumber(horizonYears)} Jahren und
         seid bei gleicher Monatsrate{" "}
         <strong>{formatYears(Math.abs(runtimeDelta))}</strong>{" "}
         {runtimeDelta < 0 ? "früher" : "später"} schuldenfrei. Dafür bindet ihr{" "}
@@ -53,7 +53,7 @@ export default function TradeoffStatement({
       </p>
       <p className={`tradeoff-net ${favoursMore ? "tradeoff-net-favours" : "tradeoff-net-against"}`}>
         Netto: <strong>{formatSignedEur(netAdvantageFixed)}</strong>{" "}
-        {favoursMore ? "für mehr Eigenkapital" : "für mehr Liquidität"} — über {horizonYears}{" "}
+        {favoursMore ? "für mehr Eigenkapital" : "für mehr Liquidität"} — über {formatNumber(horizonYears)}{" "}
         Jahre, bei{" "}
         <label className="tradeoff-etf-chip">
           <input

@@ -71,6 +71,7 @@ type ApartmentNumericKey =
   | "monthlyPayment"
   | "kfwAmount"
   | "kfwRate"
+  | "kfwTermYears"
   | "moveInMonths"
   | "parkingPrice";
 
@@ -283,6 +284,7 @@ export default function App() {
         monthlyPayment: activeApartment.monthlyPayment,
         kfwAmount: 0,
         kfwRate: 0,
+        kfwTermYears: 20,
         moveInMonths: 0,
         parkingPrice: 0,
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],

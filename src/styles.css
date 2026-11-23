@@ -724,6 +724,26 @@ button {
   font-weight: 500;
 }
 
+/* Warnings inside a tragbar verdict (D44): visible, amber, never a blocker. */
+.verdict-warnings {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  list-style: none;
+  border-left: 3px solid var(--amber);
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.verdict-warnings li + li {
+  margin-top: 4px;
+}
+
+.verdict-warnings span[aria-hidden] {
+  color: var(--amber);
+  font-weight: 700;
+}
+
 /* Tooltips inside a serif heading must not inherit its size. */
 .verdict h2 .infotip-trigger {
   width: 18px;

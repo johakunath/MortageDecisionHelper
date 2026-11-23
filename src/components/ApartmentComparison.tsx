@@ -146,8 +146,8 @@ export default function ApartmentComparison({
       cell: (column) =>
         column.inputs.kfwAmount > 0
           ? {
-              value: `${formatPct(column.scenario.interestRate, 2)} Mischzins`,
-              sub: `Bank ${formatPct(column.bankRate, 2)} · KfW ${formatEur(column.inputs.kfwAmount)} zu ${formatPct(column.inputs.kfwRate, 2)}`,
+              value: `Bank ${formatPct(column.bankRate, 2)} · KfW ${formatPct(column.inputs.kfwRate, 2)}`,
+              sub: `zwei Darlehen: ${formatEur(column.scenario.loan - column.scenario.kfwPart)} Bank, ${formatEur(column.scenario.kfwPart)} KfW über ${formatNumber(column.inputs.kfwTermYears, 0)} Jahre · im Schnitt ${formatPct(column.scenario.interestRate, 2)}`,
             }
           : { value: formatPct(column.scenario.interestRate, 2), sub: "nur Bank" },
     },
@@ -156,7 +156,10 @@ export default function ApartmentComparison({
       info: GLOSSARY.monthlyPayment,
       cell: (column) => ({
         value: formatEur(column.scenario.mortgage.regularMonthlyPayment),
-        sub: `${formatPct(column.scenario.repaymentRate, 2)} Anfangstilgung`,
+        sub:
+          column.kfwMonthly > 0
+            ? `davon KfW ${formatEur(column.kfwMonthly)}, im 1. Jahr nur Zinsen · Bank ${formatEur(column.scenario.mortgage.regularMonthlyPayment - column.kfwMonthly)}`
+            : `${formatPct(column.scenario.repaymentRate, 2)} Anfangstilgung`,
       }),
     },
     {
@@ -215,8 +218,8 @@ export default function ApartmentComparison({
     {
       label: "Schuldenfrei",
       cell: (column) => ({
-        value: `≈ ${formatCalendarYear(startYear + column.debtFreeAfterYears)}`,
-        sub: `mit eurer Sondertilgung · ohne: ≈ ${formatCalendarYear(startYear + column.scenario.contractYearsFromSigning)}${column.scenario.runsPastLimit ? ", nach der Grenze der Bank" : ""}`,
+        value: `≈ ${formatCalendarYear(startYear + column.debtFreeAfterYears)} mit Sondertilgung`,
+        sub: `${column.scenario.runsPastLimit ? "! " : ""}ohne: ≈ ${formatCalendarYear(startYear + column.scenario.contractYearsFromSigning)}${column.scenario.runsPastLimit ? `, nach eurer Grenze ≈ ${formatCalendarYear(startYear + inputs.maxRuntimeYears)}` : ", vor eurer Grenze"}`,
       }),
     },
     {

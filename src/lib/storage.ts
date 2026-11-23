@@ -179,6 +179,7 @@ function reviveApartment(
     monthlyPayment: Math.max(1, reviveNumber(raw.monthlyPayment, globalMonthlyPayment)),
     kfwAmount: Math.max(0, reviveNumber(raw.kfwAmount, sameId?.kfwAmount ?? 0)),
     kfwRate: Math.max(0, reviveNumber(raw.kfwRate, sameId?.kfwRate ?? 0)),
+    kfwTermYears: Math.max(2, reviveNumber(raw.kfwTermYears, sameId?.kfwTermYears ?? 20)),
     moveInMonths: Math.max(0, Math.round(reviveNumber(raw.moveInMonths, sameId?.moveInMonths ?? 0))),
     parkingPrice: Math.max(0, reviveNumber(raw.parkingPrice, sameId?.parkingPrice ?? 0)),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
