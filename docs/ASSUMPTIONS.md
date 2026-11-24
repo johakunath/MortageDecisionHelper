@@ -214,7 +214,7 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 8. **The six Sollzinsen are user assumptions**, entered by hand. Nothing is fetched.
 9. **The model uses the Sollzins, not the Effektivzins.** Nominal rate, compounded monthly: 3,87% nominal is 3,94% effective, while the offer states 3,97% under PAngV (which also carries fees and disbursement timing). The app therefore understates the true cost very slightly. It never displays an Effektivzins, so it never claims otherwise.
 10. **Bereitstellungszinsen are not modelled.** The offer allows 6 free months, then 0,20%/month. For a Bestandsimmobilie disbursed on the completion date this is zero; for a Neubau drawn in stages it would not be.
-11. **Loan amounts are exact percentages of the purchase price.** Banks round: the offer quotes 382.000 € and 359.000 € where 85% and 80% of 450.000 € would be 382.500 € and 360.000 €. A difference of up to ~1.000 €, not modelled.
+11. **Loan amounts are exact percentages of the purchase price, unless an apartment carries its offer's loan** (`offerLoans`, [D45](DECISIONS.md)). Banks round, and offers built on a round Eigenkapital sum differ more: the November offers' "90 %" is 445.000 € on 500.000 € (89 %). Then the down payment is price minus that loan, and the EK level stays the offer's label ("10 % EK" = the 90 % offer).
 12. **The runtime is reported in fractional months.** A bank's Tilgungsplan counts the final part-payment as a whole month, so "30,09 Jahre" here and "30 Jahre 2 Monate" on the offer are the same result.
 
 ---
@@ -225,7 +225,7 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 16. **"Grundsteuer + eigene Rücklage" is one flat amount** (default 90 €/Monat) for every apartment, not derived from size, Bundesland or building age. Grundsteuer differs by municipality, the needed reserve by the flat's condition ([D35](DECISIONS.md)).
 17. **The Shortlist flats' Monatsraten are estimates**, not offers. Lindenstraße: the smallest rate that repays the 10 %-EK loan by the retirement deadline without Sondertilgung. BUWOG: the highest rate under the 40 % burden threshold, which meets the deadline only with Sondertilgung ([D44](DECISIONS.md)). Replace both when a bank quotes.
 18. **The 15-year Sollzins column** is the owners' 10-year assumption plus 0,2 points, as they were told by the bank ([D41](DECISIONS.md)).
-19. **KfW and bank are two loans** (`simulateSplitLoan`, [D44](DECISIONS.md)). The KfW part: its own rate, one repayment-free year counted from the start of repayment (handover), then an annuity ending `kfwTermYears` after it; no Sondertilgung. The bank part: the rest of the one Monatsrate, all Sondertilgung, the 5 % cap taken on the bank part. In the free year the couple pays less (bank rate plus KfW interest only). Both rates are held for the whole term (§1); KfW's Zinsbindung is at most 10 years, so with a 15-year bank binding the KfW part would in reality refinance earlier. The refinancing stress shifts both rates. Whether the free year starts at first disbursement rather than at handover is not modelled. The blended rate is shown as an average only.
+19. **KfW and bank are two loans** (`simulateSplitLoan`, [D44](DECISIONS.md)). The KfW part: its own rate, one repayment-free year counted from the start of repayment (handover), then an annuity ending `kfwTermYears` after it; no Sondertilgung. The bank part: the rest of the one Monatsrate, all Sondertilgung, the 5 % cap taken on the bank part. In the free year the couple pays less (bank rate plus KfW interest only). Both rates are held for the whole term (§1); KfW's Zinsbindung is at most 10 years, so with a 15-year bank binding the KfW part would in reality refinance earlier. The refinancing stress shifts both rates. Whether the free year starts at first disbursement rather than at handover is not modelled. The blended rate is shown as an average only. At refinancing (also in the stress run) the KfW part gets a new annuity for its remaining term at its new rate, and the bank part the rest of the unchanged Monatsrate ([D45](DECISIONS.md)); whether the KfW really recomputes this way is the broker's to confirm.
 20. **A Neubau's handover delay** (`moveInMonths`) shortens the amortising part of the Zinsbindung; every "within the binding" horizon uses `bindingMonths`, only the rate lookup uses the full binding. Bauzeit- and Bereitstellungszinsen are a rough estimate shown in the comparison only (loan × rate × months × 50 % drawn on average, `CONSTRUCTION_DRAW_SHARE`) and are not deducted from cash or the ledger: they are paid from income while rent continues. EK is assumed due at signing. In practice EK is drawn first, then KfW, then the bank loan (broker, 20.05.2026), so 50 % drawn on average is likely on the high side. The rest of the page measures from handover; only the comparison section puts both flats on one calendar from signing.
 21. **The parking space's cost** is its share of the price: that share of the Monatsrate and of EK plus Kaufnebenkosten. No separate Hausgeld for the space.
 
@@ -293,11 +293,27 @@ matches (first month 1.306,12 vs 1.306,13 € interest; balance after 16 months
 cost structure (Nebenkosten 52.065 € = 11,57%; Eigenkapital = Anzahlung + Nebenkosten;
 Sondertilgung 5% = 20.250 €/Jahr).
 
+**Validated against four more offers** (24.11.2026, BauDarlehen24, 10 Jahre), pinned in
+`src/lib/offer2026-11.test.ts`, including the first split loan:
+
+| Angebot | Darlehen | Sollzins | Restschuld 10 J. (Modell / Angebot) | Laufzeit |
+|---|---|---|---|---|
+| 1a HypoVereinsbank | 445.000 € | 4,11 % | 319.774,78 / 319.774,73 | 25 J. 2 M. ✓ |
+| 1b Commerzbank | 420.850 € | 4,06 % | 280.975,07 / 280.975,05 | 22 J. 8 M. ✓ |
+| 2a Deutsche Bank (Bankteil) | 413.508 € | 4,01 % | 294.905,84 / 294.905,90 | 24 J. 11 M. ✓ |
+| 2b Commerzbank (Bankteil) | 380.508 € | 3,94 % | 241.807,21 / 241.807,17 | 21 J. 6 M. ✓ |
+| KfW 300 (in 2a und 2b) | 170.000 € | 0,78 % | 129.290,05 / 129.290,15 | 35 J. ✓ |
+
+2b as one `simulateSplitLoan` run reproduces the combined 371.097 €. Not modelled and
+not pinned: Deutsche Bank's first month is interest only (paid out 01.12., repayment
+from 01.01.), and Commerzbank's first month is a one-day stub; both are disbursement
+timing. The BUWOG offers assume payout in 12/2026 and repayment from 2027, as for an
+existing flat; the app starts repayment at handover (§4.20), so its BUWOG Restschuld is
+higher than the offers'.
+
 Still outstanding from [PRODUCT_SPEC §19](PRODUCT_SPEC.md#19-validation-before-real-use):
-the owner's Google Sheet and an independent German mortgage calculator. Neither is
-load-bearing now that a real offer agrees to the cent, but a second offer with a
-different structure (Neubau with Bereitstellungszinsen, or a split Teildarlehen) would
-test parts of the model this one does not touch.
+an independent German mortgage calculator, and an offer that models a Neubau's staged
+payout with Bereitstellungszinsen.
 
 Automated coverage lives in `src/lib/calculations.test.ts`. Run with:
 

@@ -17,6 +17,7 @@ A personal decision-support tool for one German couple deciding how much Eigenka
 | `src/lib/calculations.ts` | All model logic. Pure, no React. The only place behaviour changes belong |
 | `src/lib/calculations.test.ts` | Vitest coverage for the above |
 | `src/lib/offer.test.ts` | The engine pinned to a real broker offer. Do not weaken |
+| `src/lib/offer2026-11.test.ts` | Pinned to the four offers of 24.11.2026, incl. the KfW split loan. Do not weaken |
 | `src/lib/defaults.ts` | Default inputs, EK scenarios, apartment cases, QA test presets |
 | `src/lib/storage.ts`, `src/lib/sync.ts` | localStorage, JSON export bundle, optional Sheet sync. Apps Script in `docs/google-sheet-sync/` |
 | `src/lib/format.ts` | All money/percent/year rendering. Never format inline |
@@ -73,6 +74,6 @@ npm run build
 - `npm test` green
 - `npm run build` succeeds and the standalone file still opens
 - The three QA presets behave: **600k** feasible · **720k** borderline with visible warnings · **850k** yields "Keine der drei Varianten ist tragbar". They pin every input that decides their outcome, now including `monthlyPayment` and `fixedRateYears` ([D12](docs/DECISIONS.md))
-- `src/lib/offer.test.ts` still reproduces all six offer variants
+- `src/lib/offer.test.ts` still reproduces all six offer variants, and `offer2026-11.test.ts` the four November offers
 - New model assumptions or simplifications recorded in `docs/ASSUMPTIONS.md`
 - Product-shaping choices recorded in `docs/DECISIONS.md`

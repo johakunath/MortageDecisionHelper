@@ -8,6 +8,7 @@ import {
   saveExists,
   saveNamed,
   storageAvailable,
+  textHash,
   upgradeShippedRates,
   writeBundleSaves,
 } from "./storage";
@@ -325,6 +326,88 @@ describe("persistence", () => {
     const loaded = loadNamed("pre-d42")!;
     const byId = (id: string) => loaded.apartmentCases.find((a) => a.id === id)!;
     expect(byId("flat-own")).toMatchObject({ kfwAmount: 0, kfwRate: 0, moveInMonths: 0, parkingPrice: 0 });
-    expect(byId("buwog-arbor-h2-we08")).toMatchObject({ kfwAmount: 170000, kfwRate: 1.3, moveInMonths: 19, parkingPrice: 30000 });
+    const shipped = SHORTLIST_APARTMENT_CASES.find((a) => a.id === "buwog-arbor-h2-we08")!;
+    expect(byId("buwog-arbor-h2-we08")).toMatchObject({
+      kfwAmount: shipped.kfwAmount,
+      kfwRate: shipped.kfwRate,
+      moveInMonths: shipped.moveInMonths,
+      parkingPrice: shipped.parkingPrice,
+    });
+  });
+
+  it("refreshes untouched Shortlist flats to the bank offers, never edited ones (D45)", () => {
+    const state = defaultState();
+    const old = (id: string, patch: Record<string, unknown>) => {
+      const { rates: _rates, ratesNote: _note, offerLoans: _loans, ...rest } = state.apartmentCases.find((a) => a.id === id)!;
+      return { ...rest, ...patch };
+    };
+    const stored = {
+      ...state,
+      shortlistRevision: undefined,
+      rates: DEFAULT_RATES,
+      ratesNote: DEFAULT_RATES_NOTE,
+      apartmentCases: [
+        // As shipped on 23.11.2026: untouched, so it takes the offers.
+        old("lindenstrasse-31g-we49", { purchasePrice: 520000, monthlyPayment: 2500 }),
+        // Edited by the couple: left exactly as it is.
+        old("buwog-arbor-h2-we08", { purchasePrice: 640000, monthlyPayment: 2976, kfwRate: 1.3 }),
+      ],
+    };
+    window.localStorage.setItem("mdh:save:pre-d45", JSON.stringify(stored));
+
+    const loaded = loadNamed("pre-d45")!;
+    const linden = loaded.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    const buwog = loaded.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!;
+    expect(linden.purchasePrice).toBe(500000);
+    expect(linden.note).toBe(SHORTLIST_APARTMENT_CASES[0].note);
+    expect(linden.offerLoans).toEqual({ ek10: 445000, ek15: 420850 });
+    expect(linden.rates[10].ek10).toBe(4.11);
+    expect(buwog.purchasePrice).toBe(640000);
+    expect(buwog.kfwRate).toBe(1.3);
+    // Stored before rates belonged to the apartment: it keeps the grid it was using.
+    expect(buwog.rates).toEqual(DEFAULT_RATES);
+    expect(loaded.shortlistRevision).toBeGreaterThan(0);
+
+    // Shipped numbers but a different Hausgeld, or a note of their own (Codex, PR #13).
+    const hausgeld = {
+      ...stored,
+      apartmentCases: [old("lindenstrasse-31g-we49", { purchasePrice: 520000, monthlyPayment: 2500, hausgeld: 900 })],
+    };
+    window.localStorage.setItem("mdh:save:hausgeld", JSON.stringify(hausgeld));
+    const ownHausgeld = loadNamed("hausgeld")!.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    expect(ownHausgeld.hausgeld).toBe(900);
+    expect(ownHausgeld.purchasePrice).toBe(520000);
+
+    const noted = {
+      ...stored,
+      apartmentCases: [old("lindenstrasse-31g-we49", { purchasePrice: 520000, monthlyPayment: 2500, note: "Makler sagt 490k möglich" })],
+    };
+    window.localStorage.setItem("mdh:save:noted", JSON.stringify(noted));
+    const ownNote = loadNamed("noted")!.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    expect(ownNote.purchasePrice).toBe(500000);
+    expect(ownNote.note).toBe("Makler sagt 490k möglich");
+
+    // Renamed but otherwise as shipped: an edit, so it is not replaced either.
+    const renamed = {
+      ...stored,
+      apartmentCases: [old("lindenstrasse-31g-we49", { purchasePrice: 520000, monthlyPayment: 2500, label: "Unsere Linde" })],
+    };
+    window.localStorage.setItem("mdh:save:renamed", JSON.stringify(renamed));
+    const kept = loadNamed("renamed")!.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    expect(kept.label).toBe("Unsere Linde");
+    expect(kept.purchasePrice).toBe(520000);
+
+    // Refreshed once only: saved and loaded again, an edit to the refreshed flat stays.
+    saveNamed("again", {
+      ...loaded,
+      apartmentCases: loaded.apartmentCases.map((a) => (a.id === linden.id ? { ...a, monthlyPayment: 2500 } : a)),
+    });
+    expect(loadNamed("again")!.apartmentCases.find((a) => a.id === linden.id)!.monthlyPayment).toBe(2500);
+  });
+
+  it("recognises the note shipped on 23.11.2026 by its hash (D45)", () => {
+    const shipped = "Lindenstraße 31G, Haus 3 / WE49, 93,6 m², 4. OG rechts, Bj. 1998, Energie D. Kaufpreis = 495.000 € + 25.000 € TG. Mit Makler (3,57 %). Renovierung = Einbauküche 12k (Küchenöffnung 7–8k nicht enthalten). Hausgeld 630 € laut Exposé, evtl. später niedriger. Quelle: Shortlist-Sheet, Stand 23.11.2026.";
+    expect(textHash(shipped)).toBe(1755963962);
+    expect(textHash(shipped + " ")).not.toBe(1755963962);
   });
 });

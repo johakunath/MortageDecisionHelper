@@ -55,7 +55,7 @@ export default function RightPanel({ selected, inputs, decision, stress }: Right
           <Readout
             label="Darlehen"
             value={formatEur(selected.loan)}
-            sub={`${selected.ekRate}% EK + ${formatEur(selected.closingCosts)} Nebenkosten aus eigener Tasche`}
+            sub={`${formatEur(selected.downPayment)} Anzahlung + ${formatEur(selected.closingCosts)} Nebenkosten aus eigener Tasche`}
             info={GLOSSARY.loan}
           />
           <Readout

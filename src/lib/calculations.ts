@@ -76,6 +76,13 @@ export type MortgageInputs = {
   /** The KfW loan's term in years, its repayment-free year included (D44). */
   kfwTermYears: number;
   /**
+   * Loan amounts from a bank offer, per EK level, owned by the apartment (D45). Offers
+   * are built on round Eigenkapital sums, so "90 %" can be an 89 % loan; without these
+   * the screen would disagree with the offer by thousands. Missing = the EK share of
+   * the price.
+   */
+  offerLoans?: Partial<Record<ScenarioId, number>>;
+  /**
    * Months from signing to moving in (Neubau). The Zinsbindung starts at signing, but
    * the annuity starts only at handover, so the loan amortises for this much less of
    * the binding. 0 for a flat that is moved into at once. Owned by the apartment (D42).
@@ -464,6 +471,15 @@ export type ApartmentCase = {
    */
   monthlyPayment: number;
   annualSpecialRepayments: number[];
+  /**
+   * This apartment's Sollzinsen, per binding and EK level (D45). Per apartment because
+   * each flat's offer comes from its own bank: one shared grid could not hold both.
+   */
+  rates: InterestRates;
+  /** Stand und Quelle of `rates`, free text (D36). */
+  ratesNote: string;
+  /** Loan amounts from the apartment's offers, per EK level (D45). */
+  offerLoans?: Partial<Record<ScenarioId, number>>;
   /** Free text: address, Makler, link to the Exposé. Never read by the model. */
   note?: string;
 };
@@ -732,8 +748,9 @@ export function simulateSplitLoan(params: SplitLoanParams): MortgageSimulation &
   let bank = Math.max(0, params.bankPrincipal);
   let kfw = Math.max(0, params.kfwPrincipal);
   const principal = bank + kfw;
-  const kfwPayment = kfwAnnuity(kfw, params.kfwRatePct, params.kfwTermYears);
-  const bankPayment = params.monthlyPayment - kfwPayment;
+  let kfwPayment = kfwAnnuity(kfw, params.kfwRatePct, params.kfwTermYears);
+  let bankPayment = params.monthlyPayment - kfwPayment;
+  const kfwTermMonths = Math.round(params.kfwTermYears * 12);
   const fixedMonths = Math.round(params.fixedRateYears * 12);
   const maxAnnualSpecial = bank * (Math.max(0, params.specialRepaymentLimitRate) / 100);
   const usedAnnualSpecial = Math.min(requestedSpecialForYear(params.specialPlan, 0), maxAnnualSpecial);
@@ -750,6 +767,15 @@ export function simulateSplitLoan(params: SplitLoanParams): MortgageSimulation &
   while (bank + kfw > 0.01 && months < 80 * 12) {
     months += 1;
     const shift = params.rateShift && months > params.rateShift.afterMonths ? params.rateShift.points : 0;
+    if (params.rateShift && months === params.rateShift.afterMonths + 1 && kfw > 0.01) {
+      // At refinancing the KfW sets a new rate for its remaining term and recomputes its
+      // annuity; the household keeps paying the same total, so the bank part gets the
+      // rest. Holding the old KfW annuity at a tripled rate added 13 years (D45).
+      const monthsLeft = Math.max(1, kfwTermMonths - params.rateShift.afterMonths);
+      const monthly = Math.max(0, params.kfwRatePct + shift) / 1200;
+      kfwPayment = monthly === 0 ? kfw / monthsLeft : (kfw * monthly) / (1 - Math.pow(1 + monthly, -monthsLeft));
+      bankPayment = params.monthlyPayment - kfwPayment;
+    }
     const bankInterest = (bank * Math.max(0, params.bankRatePct + shift)) / 1200;
     const kfwInterest = (kfw * Math.max(0, params.kfwRatePct + shift)) / 1200;
     const bankPart = bank > 0.01 ? Math.min(bank, Math.max(0, bankPayment - bankInterest)) : 0;
@@ -888,6 +914,18 @@ export function minimumPaymentForLifetime(
   return high;
 }
 
+/**
+ * The loan for one EK level: the amount from the apartment's offer when there is one,
+ * else the price minus the EK share. Every loan in the model comes from here (D45).
+ */
+export function loanFor(base: ScenarioBase, inputs: MortgageInputs): number {
+  const fromOffer = inputs.offerLoans?.[base.id];
+  if (fromOffer !== undefined && Number.isFinite(fromOffer) && fromOffer > 0) {
+    return Math.min(fromOffer, inputs.purchasePrice);
+  }
+  return Math.max(0, inputs.purchasePrice * (1 - base.ekRate / 100));
+}
+
 export function calculateCashNeeded(
   purchasePrice: number,
   ekRate: number,
@@ -911,16 +949,10 @@ export function buildScenario(
   rates: InterestRates,
   specialPlan: SpecialPlan = planFromInputs(inputs),
 ): ScenarioResult {
-  const downPayment = inputs.purchasePrice * (base.ekRate / 100);
-  const loan = Math.max(0, inputs.purchasePrice - downPayment);
+  const loan = loanFor(base, inputs);
+  const downPayment = inputs.purchasePrice - loan;
   const closingCosts = inputs.purchasePrice * (inputs.closingCostRate / 100);
-  const cashNeeded = calculateCashNeeded(
-    inputs.purchasePrice,
-    base.ekRate,
-    inputs.closingCostRate,
-    inputs.renovation,
-    inputs.moving,
-  );
+  const cashNeeded = downPayment + closingCosts + inputs.renovation + inputs.moving;
   const bankRate = rateFor(rates, inputs.fixedRateYears, base.id);
   const kfwPart = Math.min(Math.max(0, inputs.kfwAmount), loan);
   const interestRate = blendedRate(bankRate, loan, inputs.kfwAmount, inputs.kfwRate);
@@ -1147,6 +1179,7 @@ export function buildApartmentInputs(
     kfwAmount: apartment.kfwAmount,
     kfwRate: apartment.kfwRate,
     kfwTermYears: apartment.kfwTermYears,
+    offerLoans: apartment.offerLoans,
     moveInMonths: apartment.moveInMonths,
     renovation: apartment.renovation,
     monthlyOwnershipCosts: apartment.hausgeld + baseInputs.ownerExtraMonthly,
@@ -1195,9 +1228,9 @@ export function apartmentColumn(
   apartment: ApartmentCase,
   base: ScenarioBase,
   baseInputs: MortgageInputs,
-  rates: InterestRates,
 ): ApartmentColumn {
   const inputs = buildApartmentInputs(baseInputs, apartment);
+  const rates = apartment.rates;
   const scenario = buildScenario(base, inputs, rates);
   const withoutSpecial = buildScenario(base, inputs, rates, { kind: "none" });
   const months = bindingMonths(inputs);
@@ -1224,7 +1257,9 @@ export function apartmentColumn(
     specialInBinding,
     debtFreeAfterYears: Math.max(0, inputs.moveInMonths) / 12 + scenario.mortgage.runtimeYears,
     parkingMonthly: scenario.mortgage.regularMonthlyPayment * parkingShare,
-    parkingCash: apartment.parkingPrice * ((base.ekRate + inputs.closingCostRate) / 100),
+    // The space carries its share of the actual down payment, which an offer can set
+    // a little above the nominal EK level (D45), plus its Kaufnebenkosten.
+    parkingCash: apartment.parkingPrice * (scenario.downPayment / Math.max(1, inputs.purchasePrice) + inputs.closingCostRate / 100),
   };
 }
 
@@ -1240,12 +1275,12 @@ export function compareApartmentCases(
   apartments: ApartmentCase[],
   scenarioBases: ScenarioBase[],
   baseInputs: MortgageInputs,
-  rates: InterestRates,
   selectedId: ScenarioId,
 ): ApartmentComparisonResult[] {
   return apartments.map((apartment) => {
     const apartmentInputs = buildApartmentInputs(baseInputs, apartment);
-    const scenarios = buildScenarios(scenarioBases, apartmentInputs, rates);
+    // Each apartment at its own bank's rates (D45).
+    const scenarios = buildScenarios(scenarioBases, apartmentInputs, apartment.rates);
     const decision = evaluateDecision(scenarios);
     const selectedScenario =
       scenarios.find((scenario) => scenario.id === selectedId) ?? scenarios[0];
@@ -1463,7 +1498,7 @@ export function requiredSpecialToMatch(
   inputs: MortgageInputs,
   rates: InterestRates,
 ): SpecialBreakEven {
-  const loan = inputs.purchasePrice * (1 - scenarioBase.ekRate / 100);
+  const loan = loanFor(scenarioBase, inputs);
   const maxSpecial = loan * (inputs.specialRepaymentLimitRate / 100);
   const interestAt = (annual: number) =>
     interestForPlan(scenarioBase, inputs, rates, { kind: "flat", annual });
@@ -1672,6 +1707,8 @@ export function buildWaitScenario(
     ...inputs,
     purchasePrice: futurePrice,
     availableCapital: adjustedAvailableCapital,
+    // An offer's loan belongs to today's price; a later purchase is financed by share.
+    offerLoans: waitMonths > 0 ? undefined : inputs.offerLoans,
   };
   const scenario = buildScenario(selectedBase, futureInputs, purchaseRates);
   const wealth = wealthAtHorizon({ base: selectedBase, inputs, rates, waitMonths, horizonMonths });
@@ -1908,7 +1945,7 @@ export function wealthAtHorizon(params: WealthPathParams): WealthAtHorizon {
   const { futurePrice, purchaseRates } = purchaseAfterWaiting(base, inputs, rates, waitMonths);
   const purchase = buildScenario(
     base,
-    { ...inputs, purchasePrice: futurePrice },
+    { ...inputs, purchasePrice: futurePrice, offerLoans: waitMonths > 0 ? undefined : inputs.offerLoans },
     purchaseRates,
     specialPlan,
   );

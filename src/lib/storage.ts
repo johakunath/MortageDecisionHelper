@@ -8,6 +8,8 @@ import {
   OFFER_RATES,
   OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
+  SHORTLIST_REVISION,
+  SUPERSEDED_SHORTLIST,
 } from "./defaults";
 
 /**
@@ -24,6 +26,11 @@ export type PersistedState = {
   apartmentCases: ApartmentCase[];
   activeApartmentId: string;
   selectedId: ScenarioId;
+  /**
+   * Which shipped data the Shortlist flats were last refreshed to (D45). A state below
+   * `SHORTLIST_REVISION` gets untouched Shortlist flats replaced by the current ones.
+   */
+  shortlistRevision: number;
 };
 
 const CURRENT_VERSION = 2;
@@ -114,7 +121,7 @@ function reviveAmounts(value: unknown, fallback: number[] = []): number[] {
 }
 
 /** Every `MortgageInputs` field is a number except the Sondertilgung path. */
-type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
+type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments" | "offerLoans">;
 
 function reviveInputs(stored: unknown): MortgageInputs {
   const raw = (stored ?? {}) as Record<string, unknown>;
@@ -152,13 +159,26 @@ function reviveRateRow(
  * the four values it is allowed to own — and keys from older shapes (`selectedScenarioId`)
  * do not ride along into the live state.
  */
-function reviveApartment(
-  stored: unknown,
-  index: number,
-  ownerExtra: number,
-  globalClosingCostRate: number,
-  globalMonthlyPayment: number,
-): ApartmentCase {
+type ApartmentFallbacks = {
+  ownerExtra: number;
+  closingCostRate: number;
+  monthlyPayment: number;
+  rates: InterestRates;
+  ratesNote: string;
+};
+
+function reviveOfferLoans(stored: unknown): Partial<Record<ScenarioId, number>> | undefined {
+  if (!stored || typeof stored !== "object") return undefined;
+  const raw = stored as Record<string, unknown>;
+  const loans: Partial<Record<ScenarioId, number>> = {};
+  for (const scenario of EK_SCENARIOS) {
+    const value = Number(raw[scenario.id]);
+    if (Number.isFinite(value) && value > 0) loans[scenario.id] = value;
+  }
+  return Object.keys(loans).length > 0 ? loans : undefined;
+}
+
+function reviveApartment(stored: unknown, index: number, fallbacks: ApartmentFallbacks): ApartmentCase {
   const raw = (stored ?? {}) as Record<string, unknown>;
   const fallback =
     DEFAULT_APARTMENT_CASES[Math.min(index, DEFAULT_APARTMENT_CASES.length - 1)];
@@ -172,19 +192,85 @@ function reviveApartment(
     label: typeof raw.label === "string" && raw.label.length > 0 ? raw.label : fallback.label,
     purchasePrice: reviveNumber(raw.purchasePrice, fallback.purchasePrice),
     renovation: reviveNumber(raw.renovation, fallback.renovation),
-    hausgeld: reviveHausgeld(raw, fallback.hausgeld, ownerExtra),
-    // Saves before D40 had one global KNK rate and Monatsrate; they were what every
-    // apartment used, so they stay what each of them uses.
-    closingCostRate: Math.max(0, reviveNumber(raw.closingCostRate, globalClosingCostRate)),
-    monthlyPayment: Math.max(1, reviveNumber(raw.monthlyPayment, globalMonthlyPayment)),
+    hausgeld: reviveHausgeld(raw, fallback.hausgeld, fallbacks.ownerExtra),
+    // Saves before D40 had one global KNK rate and Monatsrate, before D45 one global
+    // rate grid; they were what every apartment used, so they stay what each one uses.
+    closingCostRate: Math.max(0, reviveNumber(raw.closingCostRate, fallbacks.closingCostRate)),
+    monthlyPayment: Math.max(1, reviveNumber(raw.monthlyPayment, fallbacks.monthlyPayment)),
+    rates: reviveRates(raw.rates, fallbacks.rates),
+    ratesNote: typeof raw.ratesNote === "string" ? raw.ratesNote : fallbacks.ratesNote,
     kfwAmount: Math.max(0, reviveNumber(raw.kfwAmount, sameId?.kfwAmount ?? 0)),
     kfwRate: Math.max(0, reviveNumber(raw.kfwRate, sameId?.kfwRate ?? 0)),
     kfwTermYears: Math.max(2, reviveNumber(raw.kfwTermYears, sameId?.kfwTermYears ?? 20)),
     moveInMonths: Math.max(0, Math.round(reviveNumber(raw.moveInMonths, sameId?.moveInMonths ?? 0))),
     parkingPrice: Math.max(0, reviveNumber(raw.parkingPrice, sameId?.parkingPrice ?? 0)),
     annualSpecialRepayments: reviveAmounts(raw.annualSpecialRepayments),
+    ...(reviveOfferLoans(raw.offerLoans) ? { offerLoans: reviveOfferLoans(raw.offerLoans) } : {}),
     ...(typeof raw.note === "string" && raw.note.length > 0 ? { note: raw.note } : {}),
   };
+}
+
+function reviveRates(stored: unknown, fallback: InterestRates): InterestRates {
+  const raw = (stored ?? {}) as Partial<Record<10 | 15, unknown>>;
+  return {
+    10: reviveRateRow(raw[10], fallback[10]),
+    15: reviveRateRow(raw[15], fallback[15]),
+  };
+}
+
+function cloneApartment(apartment: ApartmentCase): ApartmentCase {
+  return {
+    ...apartment,
+    rates: { 10: { ...apartment.rates[10] }, 15: { ...apartment.rates[15] } },
+    annualSpecialRepayments: [...apartment.annualSpecialRepayments],
+    ...(apartment.offerLoans ? { offerLoans: { ...apartment.offerLoans } } : {}),
+  };
+}
+
+/**
+ * A short fingerprint of a text (djb2 over UTF-16 code units), to recognise a note the
+ * app shipped without keeping every old note in the bundle.
+ */
+export function textHash(text: string): number {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+  return hash;
+}
+
+/**
+ * Shipped Shortlist data the couple never touched is replaced when newer data ships
+ * (D45: the bank offers of 24.11.2026). "Untouched" means price and Monatsrate still
+ * equal one of the values shipped before, and every field that never changed between
+ * versions (name, Hausgeld, renovation, Kaufnebenkosten, parking) still equals it; a
+ * flat they edited in any of these is left exactly as it is.
+ */
+function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCase[] {
+  if (revision >= SHORTLIST_REVISION) return cases;
+  return cases.map((apartment) => {
+    const superseded = SUPERSEDED_SHORTLIST[apartment.id];
+    const current = SHORTLIST_APARTMENT_CASES.find((entry) => entry.id === apartment.id);
+    if (!superseded || !current) return apartment;
+    const untouched =
+      apartment.purchasePrice === superseded.purchasePrice &&
+      superseded.monthlyPayments.includes(apartment.monthlyPayment) &&
+      apartment.kfwAmount === superseded.kfwAmount &&
+      superseded.kfwRates.includes(apartment.kfwRate) &&
+      superseded.kfwTermYears.includes(apartment.kfwTermYears) &&
+      apartment.moveInMonths === superseded.moveInMonths &&
+      apartment.label === current.label &&
+      apartment.hausgeld === current.hausgeld &&
+      apartment.renovation === current.renovation &&
+      apartment.closingCostRate === current.closingCostRate &&
+      apartment.parkingPrice === current.parkingPrice;
+    if (!untouched) return apartment;
+    // A note the couple wrote stays; only a note the app shipped is replaced. The
+    // Sondertilgung plan is theirs in any case.
+    const shippedNote = apartment.note !== undefined && superseded.noteHashes.includes(textHash(apartment.note));
+    const refreshed = { ...cloneApartment(current), annualSpecialRepayments: [...apartment.annualSpecialRepayments] };
+    if (shippedNote) return refreshed;
+    const { note: _shipped, ...withoutNote } = refreshed;
+    return apartment.note !== undefined ? { ...withoutNote, note: apartment.note } : withoutNote;
+  });
 }
 
 /**
@@ -224,13 +310,21 @@ function reviveRatesNote(stored: unknown, rates: InterestRates): string {
  * A note the couple wrote themselves means they chose these rates, so it is kept too.
  */
 export function upgradeShippedRates(state: PersistedState): PersistedState {
-  const untouched =
-    ratesEqual(state.rates, OFFER_RATES) && (state.ratesNote === OFFER_RATES_NOTE || state.ratesNote === "");
-  if (!untouched) return state;
+  const untouched = (rates: InterestRates, note: string) =>
+    ratesEqual(rates, OFFER_RATES) && (note === OFFER_RATES_NOTE || note === "");
+  const fresh = () => ({ 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } });
+  const anything =
+    untouched(state.rates, state.ratesNote) ||
+    state.apartmentCases.some((apartment) => untouched(apartment.rates, apartment.ratesNote));
+  if (!anything) return state;
   return {
     ...state,
-    rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
-    ratesNote: DEFAULT_RATES_NOTE,
+    ...(untouched(state.rates, state.ratesNote) ? { rates: fresh(), ratesNote: DEFAULT_RATES_NOTE } : {}),
+    apartmentCases: state.apartmentCases.map((apartment) =>
+      untouched(apartment.rates, apartment.ratesNote)
+        ? { ...apartment, rates: fresh(), ratesNote: DEFAULT_RATES_NOTE }
+        : apartment,
+    ),
   };
 }
 
@@ -304,10 +398,7 @@ function withShortlistApartments(cases: ApartmentCase[]): ApartmentCase[] {
   );
   return [
     ...cases,
-    ...missing.map((apartment) => ({
-      ...apartment,
-      annualSpecialRepayments: [...apartment.annualSpecialRepayments],
-    })),
+    ...missing.map(cloneApartment),
   ];
 }
 
@@ -327,28 +418,35 @@ function reviveState(raw: string): PersistedState | null {
     if (!Array.isArray(storedCases) || storedCases.length === 0) return null;
 
     const inputs = reviveInputs(parsed.inputs);
+    const rates = reviveRates(parsed.rates, DEFAULT_RATES);
+    const ratesNote = reviveRatesNote(parsed.ratesNote, rates);
+    const fallbacks: ApartmentFallbacks = {
+      ownerExtra: inputs.ownerExtraMonthly,
+      closingCostRate: inputs.closingCostRate,
+      monthlyPayment: inputs.monthlyPayment,
+      rates,
+      ratesNote,
+    };
+    const revision = typeof parsed.shortlistRevision === "number" ? parsed.shortlistRevision : 0;
     const apartmentCases: ApartmentCase[] = withShortlistApartments(
-      storedCases.map((stored, index) =>
-        reviveApartment(stored, index, inputs.ownerExtraMonthly, inputs.closingCostRate, inputs.monthlyPayment),
+      refreshShortlist(
+        storedCases.map((stored, index) => reviveApartment(stored, index, fallbacks)),
+        revision,
       ),
     );
     const activeApartmentId = apartmentCases.some((a) => a.id === parsed.activeApartmentId)
       ? (parsed.activeApartmentId as string)
       : apartmentCases[0].id;
-    const storedRates = parsed.rates as InterestRates | undefined;
-    const rates: InterestRates = {
-      10: reviveRateRow(storedRates?.[10], DEFAULT_RATES[10]),
-      15: reviveRateRow(storedRates?.[15], DEFAULT_RATES[15]),
-    };
 
     return {
       version: CURRENT_VERSION,
       inputs,
       rates,
-      ratesNote: reviveRatesNote(parsed.ratesNote, rates),
+      ratesNote,
       apartmentCases,
       activeApartmentId,
       selectedId: reviveScenarioId(parsed.selectedId),
+      shortlistRevision: SHORTLIST_REVISION,
     };
   } catch {
     return null;
@@ -407,12 +505,10 @@ export function defaultState(): PersistedState {
     inputs: { ...DEFAULT_INPUTS },
     rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
     ratesNote: DEFAULT_RATES_NOTE,
-    apartmentCases: DEFAULT_APARTMENT_CASES.map((apartment) => ({
-      ...apartment,
-      annualSpecialRepayments: [...apartment.annualSpecialRepayments],
-    })),
+    apartmentCases: DEFAULT_APARTMENT_CASES.map(cloneApartment),
     activeApartmentId: DEFAULT_APARTMENT_CASES[0].id,
     selectedId: "ek10",
+    shortlistRevision: SHORTLIST_REVISION,
   };
 }
 

@@ -95,37 +95,50 @@ export const EK_SCENARIOS: ScenarioBase[] = [
 ];
 
 /**
- * The two flats marked "Vergleichen? Ja" in the couple's Shortlist Sheet (Stand
- * 22.11.2026). Prices include the parking space and Kaufnebenkosten are computed on
- * that total, exactly as the Sheet's own formulas do; "Renovierung" is the 12k kitchen
- * both lack. Stable ids, so `storage.ts` can add them to saves made before they existed
- * without ever adding them twice (D40).
+ * The two flats marked "Vergleichen? Ja" in the couple's Shortlist Sheet, at the bank
+ * offers of 24.11.2026 (BauDarlehen24, Angebote 1a/1b/2a/2b, 10 Jahre Sollzinsbindung).
+ * Prices include the parking space; "Renovierung" is the 12k kitchen, which the offers'
+ * Eigenkapital does not cover. Each flat carries its own banks' rates and the offers'
+ * loan amounts (D45). The engine reproduces each offer's Restschuld to within 10 cents
+ * (`offer2026-11.test.ts`). Stable ids, so `storage.ts` can add or refresh them (D40, D45).
  */
 export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
   {
     id: "lindenstrasse-31g-we49",
     label: "Lindenstraße 31G",
-    // 495.000 € Wohnung + 25.000 € TG-Stellplatz.
-    purchasePrice: 520000,
+    // Die Angebote rechnen mit 500.000 € inkl. TG-Stellplatz; das Exposé nennt
+    // 495.000 € + 25.000 € = 520.000 €.
+    purchasePrice: 500000,
     renovation: 12000,
     // Laut Exposé; Makler: wegen WEG-Investitionen ca. zwei Jahre erhöht.
     hausgeld: 630,
+    // 2 % Notar/Grundbuch + 6 % Grunderwerbsteuer + 3,57 % Makler = 57.850 € im Angebot.
     closingCostRate: 11.57,
-    // Geschätzt, kein Angebot: die kleinste Rate, mit der 468.000 € bei 4,3 % ohne
-    // Sondertilgung in 26 Jahren getilgt sind (Bankbedingung: bis zur Rente, D43).
-    // Nötig 2.494 €, aufgerundet; ≈ 2,1 % Anfangstilgung.
-    monthlyPayment: 2500,
+    // Angebot 1a 2.369,63 €, 1b 2.370,79 €: dieselbe Rate, gerundet (D14).
+    monthlyPayment: 2370,
     kfwAmount: 0,
     kfwRate: 0,
     kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 25000,
+    // 1a HypoVereinsbank 445.000 € (EK 112.850 €), 1b Commerzbank 420.850 € (EK 137.000 €).
+    offerLoans: { ek10: 445000, ek15: 420850 },
+    rates: {
+      // 20 % EK: kein Angebot, 0,1 Pkt. unter 85 % geschätzt wie im Angebot vom August.
+      10: { ek10: 4.11, ek15: 4.06, ek20: 3.96 },
+      // 15 Jahre: kein Angebot, je +0,2 Pkt. laut den Eigentümern.
+      15: { ek10: 4.31, ek15: 4.26, ek20: 4.16 },
+    },
+    ratesNote:
+      "Angebote 24.11.2026 (BauDarlehen24): 90 % HypoVereinsbank 4,11 %, 85 % Commerzbank 4,06 %, je 10 J. · 20 % EK und 15 J. geschätzt",
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
     note:
       "Lindenstraße 31G, Haus 3 / WE49, 93,6 m², 4. OG rechts, Bj. 1998, Energie D. " +
-      "Kaufpreis = 495.000 € + 25.000 € TG. Mit Makler (3,57 %). Renovierung = Einbauküche 12k " +
-      "(Küchenöffnung 7–8k nicht enthalten). Hausgeld 630 € laut Exposé, evtl. später niedriger. " +
-      "Quelle: Shortlist-Sheet, Stand 23.11.2026.",
+      "Kaufpreis 500.000 € inkl. TG wie in den Angeboten (Exposé: 495.000 € + 25.000 € TG). Mit Makler (3,57 %). " +
+      "Renovierung = Einbauküche 12k, nicht im Angebots-EK. Hausgeld 630 € laut Exposé. " +
+      "Angebot 1a (90 %) HypoVereinsbank: 445.000 € zu 4,11 %, Rate 2.369,63 €, Tilgung 2,28 %, Restschuld 2036 319.775 €, Laufzeit 25 J. 2 M. (bis 01/2052). " +
+      "Angebot 1b (85 %) Commerzbank: 420.850 € zu 4,06 %, Rate 2.370,79 €, Tilgung 2,70 %, Restschuld 2036 280.975 €, Laufzeit 22 J. 8 M. " +
+      "Sondertilgung je 5 % p.a.; Bereitstellungszinsfrei 12 bzw. 6 Monate, danach 0,25 %/Monat. Angebote gültig bis 26./27.11.2026.",
   },
   {
     id: "buwog-arbor-h2-we08",
@@ -135,32 +148,82 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     renovation: 12000,
     // BUWOG-Schätzung 3,50 €/m², kein finaler Wirtschaftsplan.
     hausgeld: 331,
-    // Provisionsfrei: 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch.
+    // Provisionsfrei: 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch = 52.408 € im Angebot.
     closingCostRate: 8,
-    // Geschätzt, kein Angebot: höchstens 40 % vom Haushaltsnetto mit Hausgeld (2.980 €
-    // läge 1 € darüber). Bank 4,3 % und KfW 300 als zwei Darlehen (D44): die KfW-Rate
-    // über 20 Jahre nimmt davon ≈ 842 €. Ohne Sondertilgung läuft das bis ≈ 2056, über
-    // die Rente hinaus; mit 6.000 €/Jahr bis ≈ 2051. Pünktlich ohne Sondertilgung
-    // bräuchte ≈ 3.160 €, über 40 %. Siehe D44.
-    monthlyPayment: 2976,
-    // KfW 300 bis 170.000 € bei zwei Kindern, Zins laut Sheet angenommen, keine Zusage.
+    // Angebot 2a 2.669,53 €, 2b 2.668,75 € (Bank + KfW ab dem 2. Jahr), gerundet (D14).
+    monthlyPayment: 2669,
+    // KfW 300 laut Angebot: 170.000 € zu 0,78 %, 1 tilgungsfreies Jahr, 35 Jahre
+    // Laufzeit (Rate ab dem 2. Jahr 474,49 €), keine Sondertilgung.
     kfwAmount: 170000,
-    kfwRate: 1.3,
-    // Laut Interhyp (20.05.2026) wählbar, im Gespräch 20 Jahre; 30 Jahre ginge, endete
-    // aber 2058, nach der Rente. Inkl. 1 tilgungsfreiem Jahr.
-    kfwTermYears: 20,
-    // Unterschrift Dezember 2026, Übergabe vsl. Juni 2028.
+    kfwRate: 0.78,
+    kfwTermYears: 35,
+    // Unterschrift Dezember 2026, Übergabe vsl. Juni 2028. Die Angebote rechnen dagegen
+    // mit Auszahlung 12/2026 und Tilgung ab 2027, als gäbe es keine Bauzeit (D45).
     moveInMonths: 19,
     parkingPrice: 30000,
+    // 2a Deutsche Bank 413.508 € + KfW (EK 124.000 €), 2b Commerzbank 380.508 € + KfW (EK 157.000 €).
+    offerLoans: { ek10: 583508, ek15: 550508 },
+    rates: {
+      // Bankteil ohne KfW. 20 % EK: kein Angebot, 0,1 Pkt. unter 85 % geschätzt.
+      10: { ek10: 4.01, ek15: 3.94, ek20: 3.84 },
+      // 15 Jahre: kein Angebot, je +0,2 Pkt. laut den Eigentümern.
+      15: { ek10: 4.21, ek15: 4.14, ek20: 4.04 },
+    },
+    ratesNote:
+      "Angebote 24.11.2026 (BauDarlehen24): Bankteil 90 % Deutsche Bank 4,01 %, 85 % Commerzbank 3,94 %, je 10 J., dazu KfW 300 0,78 % · 20 % EK und 15 J. geschätzt",
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
     note:
       "An der Filmfabrik 9, Haus 2 WE08, 94,6 m², 2. OG Nordost, Neubau EH40, Bezug vsl. Juni 2028. " +
       "Kaufpreis = 625.100 € Aktionspreis (bis 30.11.2026) + 30.000 € Stellplatz. Provisionsfrei. " +
-      "Renovierung = Einbauküche 12k. Hausgeld 331 € nur BUWOG-Schätzung. KfW 300 170k zu 1,3 % " +
-      "angenommen (keine Zusage; 1 tilgungsfreies Jahr, keine Sondertilgung auf KfW). Einzug in 19 Monaten: " +
-      "Zinsbindung läuft ab Unterschrift, Tilgung erst ab Übergabe. Bauzeitzinsen nur geschätzt. Quelle: Shortlist-Sheet, Stand 22.11.2026.",
+      "Renovierung = Einbauküche 12k, nicht im Angebots-EK. Hausgeld 331 € nur BUWOG-Schätzung. " +
+      "Angebot 2a (90 %) Deutsche Bank 413.508 € zu 4,01 % (Rate 2.195,04 €) + KfW 300 170.000 € zu 0,78 % (474,49 € ab dem 2. Jahr, 35 J.), Mischzins 3,07 %, Restschuld 2036 424.196 €. " +
+      "Angebot 2b (85 %) Commerzbank 380.508 € zu 3,94 % (2.194,26 €) + dieselbe KfW, Mischzins 2,96 %, Restschuld 2036 371.097 €. " +
+      "Die Angebote rechnen mit Tilgung ab 2027; real beginnt sie nach Übergabe (Juni 2028), daher zeigt die App höhere Restschulden. " +
+      "Bereitstellungszinsfrei: Deutsche Bank 12, Commerzbank nur 6 Monate, danach 0,25 %/Monat; KfW 12 Monate, danach 0,15 %/Monat. " +
+      "KfW 300: zu versteuerndes Haushaltseinkommen max. 100.000 € (2 Kinder), Ø des 2. und 3. Jahres vor Antrag.",
   },
 ];
+
+/** Bumped whenever the shipped Shortlist data changes (D45). */
+export const SHORTLIST_REVISION = 1;
+
+export type SupersededShortlist = {
+  purchasePrice: number;
+  monthlyPayments: number[];
+  kfwAmount: number;
+  kfwRates: number[];
+  /** 20 as shipped in D44; saves from before that field revive with today's term. */
+  kfwTermYears: number[];
+  moveInMonths: number;
+  /** `textHash` of every note shipped before, so a note the couple wrote is kept. */
+  noteHashes: number[];
+};
+
+/**
+ * What earlier versions shipped for the Shortlist flats: a stored flat that still
+ * matches one of these in every field that changed was never edited, so `storage.ts`
+ * replaces it with the current data (D45).
+ */
+export const SUPERSEDED_SHORTLIST: Record<string, SupersededShortlist> = {
+  "lindenstrasse-31g-we49": {
+    purchasePrice: 520000,
+    monthlyPayments: [2200, 2460, 2500],
+    kfwAmount: 0,
+    kfwRates: [0],
+    kfwTermYears: [20],
+    moveInMonths: 0,
+    noteHashes: [4117728304, 1755963962],
+  },
+  "buwog-arbor-h2-we08": {
+    purchasePrice: 655100,
+    monthlyPayments: [2770, 2670, 2976],
+    kfwAmount: 170000,
+    kfwRates: [1.3],
+    kfwTermYears: [20, 35],
+    moveInMonths: 19,
+    noteHashes: [3363609318, 577526082, 823980744],
+  },
+};
 
 /**
  * Hausgeld values are placeholders, not Exposé figures: they are the old "Eigentumskosten"
@@ -183,6 +246,8 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 0,
+    rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
+    ratesNote: DEFAULT_RATES_NOTE,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -198,6 +263,8 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 0,
+    rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
+    ratesNote: DEFAULT_RATES_NOTE,
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
@@ -213,6 +280,8 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     kfwTermYears: 20,
     moveInMonths: 0,
     parkingPrice: 0,
+    rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
+    ratesNote: DEFAULT_RATES_NOTE,
     annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
   },
   ...SHORTLIST_APARTMENT_CASES.map((apartment) => ({
