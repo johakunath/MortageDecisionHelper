@@ -106,6 +106,23 @@ npm test
 
 ---
 
+## Where it runs online
+
+The app is hosted on **Cloudflare Workers** (static assets), built by Cloudflare itself on every push to `main` — no GitHub Actions, no GitHub Pages. Because the hosting no longer reads from a public URL, **the repository can be private**, and the app itself sits behind **Cloudflare Access**, so only the two named email addresses can open it.
+
+| | |
+|---|---|
+| Config | [`wrangler.jsonc`](wrangler.jsonc) — assets-only Worker, `dist/` as the directory |
+| Build command (set in Cloudflare) | `npm test && npm run build` |
+| Deploy command (set in Cloudflare) | `npx wrangler deploy` |
+| URL | the Worker's `*.workers.dev` subdomain, or a custom domain later |
+
+Tests run inside the Cloudflare build, so a red test blocks the deploy without spending GitHub Actions minutes.
+
+The Google Sheet sync is unaffected: it is a browser-side call to the Apps Script web app and does not involve the host.
+
+---
+
 ## Documentation
 
 | File | Contents |
