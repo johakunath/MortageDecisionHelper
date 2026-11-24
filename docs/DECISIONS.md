@@ -680,3 +680,17 @@ The owner expected that the bank's household calculation would need less than 2 
 
 **Consequence.** Golden snapshots of the flats without KfW changed only in verdict fields; Lindenstraße and the 720k preset did not change at all; 850k still reads "Keine der drei Varianten ist tragbar". The invariant "Sondertilgung is neutral at the loan's rate" now uses the bank's rate, since that is the part Sondertilgung repays. Labels that printed the binding as a raw number now format it ("8,4 Jahre").
 
+
+---
+
+## D45: Hosted on Cloudflare Workers behind Access, so the repo can be private
+
+**Date:** 2026-11-24 · **Status:** accepted
+
+**Context.** The app was deployed to GitHub Pages by a workflow in `.github/workflows/deploy.yml`. GitHub Pages serves from a repository, and a Pages site on a personal account is public whatever the repository's visibility. The owners wanted both the repository and the app private: it carries their income, their equity and two real apartment offers.
+
+**Decision.** Hosting moves to a Cloudflare Worker with static assets (`wrangler.jsonc`, `dist/` as the asset directory, `not_found_handling: single-page-application`). Cloudflare's own Git integration builds and deploys on every push to `main`; the GitHub Pages workflow is deleted. Access to the Worker is restricted with Cloudflare Access to the two owners' email addresses.
+
+**Why not a GitHub Action with `wrangler deploy`.** It would keep a second build system and spend Actions minutes on a repository that now has nothing else to run there. Letting Cloudflare build removes the workflow entirely; the test suite moves into the build command (`npm test && npm run build`), so a failing test still blocks a deploy.
+
+**Consequence.** Nothing in the app changes: `base: "./"` already made every asset path relative, there is no router and no server-side piece. The offline standalone file and the optional Google Sheet sync are untouched — the sync is a browser-to-Apps-Script call and never involved the host. The site now requires a login (Cloudflare Access, session duration set in Zero Trust), which is the cost of making it private.
