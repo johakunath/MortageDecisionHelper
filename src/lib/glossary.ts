@@ -31,7 +31,7 @@ export const GLOSSARY = {
     "Ein Förderdarlehen der KfW, z. B. KfW 300 für Familien beim Neubau. Es ersetzt einen Teil des Bankdarlehens und läuft als eigenes Darlehen: eigener Zins, ein tilgungsfreies Jahr, danach eine feste Rate, keine Sondertilgung. Eure Sondertilgung geht immer in das Bankdarlehen. Weil der KfW-Teil fest ist, senkt mehr Eigenkapital nur den teureren Bankteil.",
   kfwRate: "Der Sollzins des KfW-Darlehens laut Förderzusage oder Angebot.",
   offerLoans:
-    "Die Darlehenssumme aus dem Bankangebot für diese Stufe. Banken rechnen oft mit einem runden Eigenkapitalbetrag, dann ist „90 %“ in Wirklichkeit etwas weniger Darlehen. Steht hier eine Summe, rechnet die App genau damit; 0 heißt: Anteil vom Kaufpreis.",
+    "Die Darlehenssumme aus dem Bankangebot für diese Stufe. Banken rechnen oft mit einem runden Eigenkapitalbetrag, dann ist „90 %“ in Wirklichkeit etwas weniger Darlehen. Steht hier eine Summe, rechnet die App genau damit; 0 heißt: Anteil vom Kaufpreis. Die Summe gilt für den Kaufpreis im Angebot: Ändert ihr den Kaufpreis, bleibt sie gleich und die Anzahlung ändert sich. Dann auf 0 setzen oder das neue Angebot eintragen.",
   kfwTermYears:
     "Über wie viele Jahre das KfW-Darlehen abbezahlt wird, das erste, tilgungsfreie Jahr eingerechnet. Danach ist es weg. Kürzer heißt: höherer KfW-Anteil an der Rate, aber früher schuldenfrei. Die KfW-Rate ist fest, der Rest eurer Monatsrate geht an die Bank.",
   moveInMonths:

@@ -121,6 +121,11 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
           value={apartment.purchasePrice}
           onChange={(value) => onChange({ purchasePrice: value })}
           highlight
+          hint={
+            apartment.offerLoans
+              ? "Darlehen laut Angebot unten bleiben fest; bei neuem Preis anpassen"
+              : undefined
+          }
         />
         <InputField
           label="davon Stellplatz"

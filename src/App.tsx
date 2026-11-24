@@ -76,16 +76,16 @@ type ApartmentNumericKey =
   | "moveInMonths"
   | "parkingPrice";
 
-/**
- * Restored synchronously during the first render, not in an effect: loading in an
- * effect would paint the defaults first and then visibly replace every number on the
- * screen a frame later.
- */
 /** A rates note the app shipped, rather than one the couple wrote (D36, D45). */
 function isShippedRatesNote(note: string): boolean {
   return note === DEFAULT_RATES_NOTE || SHORTLIST_APARTMENT_CASES.some((apartment) => apartment.ratesNote === note);
 }
 
+/**
+ * Restored synchronously during the first render, not in an effect: loading in an
+ * effect would paint the defaults first and then visibly replace every number on the
+ * screen a frame later.
+ */
 const INITIAL_STATE: PersistedState = loadAutosave() ?? defaultState();
 
 export default function App() {

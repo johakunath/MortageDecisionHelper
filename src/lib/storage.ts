@@ -228,9 +228,21 @@ function cloneApartment(apartment: ApartmentCase): ApartmentCase {
 }
 
 /**
+ * A short fingerprint of a text (djb2 over UTF-16 code units), to recognise a note the
+ * app shipped without keeping every old note in the bundle.
+ */
+export function textHash(text: string): number {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i += 1) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+  return hash;
+}
+
+/**
  * Shipped Shortlist data the couple never touched is replaced when newer data ships
  * (D45: the bank offers of 24.11.2026). "Untouched" means price and Monatsrate still
- * equal one of the values shipped before; a flat they edited is left exactly as it is.
+ * equal one of the values shipped before, and every field that never changed between
+ * versions (name, Hausgeld, renovation, Kaufnebenkosten, parking) still equals it; a
+ * flat they edited in any of these is left exactly as it is.
  */
 function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCase[] {
   if (revision >= SHORTLIST_REVISION) return cases;
@@ -240,8 +252,24 @@ function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCa
     if (!superseded || !current) return apartment;
     const untouched =
       apartment.purchasePrice === superseded.purchasePrice &&
-      superseded.monthlyPayments.includes(apartment.monthlyPayment);
-    return untouched ? { ...cloneApartment(current), annualSpecialRepayments: [...apartment.annualSpecialRepayments] } : apartment;
+      superseded.monthlyPayments.includes(apartment.monthlyPayment) &&
+      apartment.kfwAmount === superseded.kfwAmount &&
+      superseded.kfwRates.includes(apartment.kfwRate) &&
+      superseded.kfwTermYears.includes(apartment.kfwTermYears) &&
+      apartment.moveInMonths === superseded.moveInMonths &&
+      apartment.label === current.label &&
+      apartment.hausgeld === current.hausgeld &&
+      apartment.renovation === current.renovation &&
+      apartment.closingCostRate === current.closingCostRate &&
+      apartment.parkingPrice === current.parkingPrice;
+    if (!untouched) return apartment;
+    // A note the couple wrote stays; only a note the app shipped is replaced. The
+    // Sondertilgung plan is theirs in any case.
+    const shippedNote = apartment.note !== undefined && superseded.noteHashes.includes(textHash(apartment.note));
+    const refreshed = { ...cloneApartment(current), annualSpecialRepayments: [...apartment.annualSpecialRepayments] };
+    if (shippedNote) return refreshed;
+    const { note: _shipped, ...withoutNote } = refreshed;
+    return apartment.note !== undefined ? { ...withoutNote, note: apartment.note } : withoutNote;
   });
 }
 

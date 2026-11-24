@@ -5,6 +5,7 @@ import {
   bindingMonths,
   blendedRate,
   kfwAnnuity,
+  loanFor,
   simulateSplitLoan,
   type MortgageMonth,
   type SpecialPlan,
@@ -165,6 +166,31 @@ describe("calculation engine", () => {
     // The Shortlist Sheet's own figure for BUWOG: 52.408 € on 655.100 €.
     expect(developer.closingCosts).toBeCloseTo(52408, 0);
     expect(makler.closingCosts - developer.closingCosts).toBeCloseTo(655100 * 0.0357, 0);
+  });
+
+  it("takes the loan from the apartment's offer, and only for a purchase today (D45)", () => {
+    const flat = {
+      ...DEFAULT_APARTMENT_CASES[0],
+      purchasePrice: 500000,
+      closingCostRate: 11.57,
+      renovation: 12000,
+      offerLoans: { ek10: 445000 },
+    };
+    const inputs = buildApartmentInputs(DEFAULT_INPUTS, flat);
+    const [ek10, ek15] = buildScenarios(EK_SCENARIOS, inputs, OFFER_RATES);
+    // The offer's 445.000 €, not 90 % of the price; the rest is down payment.
+    expect(loanFor(EK_SCENARIOS[0], inputs)).toBe(445000);
+    expect(ek10.loan).toBe(445000);
+    expect(ek10.downPayment).toBe(55000);
+    // Offer EK 112.850 € (55.000 + 57.850 KNK), plus the kitchen the offer leaves out.
+    expect(ek10.cashNeeded).toBeCloseTo(112850 + 12000, 6);
+    // A level without an offer loan stays at its share of the price.
+    expect(ek15.loan).toBeCloseTo(425000, 6);
+    // Waiting moves the price, so a later purchase is financed by share again.
+    const later = buildWaitScenario(EK_SCENARIOS[0], inputs, OFFER_RATES, 12);
+    expect(later.scenario.loan).toBeCloseTo(later.futurePrice * 0.9, 6);
+    const now = buildWaitScenario(EK_SCENARIOS[0], inputs, OFFER_RATES, 0);
+    expect(now.scenario.loan).toBe(445000);
   });
 
   it("blends a fixed KfW loan into one rate per EK level (D42)", () => {

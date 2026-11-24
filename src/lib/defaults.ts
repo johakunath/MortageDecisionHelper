@@ -187,14 +187,42 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
 /** Bumped whenever the shipped Shortlist data changes (D45). */
 export const SHORTLIST_REVISION = 1;
 
+export type SupersededShortlist = {
+  purchasePrice: number;
+  monthlyPayments: number[];
+  kfwAmount: number;
+  kfwRates: number[];
+  /** 20 as shipped in D44; saves from before that field revive with today's term. */
+  kfwTermYears: number[];
+  moveInMonths: number;
+  /** `textHash` of every note shipped before, so a note the couple wrote is kept. */
+  noteHashes: number[];
+};
+
 /**
- * What earlier versions shipped for the Shortlist flats: a stored flat whose price and
- * Monatsrate still match one of these was never edited, so `storage.ts` replaces it
- * with the current data (D45).
+ * What earlier versions shipped for the Shortlist flats: a stored flat that still
+ * matches one of these in every field that changed was never edited, so `storage.ts`
+ * replaces it with the current data (D45).
  */
-export const SUPERSEDED_SHORTLIST: Record<string, { purchasePrice: number; monthlyPayments: number[] }> = {
-  "lindenstrasse-31g-we49": { purchasePrice: 520000, monthlyPayments: [2200, 2460, 2500] },
-  "buwog-arbor-h2-we08": { purchasePrice: 655100, monthlyPayments: [2770, 2670, 2976] },
+export const SUPERSEDED_SHORTLIST: Record<string, SupersededShortlist> = {
+  "lindenstrasse-31g-we49": {
+    purchasePrice: 520000,
+    monthlyPayments: [2200, 2460, 2500],
+    kfwAmount: 0,
+    kfwRates: [0],
+    kfwTermYears: [20],
+    moveInMonths: 0,
+    noteHashes: [4117728304, 1755963962],
+  },
+  "buwog-arbor-h2-we08": {
+    purchasePrice: 655100,
+    monthlyPayments: [2770, 2670, 2976],
+    kfwAmount: 170000,
+    kfwRates: [1.3],
+    kfwTermYears: [20, 35],
+    moveInMonths: 19,
+    noteHashes: [3363609318, 577526082, 823980744],
+  },
 };
 
 /**

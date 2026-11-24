@@ -8,6 +8,7 @@ import {
   saveExists,
   saveNamed,
   storageAvailable,
+  textHash,
   upgradeShippedRates,
   writeBundleSaves,
 } from "./storage";
@@ -358,6 +359,7 @@ describe("persistence", () => {
     const linden = loaded.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
     const buwog = loaded.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!;
     expect(linden.purchasePrice).toBe(500000);
+    expect(linden.note).toBe(SHORTLIST_APARTMENT_CASES[0].note);
     expect(linden.offerLoans).toEqual({ ek10: 445000, ek15: 420850 });
     expect(linden.rates[10].ek10).toBe(4.11);
     expect(buwog.purchasePrice).toBe(640000);
@@ -366,11 +368,46 @@ describe("persistence", () => {
     expect(buwog.rates).toEqual(DEFAULT_RATES);
     expect(loaded.shortlistRevision).toBeGreaterThan(0);
 
+    // Shipped numbers but a different Hausgeld, or a note of their own (Codex, PR #13).
+    const hausgeld = {
+      ...stored,
+      apartmentCases: [old("lindenstrasse-31g-we49", { purchasePrice: 520000, monthlyPayment: 2500, hausgeld: 900 })],
+    };
+    window.localStorage.setItem("mdh:save:hausgeld", JSON.stringify(hausgeld));
+    const ownHausgeld = loadNamed("hausgeld")!.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    expect(ownHausgeld.hausgeld).toBe(900);
+    expect(ownHausgeld.purchasePrice).toBe(520000);
+
+    const noted = {
+      ...stored,
+      apartmentCases: [old("lindenstrasse-31g-we49", { purchasePrice: 520000, monthlyPayment: 2500, note: "Makler sagt 490k möglich" })],
+    };
+    window.localStorage.setItem("mdh:save:noted", JSON.stringify(noted));
+    const ownNote = loadNamed("noted")!.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    expect(ownNote.purchasePrice).toBe(500000);
+    expect(ownNote.note).toBe("Makler sagt 490k möglich");
+
+    // Renamed but otherwise as shipped: an edit, so it is not replaced either.
+    const renamed = {
+      ...stored,
+      apartmentCases: [old("lindenstrasse-31g-we49", { purchasePrice: 520000, monthlyPayment: 2500, label: "Unsere Linde" })],
+    };
+    window.localStorage.setItem("mdh:save:renamed", JSON.stringify(renamed));
+    const kept = loadNamed("renamed")!.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    expect(kept.label).toBe("Unsere Linde");
+    expect(kept.purchasePrice).toBe(520000);
+
     // Refreshed once only: saved and loaded again, an edit to the refreshed flat stays.
     saveNamed("again", {
       ...loaded,
       apartmentCases: loaded.apartmentCases.map((a) => (a.id === linden.id ? { ...a, monthlyPayment: 2500 } : a)),
     });
     expect(loadNamed("again")!.apartmentCases.find((a) => a.id === linden.id)!.monthlyPayment).toBe(2500);
+  });
+
+  it("recognises the note shipped on 23.11.2026 by its hash (D45)", () => {
+    const shipped = "Lindenstraße 31G, Haus 3 / WE49, 93,6 m², 4. OG rechts, Bj. 1998, Energie D. Kaufpreis = 495.000 € + 25.000 € TG. Mit Makler (3,57 %). Renovierung = Einbauküche 12k (Küchenöffnung 7–8k nicht enthalten). Hausgeld 630 € laut Exposé, evtl. später niedriger. Quelle: Shortlist-Sheet, Stand 23.11.2026.";
+    expect(textHash(shipped)).toBe(1755963962);
+    expect(textHash(shipped + " ")).not.toBe(1755963962);
   });
 });
