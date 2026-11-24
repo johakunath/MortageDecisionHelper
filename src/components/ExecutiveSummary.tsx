@@ -56,9 +56,16 @@ function describeWarnings(scenario: ScenarioResult, inputs: MortgageInputs, star
     );
   }
   if (scenario.diagnosis.warnings.includes("runtime")) {
-    const withPlan = Number.isFinite(scenario.debtFreeYearsFromSigning)
-      ? `, mit eurer Sondertilgung ≈ ${formatCalendarYear(startYear + scenario.debtFreeYearsFromSigning)}`
-      : "";
+    // When the KfW part sets the end date, Sondertilgung cannot move it: KfW 300 takes
+    // none, and saying "mit Sondertilgung" the same year would read as a contradiction.
+    const kfwBound =
+      scenario.kfwPart > 0 &&
+      Math.abs(scenario.debtFreeYearsFromSigning - scenario.contractYearsFromSigning) < 0.1;
+    const withPlan = !Number.isFinite(scenario.debtFreeYearsFromSigning)
+      ? ""
+      : kfwBound
+        ? "; das Ende setzt das KfW-Darlehen mit seiner Laufzeit, Sondertilgung ist dort nicht möglich"
+        : `, mit eurer Sondertilgung ≈ ${formatCalendarYear(startYear + scenario.debtFreeYearsFromSigning)}`;
     notes.push(
       `ohne Sondertilgung erst ≈ ${formatCalendarYear(startYear + scenario.contractYearsFromSigning)} schuldenfrei, eure Grenze ist ≈ ${formatCalendarYear(startYear + inputs.maxRuntimeYears)}${withPlan}`,
     );

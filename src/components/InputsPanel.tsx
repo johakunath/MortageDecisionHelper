@@ -3,6 +3,7 @@ import {
   monthlyAnnuity,
   normaliseFixedPeriod,
   blendedRate,
+  loanFor,
   rateFor,
   repaymentRateFromMonthlyPayment,
   repaymentRateFromRuntimeYears,
@@ -39,7 +40,7 @@ const RATE_MODES: { id: RateMode; label: string }[] = [
   { id: "runtime", label: "Laufzeit" },
 ];
 
-type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
+type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments" | "offerLoans">;
 
 function InputBox({ id, children }: { id: (typeof INPUT_BOXES)[number]["id"]; children: ReactNode }) {
   const box = INPUT_BOXES.find((entry) => entry.id === id)!;
@@ -76,7 +77,7 @@ function PaymentField({
   const [mode, setMode] = useState<RateMode>("payment");
   const selected = scenarios.find((entry) => entry.id === selectedId) ?? scenarios[0];
   const ekRate = selected.ekRate;
-  const referenceLoan = inputs.purchasePrice * (1 - ekRate / 100);
+  const referenceLoan = loanFor(selected, inputs);
   const referenceRate = blendedRate(
     rateFor(rates, inputs.fixedRateYears, selectedId),
     referenceLoan,
@@ -284,6 +285,8 @@ type InputsPanelProps = {
   onRateChange: (period: number, id: ScenarioId, value: number) => void;
   ratesNote: string;
   onRatesNoteChange: (note: string) => void;
+  /** The apartment the rate grid belongs to (D45). */
+  apartmentLabel: string;
   onReset: () => void;
   onSafetyFocus: () => void;
   onMoreSpecial: () => void;
@@ -303,6 +306,7 @@ export default function InputsPanel({
   onRateChange,
   ratesNote,
   onRatesNoteChange,
+  apartmentLabel,
   onReset,
   onSafetyFocus,
   onMoreSpecial,
@@ -428,6 +432,10 @@ export default function InputsPanel({
         </InputBox>
 
         <InputBox id="rates">
+          <p className="input-box-note">
+            Gilt für <strong>{apartmentLabel}</strong>. Jede Wohnung hat ihr eigenes Angebot und
+            damit ihre eigenen Zinsen.
+          </p>
           <RateMatrix
             rates={rates}
             scenarios={scenarios}
@@ -441,7 +449,7 @@ export default function InputsPanel({
               {formatPct(inputs.kfwRate, 2)} und rechnet deshalb mit einem Mischzins:{" "}
               {scenarios
                 .map((scenario) => {
-                  const loan = inputs.purchasePrice * (1 - scenario.ekRate / 100);
+                  const loan = loanFor(scenario, inputs);
                   const rate = blendedRate(
                     rateFor(rates, inputs.fixedRateYears, scenario.id),
                     loan,

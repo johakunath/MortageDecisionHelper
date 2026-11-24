@@ -33,7 +33,6 @@ import {
   waitTippingPoints,
   wealthAtHorizon,
   type ApartmentCase,
-  type InterestRates,
   type MortgageInputs,
   type ScenarioId,
 } from "./lib/calculations";
@@ -41,6 +40,8 @@ import {
   DEFAULT_APARTMENT_CASES,
   DEFAULT_INPUTS,
   DEFAULT_RATES_NOTE,
+  SHORTLIST_APARTMENT_CASES,
+  SHORTLIST_REVISION,
   EK_SCENARIOS,
   SECTIONS,
   type SectionId,
@@ -62,7 +63,7 @@ import {
   type PersistedState,
 } from "./lib/storage";
 
-type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments">;
+type NumericInputKey = Exclude<keyof MortgageInputs, "annualSpecialRepayments" | "offerLoans">;
 type ApartmentNumericKey =
   | "purchasePrice"
   | "renovation"
@@ -80,12 +81,15 @@ type ApartmentNumericKey =
  * effect would paint the defaults first and then visibly replace every number on the
  * screen a frame later.
  */
+/** A rates note the app shipped, rather than one the couple wrote (D36, D45). */
+function isShippedRatesNote(note: string): boolean {
+  return note === DEFAULT_RATES_NOTE || SHORTLIST_APARTMENT_CASES.some((apartment) => apartment.ratesNote === note);
+}
+
 const INITIAL_STATE: PersistedState = loadAutosave() ?? defaultState();
 
 export default function App() {
   const [inputs, setInputs] = useState<MortgageInputs>(INITIAL_STATE.inputs);
-  const [rates, setRates] = useState<InterestRates>(INITIAL_STATE.rates);
-  const [ratesNote, setRatesNote] = useState<string>(INITIAL_STATE.ratesNote);
   const [apartmentCases, setApartmentCases] = useState<ApartmentCase[]>(INITIAL_STATE.apartmentCases);
   const [activeApartmentId, setActiveApartmentId] = useState<string>(INITIAL_STATE.activeApartmentId);
   const [selectedId, setSelectedId] = useState<ScenarioId>(INITIAL_STATE.selectedId);
@@ -96,10 +100,21 @@ export default function App() {
   const [activeSaveName, setActiveSaveName] = useState<string | null>(null);
   const storageWorks = useMemo(() => storageAvailable(), []);
 
-  const snapshot = useMemo<PersistedState>(
-    () => ({ version: 2, inputs, rates, ratesNote, apartmentCases, activeApartmentId, selectedId }),
-    [inputs, rates, ratesNote, apartmentCases, activeApartmentId, selectedId],
-  );
+  // The rate grid belongs to each apartment (D45). The top-level `rates` in a save
+  // carries the active one's grid, the fallback for an apartment stored without its own.
+  const snapshot = useMemo<PersistedState>(() => {
+    const active = apartmentCases.find((apartment) => apartment.id === activeApartmentId) ?? apartmentCases[0];
+    return {
+      version: 2,
+      inputs,
+      rates: active.rates,
+      ratesNote: active.ratesNote,
+      apartmentCases,
+      activeApartmentId,
+      selectedId,
+      shortlistRevision: SHORTLIST_REVISION,
+    };
+  }, [inputs, apartmentCases, activeApartmentId, selectedId]);
 
   function importBundle(bundle: Bundle) {
     writeBundleSaves(bundle.saves);
@@ -124,8 +139,6 @@ export default function App() {
 
   function applyState(state: PersistedState) {
     setInputs(state.inputs);
-    setRates(state.rates);
-    setRatesNote(state.ratesNote);
     setApartmentCases(state.apartmentCases);
     setActiveApartmentId(state.activeApartmentId);
     setSelectedId(state.selectedId);
@@ -139,6 +152,9 @@ export default function App() {
     () => apartmentCases.find((apartment) => apartment.id === activeApartmentId) ?? apartmentCases[0],
     [apartmentCases, activeApartmentId],
   );
+  // Each apartment at its own bank's rates (D45).
+  const rates = activeApartment.rates;
+  const ratesNote = activeApartment.ratesNote;
   const activeInputs = useMemo(
     () => buildApartmentInputs(inputs, activeApartment),
     [inputs, activeApartment],
@@ -152,8 +168,8 @@ export default function App() {
   const decision = useMemo(() => evaluateDecision(scenarios), [scenarios]);
 
   const apartmentResults = useMemo(
-    () => compareApartmentCases(apartmentCases, EK_SCENARIOS, inputs, rates, selected.id),
-    [apartmentCases, inputs, rates, selected.id],
+    () => compareApartmentCases(apartmentCases, EK_SCENARIOS, inputs, selected.id),
+    [apartmentCases, inputs, selected.id],
   );
 
   // Sondertilgung is always measured against the EK level chosen above, running its
@@ -222,16 +238,29 @@ export default function App() {
   // address of a rate — not implied by whatever binding happens to be active.
   function updateRate(period: number, key: ScenarioId, value: number) {
     const column = normaliseFixedPeriod(period);
-    setRates((current) => ({ ...current, [column]: { ...current[column], [key]: value } }));
-    // A typed rate is a new quote. The shipped note no longer describes it, so it is
-    // cleared and the field asks for Stand und Quelle (D36). A note the couple wrote
-    // themselves is left alone: they may be adding one quote to several.
-    setRatesNote((current) => (current === DEFAULT_RATES_NOTE ? "" : current));
+    setApartmentCases((current) =>
+      current.map((apartment) =>
+        apartment.id === activeApartmentId
+          ? {
+              ...apartment,
+              rates: { ...apartment.rates, [column]: { ...apartment.rates[column], [key]: value } },
+              // A typed rate is a new quote. A shipped note no longer describes it, so it
+              // is cleared and the field asks for Stand und Quelle (D36). A note the
+              // couple wrote themselves is left alone: they may be adding one quote.
+              ratesNote: isShippedRatesNote(apartment.ratesNote) ? "" : apartment.ratesNote,
+            }
+          : apartment,
+      ),
+    );
+  }
+
+  function setRatesNote(note: string) {
+    updateApartmentCase(activeApartmentId, { ratesNote: note });
   }
 
   function updateApartmentCase(
     apartmentId: string,
-    patch: Partial<Pick<ApartmentCase, ApartmentNumericKey | "label" | "note">>,
+    patch: Partial<Pick<ApartmentCase, ApartmentNumericKey | "label" | "note" | "ratesNote" | "offerLoans">>,
   ) {
     setApartmentCases((current) =>
       current.map((apartment) => (apartment.id === apartmentId ? { ...apartment, ...patch } : apartment)),
@@ -287,6 +316,9 @@ export default function App() {
         kfwTermYears: 20,
         moveInMonths: 0,
         parkingPrice: 0,
+        // A new flat starts from the grid on screen; its own offer replaces it later.
+        rates: { 10: { ...activeApartment.rates[10] }, 15: { ...activeApartment.rates[15] } },
+        ratesNote: activeApartment.ratesNote,
         annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
       },
     ]);
@@ -470,6 +502,7 @@ export default function App() {
               onRateChange={updateRate}
               ratesNote={ratesNote}
               onRatesNoteChange={setRatesNote}
+              apartmentLabel={activeApartment.label}
               onReset={() => applyPreset("reset")}
               onSafetyFocus={() => applyPreset("safety")}
               onMoreSpecial={() => applyPreset("special")}
@@ -597,7 +630,6 @@ export default function App() {
               apartments={apartmentCases}
               scenarios={EK_SCENARIOS}
               inputs={inputs}
-              rates={rates}
               selectedId={selected.id}
             />
           </section>

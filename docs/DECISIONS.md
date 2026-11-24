@@ -680,3 +680,23 @@ The owner expected that the bank's household calculation would need less than 2 
 
 **Consequence.** Golden snapshots of the flats without KfW changed only in verdict fields; Lindenstraße and the 720k preset did not change at all; 850k still reads "Keine der drei Varianten ist tragbar". The invariant "Sondertilgung is neutral at the loan's rate" now uses the bank's rate, since that is the part Sondertilgung repays. Labels that printed the binding as a raw number now format it ("8,4 Jahre").
 
+---
+
+## D45: The bank offers of 24.11.2026; each apartment owns its rates and its offer's loans
+
+**Date:** 2026-11-24 · **Status:** accepted · **Refines** [D40](#d40-kaufnebenkosten-and-monatsrate-move-onto-the-apartment-the-two-shortlist-flats-ship-as-defaults), [D41](#d41-default-sollzinsen-move-to-the-owners-current-assumption-the-august-offer-stays-pinned), [D44](#d44-reserve-and-retirement-deadline-warn-kfw-and-bank-run-as-two-loans)
+
+**Context.** Four offers arrived (BauDarlehen24, 10 Jahre): Lindenstraße 1a HypoVereinsbank 4,11 % and 1b Commerzbank 4,06 % on 500.000 € incl. TG; BUWOG 2a Deutsche Bank 4,01 % and 2b Commerzbank 3,94 %, each with KfW 300 170.000 € at 0,78 % over 35 years with one free year. Each flat has its own banks, so one shared rate grid could no longer hold both. The offers are built on round Eigenkapital sums (112.850 €, 137.000 €, 124.000 €, 157.000 €): their "90 %" loan is 445.000 € where 90 % of the price would be 450.000 €. Computed by share, the app disagreed with the offers by thousands and flagged Lindenstraße 10 % as running past 2052, which the offer does not (last payment 01/2052).
+
+**Decision.**
+- `ApartmentCase` owns `rates` and `ratesNote`; the §2 grid edits the active apartment's. Older saves give every apartment the grid it was using.
+- `offerLoans` per EK level, optional, edited in "Fakten bearbeiten"; `loanFor` is the one place a loan is computed. The down payment is price minus that loan. A later purchase in the Warten section is financed by share again.
+- The Shortlist flats ship with the offers; the Monatsrate is one per flat (2.370 € / 2.669 €, the offers differ by under 1,20 €, D14). 20 % EK and the 15-year column have no offer and are estimates, named as such in the rates note. Lindenstraße's price is 500.000 € as in the offers, not the Exposé's 520.000 €.
+- Saved states get untouched Shortlist flats replaced by the new data once (`shortlistRevision`, `SUPERSEDED_SHORTLIST`); a flat the couple edited is left alone.
+- In the stress run the KfW part gets a new annuity for its remaining term, the bank part the rest of the same Monatsrate. Holding the old 474 € KfW annuity at a 2,78 % rate had shown "+13 J. länger".
+- When the KfW part sets the end date, the verdict says so instead of naming a year "mit Sondertilgung".
+
+**What the tool says about 10 vs 15 %.** With the offers, the step from 10 to 15 % earns about 4,8 % a year tax-free on Lindenstraße (24.150 € more EK, 38.453 € less debt after ten years) and 4,7 % on BUWOG (33.000 €, 48.374 € over 8,4 years), against about 4,2 % for a 5 % ETF after tax: about +1.900 € and +1.700 € over the binding. With 145.000 € available and the 12.000 € kitchen, 15 % does not fit either flat; whether it does depends on the couple's actual capital.
+
+**Consequence.** `offer2026-11.test.ts` pins the four offers (largest deviation 10 cents, the KfW annuity's rounding). Golden snapshots changed only for the two Shortlist flats.
+

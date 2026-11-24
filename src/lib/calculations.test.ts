@@ -208,6 +208,31 @@ describe("calculation engine", () => {
     expect(withPlan.run.runtimeYears).toBeCloseTo(30, 9);
   });
 
+  it("recomputes the KfW annuity over its remaining term when the rate is stressed (D45)", () => {
+    const base = {
+      bankPrincipal: 413508,
+      bankRatePct: 4.01,
+      kfwPrincipal: 170000,
+      kfwRatePct: 0.78,
+      kfwTermYears: 35,
+      monthlyPayment: 2669,
+      fixedRateYears: 10,
+      specialPlan: { kind: "none" } as SpecialPlan,
+      specialRepaymentLimitRate: 5,
+    };
+    const plain = simulateSplitLoan(base);
+    // At an unchanged rate the recomputed annuity is the old one: nothing moves.
+    const same = simulateSplitLoan({ ...base, rateShift: { afterMonths: 120, points: 0 } });
+    expect(same.runtimeYears).toBeCloseTo(plain.runtimeYears, 9);
+    expect(same.interestTotal).toBeCloseTo(plain.interestTotal, 4);
+    // Two points higher: the KfW still ends with its term, the bank part carries the
+    // extra cost out of the same total, so more interest but a finite runtime.
+    const stressed = simulateSplitLoan({ ...base, rateShift: { afterMonths: 120, points: 2 } });
+    expect(stressed.amortises).toBe(true);
+    expect(stressed.interestTotal).toBeGreaterThan(plain.interestTotal + 10000);
+    expect(stressed.runtimeYears).toBeCloseTo(35, 6);
+  });
+
   it("pays each part's own rate and puts Sondertilgung into the bank part (D44)", () => {
     const flat = { ...DEFAULT_APARTMENT_CASES[0], purchasePrice: 655100, kfwAmount: 170000, kfwRate: 1.3, monthlyPayment: 2976 };
     const inputs = buildApartmentInputs(DEFAULT_INPUTS, flat);
@@ -286,8 +311,9 @@ describe("calculation engine", () => {
       monthlyPayment: 2460,
       moveInMonths: 12,
       parkingPrice: 26000,
+      rates: DEFAULT_RATES,
     };
-    const column = apartmentColumn(flat, EK_SCENARIOS[0], DEFAULT_INPUTS, DEFAULT_RATES);
+    const column = apartmentColumn(flat, EK_SCENARIOS[0], DEFAULT_INPUTS);
     // 468.000 € × 4,3 % × 1 Jahr × halb abgerufen.
     expect(column.constructionInterest).toBeCloseTo(468000 * 0.043 * 0.5, 6);
     // 5 % of the price: 5 % of the rate; and 10 % EK + 11,57 % KNK of 26.000 €.
@@ -316,6 +342,8 @@ describe("calculation engine", () => {
           kfwTermYears: 20,
           moveInMonths: 0,
           parkingPrice: 0,
+          rates: CASE_PRESETS.case720.rates,
+          ratesNote: "",
           annualSpecialRepayments: [0, 0, 0],
         },
         {
@@ -331,12 +359,13 @@ describe("calculation engine", () => {
           kfwTermYears: 20,
           moveInMonths: 0,
           parkingPrice: 0,
+          rates: CASE_PRESETS.case720.rates,
+          ratesNote: "",
           annualSpecialRepayments: [10000, 10000, 10000],
         },
       ],
       EK_SCENARIOS,
       DEFAULT_INPUTS,
-      CASE_PRESETS.case720.rates,
       "ek10",
     );
 

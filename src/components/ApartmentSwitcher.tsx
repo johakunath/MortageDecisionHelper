@@ -1,5 +1,6 @@
 import type { ApartmentCase, ApartmentComparisonResult } from "../lib/calculations";
 import { formatEur } from "../lib/format";
+import { EK_SCENARIOS } from "../lib/defaults";
 import { GLOSSARY } from "../lib/glossary";
 import { Button, InputField, StatusPill } from "./ui";
 
@@ -15,6 +16,8 @@ type ApartmentEditableKey =
   | "kfwTermYears"
   | "moveInMonths";
 
+type ApartmentPatch = Partial<Pick<ApartmentCase, ApartmentEditableKey | "offerLoans">>;
+
 type ApartmentSwitcherProps = {
   results: ApartmentComparisonResult[];
   activeApartmentId: string;
@@ -26,7 +29,7 @@ type ApartmentFactsProps = {
   apartment: ApartmentCase;
   /** Grundsteuer + own reserve, added on top of the Hausgeld (D35). */
   ownerExtraMonthly: number;
-  onChange: (patch: Partial<Pick<ApartmentCase, ApartmentEditableKey>>) => void;
+  onChange: (patch: ApartmentPatch) => void;
 };
 
 /**
@@ -181,6 +184,25 @@ export function ApartmentFacts({ apartment, ownerExtraMonthly, onChange }: Apart
           info={GLOSSARY.moveInMonths}
           hint="0 = sofort · Neubau: bis zur Übergabe"
         />
+        {EK_SCENARIOS.map((scenario) => {
+          const fromShare = apartment.purchasePrice * (1 - scenario.ekRate / 100);
+          return (
+            <InputField
+              key={scenario.id}
+              label={`Darlehen ${scenario.label} (Angebot)`}
+              value={apartment.offerLoans?.[scenario.id] ?? 0}
+              min={0}
+              onChange={(value) => {
+                const next = { ...(apartment.offerLoans ?? {}) };
+                if (value > 0) next[scenario.id] = value;
+                else delete next[scenario.id];
+                onChange({ offerLoans: Object.keys(next).length > 0 ? next : undefined });
+              }}
+              info={GLOSSARY.offerLoans}
+              hint={`0 = ${formatEur(fromShare)}, ${100 - scenario.ekRate} % vom Kaufpreis`}
+            />
+          );
+        })}
       </div>
     </details>
   );

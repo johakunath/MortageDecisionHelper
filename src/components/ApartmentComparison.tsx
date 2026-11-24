@@ -3,7 +3,6 @@ import {
   apartmentColumn,
   type ApartmentCase,
   type ApartmentColumn,
-  type InterestRates,
   type MortgageInputs,
   type ScenarioBase,
   type ScenarioId,
@@ -19,7 +18,6 @@ type ApartmentComparisonProps = {
   scenarios: ScenarioBase[];
   /** The global inputs; each column builds its own apartment inputs from them. */
   inputs: MortgageInputs;
-  rates: InterestRates;
   /** The EK level selected on screen: where both columns start. */
   selectedId: ScenarioId;
 };
@@ -58,7 +56,6 @@ export default function ApartmentComparison({
   apartments,
   scenarios,
   inputs,
-  rates,
   selectedId,
 }: ApartmentComparisonProps) {
   const [pair, setPair] = useState<[string, string]>(() => defaultPair(apartments));
@@ -74,9 +71,9 @@ export default function ApartmentComparison({
       pair.map((id, index) => {
         const apartment = apartments.find((entry) => entry.id === id) ?? apartments[0];
         const base = scenarios.find((entry) => entry.id === ekIds[index]) ?? scenarios[0];
-        return apartmentColumn(apartment, base, inputs, rates);
+        return apartmentColumn(apartment, base, inputs);
       }),
-    [pair, ekIds, apartments, scenarios, inputs, rates],
+    [pair, ekIds, apartments, scenarios, inputs],
   );
 
   const series = useMemo<ChartSeries[]>(
