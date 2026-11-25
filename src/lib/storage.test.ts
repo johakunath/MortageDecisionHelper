@@ -20,6 +20,7 @@ import {
   OFFER_RATES,
   OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
+  SUPERSEDED_SHORTLIST_RATES,
 } from "./defaults";
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
@@ -409,5 +410,28 @@ describe("persistence", () => {
     const shipped = "Lindenstraße 31G, Haus 3 / WE49, 93,6 m², 4. OG rechts, Bj. 1998, Energie D. Kaufpreis = 495.000 € + 25.000 € TG. Mit Makler (3,57 %). Renovierung = Einbauküche 12k (Küchenöffnung 7–8k nicht enthalten). Hausgeld 630 € laut Exposé, evtl. später niedriger. Quelle: Shortlist-Sheet, Stand 23.11.2026.";
     expect(textHash(shipped)).toBe(1755963962);
     expect(textHash(shipped + " ")).not.toBe(1755963962);
+  });
+
+  it("moves a flat still on the 24.11. grid to the 15-year offers of 25.11., nothing else (D46)", () => {
+    const state = defaultState();
+    const linden = state.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    const rev1 = SUPERSEDED_SHORTLIST_RATES["lindenstrasse-31g-we49"];
+    const stored = {
+      ...state,
+      shortlistRevision: 1,
+      apartmentCases: [
+        { ...linden, rates: rev1.rates, ratesNote: rev1.ratesNote, hausgeld: 700 },
+        { ...state.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!, rates: DEFAULT_RATES, ratesNote: "eigene Zinsen" },
+      ],
+    };
+    window.localStorage.setItem("mdh:save:rev1", JSON.stringify(stored));
+    const loaded = loadNamed("rev1")!;
+    const l = loaded.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
+    expect(l.rates[15].ek15).toBe(4.27);
+    expect(l.ratesNote).toBe(SHORTLIST_APARTMENT_CASES[0].ratesNote);
+    expect(l.hausgeld).toBe(700);
+    const b = loaded.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!;
+    expect(b.rates).toEqual(DEFAULT_RATES);
+    expect(b.ratesNote).toBe("eigene Zinsen");
   });
 });
