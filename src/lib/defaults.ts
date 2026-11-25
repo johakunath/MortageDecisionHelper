@@ -126,11 +126,12 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     rates: {
       // 20 % EK: kein Angebot, 0,1 Pkt. unter 85 % geschätzt wie im Angebot vom August.
       10: { ek10: 4.11, ek15: 4.06, ek20: 3.96 },
-      // 15 Jahre: kein Angebot, je +0,2 Pkt. laut den Eigentümern.
-      15: { ek10: 4.31, ek15: 4.26, ek20: 4.16 },
+      // 15 Jahre: 85 % laut Angebot vom 25.11.2026 (Commerzbank 4,27 %, +0,21 Pkt.);
+      // 10 % und 20 % ohne Angebot, mit demselben Aufschlag geschätzt.
+      15: { ek10: 4.32, ek15: 4.27, ek20: 4.17 },
     },
     ratesNote:
-      "Angebote 24.11.2026 (BauDarlehen24): 90 % HypoVereinsbank 4,11 %, 85 % Commerzbank 4,06 %, je 10 J. · 20 % EK und 15 J. geschätzt",
+      "Angebote 24./25.11.2026 (BauDarlehen24): 10 J.: 90 % HypoVereinsbank 4,11 %, 85 % Commerzbank 4,06 % · 15 J.: 85 % Commerzbank 4,27 % · 20 % EK sowie 15 J. bei 10 %/20 % geschätzt",
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
     note:
       "Lindenstraße 31G, Haus 3 / WE49, 93,6 m², 4. OG rechts, Bj. 1998, Energie D. " +
@@ -166,11 +167,13 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
     rates: {
       // Bankteil ohne KfW. 20 % EK: kein Angebot, 0,1 Pkt. unter 85 % geschätzt.
       10: { ek10: 4.01, ek15: 3.94, ek20: 3.84 },
-      // 15 Jahre: kein Angebot, je +0,2 Pkt. laut den Eigentümern.
-      15: { ek10: 4.21, ek15: 4.14, ek20: 4.04 },
+      // 15 Jahre: 85 % aus dem Angebot vom 25.11.2026 abgeleitet: Mischzins 3,11 % auf
+      // 550.508 €, davon KfW 170.000 € zu 0,78 % → Bankteil ≈ 4,15 % (+0,21 Pkt.). Die
+      // KfW bleibt bei 10 Jahren Bindung. 10 % und 20 % mit demselben Aufschlag geschätzt.
+      15: { ek10: 4.22, ek15: 4.15, ek20: 4.05 },
     },
     ratesNote:
-      "Angebote 24.11.2026 (BauDarlehen24): Bankteil 90 % Deutsche Bank 4,01 %, 85 % Commerzbank 3,94 %, je 10 J., dazu KfW 300 0,78 % · 20 % EK und 15 J. geschätzt",
+      "Angebote 24./25.11.2026 (BauDarlehen24): Bankteil 10 J.: 90 % Deutsche Bank 4,01 %, 85 % Commerzbank 3,94 % · 15 J.: 85 % Commerzbank ≈ 4,15 % (aus Mischzins 3,11 %) · dazu KfW 300 0,78 % (10 J.) · 20 % EK sowie 15 J. bei 10 %/20 % geschätzt",
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
     note:
       "An der Filmfabrik 9, Haus 2 WE08, 94,6 m², 2. OG Nordost, Neubau EH40, Bezug vsl. Juni 2028. " +
@@ -185,7 +188,22 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
 ];
 
 /** Bumped whenever the shipped Shortlist data changes (D45). */
-export const SHORTLIST_REVISION = 1;
+export const SHORTLIST_REVISION = 2;
+
+/**
+ * Revision 1 (24.11.2026) shipped these rate grids and notes. A Shortlist flat that
+ * still holds them gets the 15-year offers of 25.11.2026 (revision 2) and nothing else.
+ */
+export const SUPERSEDED_SHORTLIST_RATES: Record<string, { rates: InterestRates; ratesNote: string }> = {
+  "lindenstrasse-31g-we49": {
+    rates: { 10: { ek10: 4.11, ek15: 4.06, ek20: 3.96 }, 15: { ek10: 4.31, ek15: 4.26, ek20: 4.16 } },
+    ratesNote: "Angebote 24.11.2026 (BauDarlehen24): 90 % HypoVereinsbank 4,11 %, 85 % Commerzbank 4,06 %, je 10 J. · 20 % EK und 15 J. geschätzt",
+  },
+  "buwog-arbor-h2-we08": {
+    rates: { 10: { ek10: 4.01, ek15: 3.94, ek20: 3.84 }, 15: { ek10: 4.21, ek15: 4.14, ek20: 4.04 } },
+    ratesNote: "Angebote 24.11.2026 (BauDarlehen24): Bankteil 90 % Deutsche Bank 4,01 %, 85 % Commerzbank 3,94 %, je 10 J., dazu KfW 300 0,78 % · 20 % EK und 15 J. geschätzt",
+  },
+};
 
 export type SupersededShortlist = {
   purchasePrice: number;

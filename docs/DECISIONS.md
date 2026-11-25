@@ -700,3 +700,13 @@ The owner expected that the bank's household calculation would need less than 2 
 
 **Consequence.** `offer2026-11.test.ts` pins the four offers (largest deviation 10 cents, the KfW annuity's rounding). Golden snapshots changed only for the two Shortlist flats.
 
+
+---
+
+## D46: The 15-year offers of 25.11.2026
+
+**Date:** 2026-11-25 · **Status:** accepted · **Refines** [D45](#d45-the-bank-offers-of-24112026-each-apartment-owns-its-rates-and-its-offers-loans)
+
+**Context.** The broker recalculated both 85 % variants with 15 Jahre Sollzinsbindung at the same Monatsrate (lower Tilgung): Lindenstraße Commerzbank 4,27 % (+0,21 Pkt.), BUWOG Mischzins 3,11 % (+0,15 Pkt.), the KfW part unchanged at 0,78 % with 10 years' binding.
+
+**Decision.** The 15-year column takes 4,27 % for Lindenstraße and ≈ 4,15 % for BUWOG's bank part, derived from the blended rate ((550.508 × 3,11 % − 170.000 × 0,78 %) / 380.508 = 4,151 %; the engine's blend gives back 3,109 %). 10 % and 20 % EK at 15 years have no offer and take the observed +0,21 points. Saved flats still holding the grid of 24.11. get the new grid and note (`SHORTLIST_REVISION` 2, rates only); any other edit is kept. The KfW's shorter binding stays as recorded in ASSUMPTIONS §4.19.

@@ -10,6 +10,7 @@ import {
   SHORTLIST_APARTMENT_CASES,
   SHORTLIST_REVISION,
   SUPERSEDED_SHORTLIST,
+  SUPERSEDED_SHORTLIST_RATES,
 } from "./defaults";
 
 /**
@@ -246,6 +247,8 @@ export function textHash(text: string): number {
  */
 function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCase[] {
   if (revision >= SHORTLIST_REVISION) return cases;
+  // Revision 1 → 2 changed only the rate grids: refresh them where still as shipped.
+  if (revision >= 1) return cases.map(refreshShortlistRates);
   return cases.map((apartment) => {
     const superseded = SUPERSEDED_SHORTLIST[apartment.id];
     const current = SHORTLIST_APARTMENT_CASES.find((entry) => entry.id === apartment.id);
@@ -271,6 +274,19 @@ function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCa
     const { note: _shipped, ...withoutNote } = refreshed;
     return apartment.note !== undefined ? { ...withoutNote, note: apartment.note } : withoutNote;
   });
+}
+
+function refreshShortlistRates(apartment: ApartmentCase): ApartmentCase {
+  const superseded = SUPERSEDED_SHORTLIST_RATES[apartment.id];
+  const current = SHORTLIST_APARTMENT_CASES.find((entry) => entry.id === apartment.id);
+  if (!superseded || !current) return apartment;
+  const untouched = ratesEqual(apartment.rates, superseded.rates) && apartment.ratesNote === superseded.ratesNote;
+  if (!untouched) return apartment;
+  return {
+    ...apartment,
+    rates: { 10: { ...current.rates[10] }, 15: { ...current.rates[15] } },
+    ratesNote: current.ratesNote,
+  };
 }
 
 /**
