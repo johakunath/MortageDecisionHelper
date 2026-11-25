@@ -42,6 +42,7 @@ import {
   DEFAULT_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
   SHORTLIST_REVISION,
+  SUPERSEDED_SHORTLIST_RATES,
   EK_SCENARIOS,
   SECTIONS,
   type SectionId,
@@ -78,7 +79,11 @@ type ApartmentNumericKey =
 
 /** A rates note the app shipped, rather than one the couple wrote (D36, D45). */
 function isShippedRatesNote(note: string): boolean {
-  return note === DEFAULT_RATES_NOTE || SHORTLIST_APARTMENT_CASES.some((apartment) => apartment.ratesNote === note);
+  return (
+    note === DEFAULT_RATES_NOTE ||
+    SHORTLIST_APARTMENT_CASES.some((apartment) => apartment.ratesNote === note) ||
+    Object.values(SUPERSEDED_SHORTLIST_RATES).some((shipped) => shipped.ratesNote === note)
+  );
 }
 
 /**

@@ -428,6 +428,7 @@ describe("persistence", () => {
     const loaded = loadNamed("rev1")!;
     const l = loaded.apartmentCases.find((a) => a.id === "lindenstrasse-31g-we49")!;
     expect(l.rates[15].ek15).toBe(4.27);
+    expect(l.ratesNote).toBe(SHORTLIST_APARTMENT_CASES[0].ratesNote);
     expect(l.hausgeld).toBe(700);
     const b = loaded.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!;
     expect(b.rates).toEqual(DEFAULT_RATES);
