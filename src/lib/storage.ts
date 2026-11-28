@@ -253,8 +253,10 @@ function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCa
   // 0 → 1 replaced the Shortlist flats wholesale; 1 → 2 changed only their rate grids.
   if (revision < 1) next = next.map(refreshShortlistFully);
   else if (revision < 2) next = next.map(refreshShortlistRates);
-  // 2 → 3 replaces the "Wohnung C" placeholder with the real flat behind it (D47).
-  if (revision < 3) next = next.map(refreshPlaceholderFlat);
+  // 2 → 3 replaced the "Wohnung C" placeholder with the real flat behind it (D47); its
+  // check never fired, so 3 → 4 runs the corrected one (D49). A state stamped 3 by the
+  // first attempt is below 4, so it gets the flat it should have had.
+  if (revision < 4) next = next.map(refreshPlaceholderFlat);
   return next;
 }
 
@@ -296,10 +298,19 @@ function sameAmounts(a: number[], b: readonly number[]): boolean {
 
 /**
  * The `flat-c` placeholder ("Wohnung C", 600.000 €) becomes the real flat behind it
- * (D47), but only where every shipped field is still exactly as shipped — the rate grid
- * included, in either of the two grids that ever shipped for it, and the Sondertilgung
- * plan, which was shipped too. Any edit at all and the couple's flat is left alone:
- * this replaces one property with a different one, not a figure with a newer figure.
+ * (D47, corrected in D49). This replaces one property with a different one, not a figure
+ * with a newer figure, so one real edit keeps the couple's flat.
+ *
+ * The question is "did anyone put their own data into *this flat*", and only the fields
+ * the placeholder ever owned can answer it. Its Monatsrate, Kaufnebenkostensatz,
+ * Zinsraster and Zins-Notiz were never its own — it displayed the global ones, and
+ * `reviveApartment` still fills them from an older save's globals. Reading those asked
+ * instead "was any global setting ever changed", which was true of every save that had
+ * been used at all, so the first version of this refresh reached nobody (D49).
+ *
+ * What is left is a fingerprint nobody types by accident: the name "Wohnung C" beside
+ * 600.000 €, 670 € Hausgeld and 5.000 € Renovierung, with no note, no offer loans and no
+ * Sondertilgung plan of their own.
  */
 function refreshPlaceholderFlat(apartment: ApartmentCase): ApartmentCase {
   const shipped = SUPERSEDED_PLACEHOLDER_FLAT_C;
@@ -311,8 +322,6 @@ function refreshPlaceholderFlat(apartment: ApartmentCase): ApartmentCase {
     apartment.purchasePrice === shipped.purchasePrice &&
     apartment.renovation === shipped.renovation &&
     apartment.hausgeld === shipped.hausgeld &&
-    apartment.closingCostRate === shipped.closingCostRate &&
-    apartment.monthlyPayment === shipped.monthlyPayment &&
     apartment.kfwAmount === shipped.kfwAmount &&
     apartment.kfwRate === shipped.kfwRate &&
     shipped.kfwTermYears.includes(apartment.kfwTermYears) &&
@@ -320,11 +329,9 @@ function refreshPlaceholderFlat(apartment: ApartmentCase): ApartmentCase {
     apartment.parkingPrice === shipped.parkingPrice &&
     apartment.offerLoans === undefined &&
     apartment.note === undefined &&
-    sameAmounts(apartment.annualSpecialRepayments, shipped.annualSpecialRepayments) &&
-    (ratesEqual(apartment.rates, DEFAULT_RATES) || ratesEqual(apartment.rates, OFFER_RATES)) &&
-    (apartment.ratesNote === DEFAULT_RATES_NOTE ||
-      apartment.ratesNote === OFFER_RATES_NOTE ||
-      apartment.ratesNote === "");
+    shipped.annualSpecialRepaymentPlans.some((plan) =>
+      sameAmounts(apartment.annualSpecialRepayments, plan),
+    );
   return untouched ? cloneApartment(current) : apartment;
 }
 

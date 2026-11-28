@@ -20,9 +20,23 @@ import {
   OFFER_RATES,
   OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
+  SHORTLIST_REVISION,
   SUPERSEDED_PLACEHOLDER_FLAT_C,
   SUPERSEDED_SHORTLIST_RATES,
 } from "./defaults";
+
+/** The `flat-c` placeholder exactly as it shipped before D47, as a stored apartment. */
+function placeholderFlatC() {
+  return {
+    ...SUPERSEDED_PLACEHOLDER_FLAT_C,
+    kfwTermYears: 20,
+    closingCostRate: 11.57,
+    monthlyPayment: 1900,
+    annualSpecialRepayments: [...SUPERSEDED_PLACEHOLDER_FLAT_C.annualSpecialRepaymentPlans[0]],
+    rates: DEFAULT_RATES,
+    ratesNote: DEFAULT_RATES_NOTE,
+  };
+}
 
 /** Minimal in-memory localStorage — the module guards every access, so this is enough. */
 function installStorage() {
@@ -436,10 +450,60 @@ describe("persistence", () => {
     expect(b.ratesNote).toBe("eigene Zinsen");
   });
 
+  it("replaces the placeholder although every global-derived field was changed (D49)", () => {
+    // The first version of this refresh also compared Monatsrate, Kaufnebenkostensatz,
+    // Zinsraster and Zins-Notiz. The placeholder never owned any of them — it showed the
+    // globals, and an older save revives them from its globals — so one changed global
+    // anywhere in the app kept the flat, and the refresh reached nobody. Each of these
+    // shipped on a real save and none of them is an edit to this flat.
+    const state = defaultState();
+    const inherited = [
+      ["Monatsrate", { monthlyPayment: 2400 }],
+      ["Kaufnebenkosten", { closingCostRate: 8 }],
+      ["Zinsraster", { rates: { 10: { ek10: 4.2, ek15: 4.1, ek20: 3.9 }, 15: { ek10: 4.4, ek15: 4.3, ek20: 4.1 } } }],
+      ["Zins-Notiz", { ratesNote: "eigene Zinsen vom Makler" }],
+      ["leerer Plan", { annualSpecialRepayments: [] }],
+      ["globaler Plan", { annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments] }],
+    ] as const;
+    for (const [name, inheritedFields] of inherited) {
+      const stored = {
+        ...state,
+        shortlistRevision: 2,
+        apartmentCases: state.apartmentCases.map((a) =>
+          a.id === "flat-c" ? { ...placeholderFlatC(), ...inheritedFields } : a,
+        ),
+      };
+      window.localStorage.setItem(`mdh:save:inherited-${name}`, JSON.stringify(stored));
+      const flat = loadNamed(`inherited-${name}`)!.apartmentCases.find((a) => a.id === "flat-c")!;
+      expect(flat.label, name).toBe("SpreeLofts · WE 06");
+      expect(flat.purchasePrice, name).toBe(499000);
+    }
+  });
+
+  it("reaches a state the first attempt already stamped as refreshed (D49)", () => {
+    // Loading once after D47 shipped stamped `shortlistRevision: 3` whether or not the
+    // step did anything. Those states are the ones that need the corrected step most.
+    const state = defaultState();
+    const stored = {
+      ...state,
+      shortlistRevision: 3,
+      apartmentCases: state.apartmentCases.map((a) =>
+        a.id === "flat-c" ? { ...placeholderFlatC(), monthlyPayment: 2400 } : a,
+      ),
+    };
+    window.localStorage.setItem("mdh:save:stamped3", JSON.stringify(stored));
+    const loaded = loadNamed("stamped3")!;
+    expect(loaded.apartmentCases.find((a) => a.id === "flat-c")!.label).toBe("SpreeLofts · WE 06");
+    expect(loaded.shortlistRevision).toBe(4);
+  });
+
   it("replaces an untouched 'Wohnung C' placeholder with the real flat behind it (D47)", () => {
     const state = defaultState();
     const placeholder = {
       ...SUPERSEDED_PLACEHOLDER_FLAT_C,
+      closingCostRate: 11.57,
+      monthlyPayment: 1900,
+      annualSpecialRepayments: SUPERSEDED_PLACEHOLDER_FLAT_C.annualSpecialRepaymentPlans[0],
       rates: DEFAULT_RATES,
       ratesNote: DEFAULT_RATES_NOTE,
       kfwTermYears: 20,
@@ -468,14 +532,19 @@ describe("persistence", () => {
 
   it("leaves a 'Wohnung C' the couple edited exactly as it is (D47)", () => {
     const state = defaultState();
-    const base = { ...SUPERSEDED_PLACEHOLDER_FLAT_C, rates: DEFAULT_RATES, ratesNote: DEFAULT_RATES_NOTE, kfwTermYears: 20 };
-    // One edited field each: a price, a Hausgeld, a Sondertilgung plan, a note.
-    const edits = [
+    const base = placeholderFlatC();
+    // One edited field each. `ratesNote` is NOT here: the placeholder never had its own,
+    // so a different one says nothing about this flat (D49).
+    const edits: Partial<Record<"purchasePrice" | "hausgeld" | "renovation" | "parkingPrice", number> &
+      Record<"label" | "note", string> &
+      Record<"annualSpecialRepayments", number[]>>[] = [
       { purchasePrice: 610000 },
       { hausgeld: 700 },
+      { renovation: 0 },
+      { label: "Maisonette Köpenick" },
       { annualSpecialRepayments: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
       { note: "Besichtigung am Samstag" },
-      { ratesNote: "eigene Zinsen" },
+      { parkingPrice: 20000 },
     ];
     for (const [index, edit] of edits.entries()) {
       const stored = {
@@ -485,15 +554,17 @@ describe("persistence", () => {
       };
       window.localStorage.setItem(`mdh:save:edited-${index}`, JSON.stringify(stored));
       const flat = loadNamed(`edited-${index}`)!.apartmentCases.find((a) => a.id === "flat-c")!;
-      expect(flat.label).toBe("Wohnung C");
-      expect(flat.purchasePrice).toBe(edit.purchasePrice ?? 600000);
-      expect(flat.offerLoans).toBeUndefined();
+      // Still their flat, in every field: not renamed, not repriced, no offer attached.
+      expect(flat.label, String(index)).toBe(edit.label ?? "Wohnung C");
+      expect(flat.purchasePrice, String(index)).toBe(edit.purchasePrice ?? 600000);
+      expect(flat.hausgeld, String(index)).toBe(edit.hausgeld ?? 670);
+      expect(flat.offerLoans, String(index)).toBeUndefined();
     }
   });
 
   it("applies both the Shortlist and the placeholder step to a state from before either (D45, D47)", () => {
     const state = defaultState();
-    const placeholder = { ...SUPERSEDED_PLACEHOLDER_FLAT_C, rates: OFFER_RATES, ratesNote: OFFER_RATES_NOTE, kfwTermYears: 20 };
+    const placeholder = { ...placeholderFlatC(), rates: OFFER_RATES, ratesNote: OFFER_RATES_NOTE };
     const stored = {
       ...state,
       shortlistRevision: 0,
@@ -502,6 +573,6 @@ describe("persistence", () => {
     window.localStorage.setItem("mdh:save:rev0", JSON.stringify(stored));
     const loaded = loadNamed("rev0")!;
     expect(loaded.apartmentCases.find((a) => a.id === "flat-c")!.purchasePrice).toBe(499000);
-    expect(loaded.shortlistRevision).toBe(3);
+    expect(loaded.shortlistRevision).toBe(SHORTLIST_REVISION);
   });
 });

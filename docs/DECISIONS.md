@@ -786,3 +786,48 @@ A second, quieter drift sat in the same chain: a scenario whose own status reads
 - The whole decision moves into `apartmentChipStatus` in `src/lib/calculations.ts`, beside `status`/`statusTone`, so it is covered by the model tests rather than living in an inline ternary chain in a component. `ApartmentComparison.tsx` already rendered `statusTone`/`status` directly; the chip was the only second derivation.
 
 **Consequence.** Five chip states: red *"nicht tragbar"*, amber *"nur bei … tragbar"*, amber *"tragbar, mit Hinweis"*, amber *"gerade so tragbar"*, green *"tragbar"*. With the shipped defaults no flat is plain green at any EK level — each either carries a warning, sits close to the reserve, or fails at that level. That is the honest reading; the previous screen showed four green chips for flats whose selected level does not work. `calculations.test.ts` adds a sweep asserting that no flat at any level can be green while `selectedScenario.feasible` is false, and that a tragbar chip's tone always equals the scenario's `statusTone`. Widths were checked at 560 px: the longest label, *"nur bei 10/15% tragbar"*, is 22 characters against *"tragbar, mit Hinweis"* at 20, and the chip row already wraps.
+
+
+---
+
+## D49: The flat-c refresh checked fields the placeholder never owned, so it fired for nobody
+
+**Date:** 2026-11-28 · **Status:** accepted · **Corrects** [D47](#d47-the-henriette-lustig-flat-replaces-the-wohnung-c-placeholder)
+
+**Context.** D47 replaced the "Wohnung C" placeholder with the real flat in saved states,
+but only where it was "untouched", and defined untouched as *every* shipped field still
+matching — Monatsrate, Kaufnebenkostensatz, Zinsraster and Zins-Notiz included. The
+placeholder never owned any of those. It displayed the global ones, and `reviveApartment`
+still fills them from an older save's globals ([D40](#d40-kaufnebenkosten-and-monatsrate-move-onto-the-apartment-the-two-shortlist-flats-ship-as-defaults), [D45](#d45-the-bank-offers-of-24112026-each-apartment-owns-its-rates-and-its-offers-loans)). So the check was really asking "has any
+global setting ever been changed anywhere in the app", which has nothing to do with
+whether this flat was touched — and is true of every save that has been used at all.
+
+The owner reported the flat had not appeared. Reproduced: with the shipped defaults the
+step fires, and with any one of a changed Monatsrate, a changed Kaufnebenkostensatz, an
+edited rate grid, an own rates note, an empty Sondertilgung plan or the global default
+plan, it does not. Six ways to miss, all of them normal use.
+
+**Decision.** The check reads only fields the couple could have set *on this flat*: the
+name, price, Hausgeld, Renovierung, parking, the KfW fields, the handover months, the
+absence of a note and of offer loans, and a Sondertilgung plan that is one of the three
+meaning "never set one here" (the shipped plan, the empty one an older save revives with,
+the global default). Monatsrate, Kaufnebenkostensatz, rate grid and rates note are gone
+from it. What remains is a fingerprint nobody types by accident: *"Wohnung C"* beside
+600.000 €, 670 € Hausgeld and 5.000 € Renovierung.
+
+`SHORTLIST_REVISION` goes to 4 rather than reusing 3. `reviveState` stamps the current
+revision on every load whether or not a step did anything, so a state that was opened once
+after D47 shipped already reads 3 and would skip a corrected step at `revision < 3`. Those
+are exactly the states that need it.
+
+**Consequence.** The refresh is looser than D45's, deliberately: D45 moved a figure to a
+newer figure on a flat that stayed the same flat, where a wrongly-kept edit costs the
+couple one re-entry. Here it swaps one property for a different one, so being wrong in the
+other direction would silently delete a flat they had entered. The fingerprint is what
+keeps that from happening — four values that only the placeholder ever had together.
+`storage.test.ts` pins all six inherited-field cases, the stamped-revision-3 case, and
+seven real edits that must keep the couple's flat.
+
+A save where the couple did put their own data into `flat-c` is still left alone, by
+design. Nothing short of the JSON export and import under "Annahmen" will move the new
+flat into such a state, and that is the right trade.
