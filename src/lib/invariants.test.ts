@@ -108,12 +108,18 @@ describe("engine invariants", () => {
       // Paying s into the loan saves the Sollzins on s; keeping it earns the ETF rate on
       // s. At equal effective rates and no tax the two paths must end level. Anything
       // else would mean the ledger books a cash flow on one side only.
+      // `flat-c` ships with an all-zero plan so the screen can be read against its bank
+      // offer (D47). The invariant is about the arithmetic, not about that choice, so a
+      // flat without a plan is given the default one rather than skipped.
+      const planned = inputs.annualSpecialRepayments.some((amount) => amount > 0)
+        ? inputs
+        : { ...inputs, annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments] };
       for (const base of EK_SCENARIOS) {
         // Sondertilgung only ever goes into the bank part (D44), so it saves the bank's
         // rate; without KfW that is the loan's rate.
-        const rate = buildScenario(base, inputs, OFFER_RATES).bankRate;
+        const rate = buildScenario(base, planned, OFFER_RATES).bankRate;
         const effective = (Math.pow(1 + rate / 1200, 12) - 1) * 100;
-        const neutral = { ...inputs, etfReturnRate: effective, etfTaxRate: 0 };
+        const neutral = { ...planned, etfReturnRate: effective, etfTaxRate: 0 };
         const withPlan = wealthAtHorizon({ base, inputs: neutral, rates: OFFER_RATES });
         const without = wealthAtHorizon({
           base,

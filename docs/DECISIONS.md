@@ -710,3 +710,61 @@ The owner expected that the bank's household calculation would need less than 2 
 **Context.** The broker recalculated both 85 % variants with 15 Jahre Sollzinsbindung at the same Monatsrate (lower Tilgung): Lindenstraße Commerzbank 4,27 % (+0,21 Pkt.), BUWOG Mischzins 3,11 % (+0,15 Pkt.), the KfW part unchanged at 0,78 % with 10 years' binding.
 
 **Decision.** The 15-year column takes 4,27 % for Lindenstraße and ≈ 4,15 % for BUWOG's bank part, derived from the blended rate ((550.508 × 3,11 % − 170.000 × 0,78 %) / 380.508 = 4,151 %; the engine's blend gives back 3,109 %). 10 % and 20 % EK at 15 years have no offer and take the observed +0,21 points. Saved flats still holding the grid of 24.11. get the new grid and note (`SHORTLIST_REVISION` 2, rates only); any other edit is kept. The KfW's shorter binding stays as recorded in ASSUMPTIONS §4.19.
+
+
+---
+
+## D47: The Henriette-Lustig flat replaces the "Wohnung C" placeholder
+
+**Date:** 2026-11-28 · **Status:** accepted · **Refines** [D40](#d40-kaufnebenkosten-and-monatsrate-move-onto-the-apartment-the-two-shortlist-flats-ship-as-defaults), [D45](#d45-the-bank-offers-of-24112026-each-apartment-owns-its-rates-and-its-offers-loans)
+
+**Context.** Four more offers arrived (BauDarlehen24, 27.11.2026) for a Denkmal-Maisonette
+at Henriette-Lustig-Straße 13 in Spindlersfeld: 499.000 €, two loan amounts (444.000 € at
+ca. 10 % EK, 394.000 € at ca. 20 %) × two Sollzinsbindungen, four banks — Lloyds 4,17 %
+and PSD Nürnberg 4,35 % on the larger loan, Commerzbank 4,02 % and OLB 4,16 % on the
+smaller. Commerzbank 2a is the preferred variant. The third default apartment was still
+"Wohnung C", a round-number placeholder (600.000 €, Hausgeld 670 €, the global 1.900 €
+Monatsrate) left over from before any flat was real.
+
+**Decision.** `flat-c` keeps its id and its position and becomes the real flat.
+
+- Price 499.000 € including the Außenstellplatz P6, which is a Sondernutzungsrecht with no
+  separate price in the offer, so `parkingPrice` stays 0 (ASSUMPTIONS §4.21). Kaufnebenkosten
+  11,57 %, Hausgeld 428 € from the Wirtschaftsplan 2026, Renovierung 15.000 € as a plan value
+  (12.000 € kitchen + 3.000 € parquet).
+- One Monatsrate per flat as always (D14): 2.570,85 €, Variante 2a's. The 10 %-Angebote run
+  2.571,50 €, 0,65 € higher — recorded rather than averaged away.
+- `offerLoans` holds the two quoted amounts. 15 % EK was not quoted: no entry, and the rate
+  is the rounded midpoint of its neighbours, named as an assumption in the rates note
+  (ASSUMPTIONS §4.22). The app's "10 %" and "20 %" are really 11,02 % and 21,04 %.
+- `annualSpecialRepayments` is all zeros. The offers are the thing to read the screen
+  against, and the bank's own Sondertilgungstermin (30.06.) is not the app's (year end), so
+  a plan here would make the two disagree for a reason that has nothing to do with the
+  decision. The bank's five-times-10.000 € plan is recorded in the apartment's note and in
+  ASSUMPTIONS §6 as a reference figure.
+
+**Saved states.** `shortlistRevision` gains a third step: an untouched `flat-c` is replaced
+by the new flat. "Untouched" is stricter here than in D45, because this swaps one property
+for a different one rather than refreshing a figure — every shipped field must still match,
+the rate grid (either grid that ever shipped for it) and the shipped Sondertilgung plan
+included. One edited field anywhere and the couple's flat is left exactly as it is. The
+persisted field keeps its name although it no longer governs only Shortlist flats; renaming
+it would break every existing save for a comment's worth of clarity.
+
+**Consequence.** `offer2026-11-27.test.ts` pins all four offers, each 15-year one twice —
+mid-binding and at the end, since the offers print both. Largest deviation 6 cents, and the
+Anfangstilgung of all four (2,78 / 2,60 / 3,81 / 3,67 %) comes out exact, which is the real
+check that loan, rate and Rate belong together. Three tests had been reading the placeholder
+as if it were a fixture: the refinancing-stress case that needed a payment too small to cover
+interest now pins its own 600.000 € / 1.900 € inputs (D12) instead of borrowing a shipped
+apartment, the D35 ownership-cost guard now covers only the two flats that are still
+placeholders, and the Sondertilgung-neutrality invariant supplies a plan for a flat that
+ships without one. The golden snapshot for the flat was rewritten.
+
+**What the tool says.** At the shipped 145.000 € Eigenkapital only 10 % EK is feasible on
+this flat, with the reserve under target; 15 % and 20 % fail on cash by 2.584 € and 32.734 €.
+Whether that holds depends on the couple's actual capital, which is theirs to enter. On the
+offers themselves the step from 10 % to 20 % buys 50.000 € more EK against 81.570 € less debt
+after ten years (291.173 € → 209.603 €) and ends the loan 4,1 years sooner (22,1 → 18,0).
+On screen the 10 % column shows 291.270 €, 97 € above the offer: the app runs one Monatsrate
+for all three levels, and the 10 %-Angebote carry 0,65 €/Monat more.

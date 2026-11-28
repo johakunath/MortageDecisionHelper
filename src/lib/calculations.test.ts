@@ -109,11 +109,14 @@ describe("calculation engine", () => {
     expect(inputs.monthlyOwnershipCosts).toBe(475);
 
     // The split did not move a single default figure: the old totals were 640/690/760 €.
+    // Only the first two are still placeholders — `flat-c` carries a real Hausgeld from
+    // the Wirtschaftsplan since D47 (428 + 90 = 518 €), so its old 760 € is gone on purpose.
     expect(
-      DEFAULT_APARTMENT_CASES.slice(0, 3).map(
+      DEFAULT_APARTMENT_CASES.slice(0, 2).map(
         (flat) => buildApartmentInputs(DEFAULT_INPUTS, flat).monthlyOwnershipCosts,
       ),
-    ).toEqual([640, 690, 760]);
+    ).toEqual([640, 690]);
+    expect(buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[2]).monthlyOwnershipCosts).toBe(518);
   });
 
   it("calculates cash needed as down payment plus costs, renovation, and moving", () => {
@@ -706,9 +709,17 @@ describe("calculation engine", () => {
     expect(stresses[1].stress.extraYears).toBeGreaterThan(stresses[2].stress.extraYears);
     expect(stresses[0].stress.extraYears).toBeCloseTo(3.17, 1);
 
-    // Wohnung C at 10% EK: 1.900 € no longer even covers the interest on the Restschuld.
-    const flatC = buildApartmentInputs(DEFAULT_INPUTS, DEFAULT_APARTMENT_CASES[2]);
-    const tight = refinanceStress(buildScenario(LOWEST, flatC, OFFER_RATES), flatC);
+    // A 600.000 € flat at 10% EK where 1.900 € no longer even covers the interest on the
+    // Restschuld. Pinned here rather than read off a shipped apartment (D12): this fixture
+    // used to be the "Wohnung C" placeholder, and when that became a real flat with a real
+    // Monatsrate (D47) the case silently stopped being a case.
+    const tightFlat = buildApartmentInputs(DEFAULT_INPUTS, {
+      ...DEFAULT_APARTMENT_CASES[2],
+      purchasePrice: 600000,
+      monthlyPayment: 1900,
+      offerLoans: undefined,
+    });
+    const tight = refinanceStress(buildScenario(LOWEST, tightFlat, OFFER_RATES), tightFlat);
     expect(tight.coversInterest).toBe(false);
     expect(tight.runtimeYearsStressed).toBe(Infinity);
 
