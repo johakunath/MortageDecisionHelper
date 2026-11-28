@@ -189,48 +189,15 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
 
 /**
  * Bumped whenever shipped apartment data changes (D45). Despite the name it now also
- * governs the default flats: revision 3 replaced the "Wohnung C" placeholder (D47),
- * revision 4 does it again with a check that actually fires (D49). The persisted field
- * keeps its name so older saves still read.
+ * governs the default flats: revisions 3 and 4 tried to replace the "Wohnung C"
+ * placeholder where it looked untouched (D47, D49), revision 5 replaces it whatever it
+ * holds, once, because the owner asked for exactly that (D50). The persisted field keeps
+ * its name so older saves still read.
  */
-export const SHORTLIST_REVISION = 4;
+export const SHORTLIST_REVISION = 5;
 
-/**
- * What `flat-c` shipped as before D47: a round-number placeholder ("Wohnung C",
- * 600.000 €), never a real flat. A stored `flat-c` still matching this was never
- * edited, so `storage.ts` replaces it with the Henriette-Lustig data.
- *
- * **Only fields the couple could have set on this flat are listed** (D49). Monatsrate,
- * Kaufnebenkostensatz, Zinsraster and Zins-Notiz are deliberately absent: the placeholder
- * never carried its own, it took the global ones, and `reviveApartment` still hands an
- * older save its globals for them. Checking those asked "did you ever change a global
- * setting anywhere in the app", which has nothing to do with whether this flat was
- * touched — and answered yes for every real save, so the first version of this refresh
- * fired for nobody.
- */
-export const SUPERSEDED_PLACEHOLDER_FLAT_C = {
-  id: "flat-c",
-  label: "Wohnung C",
-  purchasePrice: 600000,
-  renovation: 5000,
-  hausgeld: 670,
-  kfwAmount: 0,
-  kfwRate: 0,
-  /** 20 as shipped; saves from before the field revive with today's term. */
-  kfwTermYears: [20],
-  moveInMonths: 0,
-  parkingPrice: 0,
-  /**
-   * Plans that mean "never set a plan on this flat": the one shipped with the
-   * placeholder, the empty one an older save revives with, and the global default. The
-   * new flat starts at zero on purpose, so a plan the couple really chose keeps the flat.
-   */
-  annualSpecialRepaymentPlans: [
-    [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
-    [],
-    [...DEFAULT_INPUTS.annualSpecialRepayments],
-  ],
-};
+/** The slot the "Wohnung C" placeholder occupied and the Henriette-Lustig flat now holds. */
+export const PLACEHOLDER_FLAT_ID = "flat-c";
 
 /**
  * Revision 1 (24.11.2026) shipped these rate grids and notes. A Shortlist flat that

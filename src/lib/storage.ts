@@ -9,7 +9,7 @@ import {
   OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
   SHORTLIST_REVISION,
-  SUPERSEDED_PLACEHOLDER_FLAT_C,
+  PLACEHOLDER_FLAT_ID,
   SUPERSEDED_SHORTLIST,
   SUPERSEDED_SHORTLIST_RATES,
 } from "./defaults";
@@ -253,10 +253,9 @@ function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCa
   // 0 → 1 replaced the Shortlist flats wholesale; 1 → 2 changed only their rate grids.
   if (revision < 1) next = next.map(refreshShortlistFully);
   else if (revision < 2) next = next.map(refreshShortlistRates);
-  // 2 → 3 replaced the "Wohnung C" placeholder with the real flat behind it (D47); its
-  // check never fired, so 3 → 4 runs the corrected one (D49). A state stamped 3 by the
-  // first attempt is below 4, so it gets the flat it should have had.
-  if (revision < 4) next = next.map(refreshPlaceholderFlat);
+  // 3 and 4 tried to replace the "Wohnung C" placeholder only where it looked untouched
+  // (D47, D49). → 5 replaces it whatever it holds, once (D50).
+  if (revision < 5) next = next.map(replacePlaceholderFlat);
   return next;
 }
 
@@ -292,47 +291,23 @@ function refreshShortlistFully(apartment: ApartmentCase): ApartmentCase {
   return apartment.note !== undefined ? { ...withoutNote, note: apartment.note } : withoutNote;
 }
 
-function sameAmounts(a: number[], b: readonly number[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
-}
-
 /**
- * The `flat-c` placeholder ("Wohnung C", 600.000 €) becomes the real flat behind it
- * (D47, corrected in D49). This replaces one property with a different one, not a figure
- * with a newer figure, so one real edit keeps the couple's flat.
+ * The `flat-c` slot is set to the shipped flat, whatever it currently holds (D50).
  *
- * The question is "did anyone put their own data into *this flat*", and only the fields
- * the placeholder ever owned can answer it. Its Monatsrate, Kaufnebenkostensatz,
- * Zinsraster and Zins-Notiz were never its own — it displayed the global ones, and
- * `reviveApartment` still fills them from an older save's globals. Reading those asked
- * instead "was any global setting ever changed", which was true of every save that had
- * been used at all, so the first version of this refresh reached nobody (D49).
+ * D47 and D49 replaced it only where it still looked like the untouched placeholder, so
+ * that data the couple had entered there could not be lost. The owner then asked for it
+ * to be overwritten anyway, their own edits included: the slot had only ever held a
+ * placeholder they did not want, and the real flat is what they want to see.
  *
- * What is left is a fingerprint nobody types by accident: the name "Wohnung C" beside
- * 600.000 €, 670 € Hausgeld and 5.000 € Renovierung, with no note, no offer loans and no
- * Sondertilgung plan of their own.
+ * This is a **one-shot migration, not a rule**. It runs for a state below revision 5 and
+ * never again, so an edit they make to this flat from now on survives every later load.
+ * Nothing else would be acceptable: a standing "always reset" would quietly undo their
+ * work every time the app opened.
  */
-function refreshPlaceholderFlat(apartment: ApartmentCase): ApartmentCase {
-  const shipped = SUPERSEDED_PLACEHOLDER_FLAT_C;
-  if (apartment.id !== shipped.id) return apartment;
-  const current = DEFAULT_APARTMENT_CASES.find((entry) => entry.id === shipped.id);
-  if (!current) return apartment;
-  const untouched =
-    apartment.label === shipped.label &&
-    apartment.purchasePrice === shipped.purchasePrice &&
-    apartment.renovation === shipped.renovation &&
-    apartment.hausgeld === shipped.hausgeld &&
-    apartment.kfwAmount === shipped.kfwAmount &&
-    apartment.kfwRate === shipped.kfwRate &&
-    shipped.kfwTermYears.includes(apartment.kfwTermYears) &&
-    apartment.moveInMonths === shipped.moveInMonths &&
-    apartment.parkingPrice === shipped.parkingPrice &&
-    apartment.offerLoans === undefined &&
-    apartment.note === undefined &&
-    shipped.annualSpecialRepaymentPlans.some((plan) =>
-      sameAmounts(apartment.annualSpecialRepayments, plan),
-    );
-  return untouched ? cloneApartment(current) : apartment;
+function replacePlaceholderFlat(apartment: ApartmentCase): ApartmentCase {
+  if (apartment.id !== PLACEHOLDER_FLAT_ID) return apartment;
+  const current = DEFAULT_APARTMENT_CASES.find((entry) => entry.id === PLACEHOLDER_FLAT_ID);
+  return current ? cloneApartment(current) : apartment;
 }
 
 function refreshShortlistRates(apartment: ApartmentCase): ApartmentCase {

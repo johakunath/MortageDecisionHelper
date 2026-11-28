@@ -21,18 +21,25 @@ import {
   OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
   SHORTLIST_REVISION,
-  SUPERSEDED_PLACEHOLDER_FLAT_C,
   SUPERSEDED_SHORTLIST_RATES,
 } from "./defaults";
 
-/** The `flat-c` placeholder exactly as it shipped before D47, as a stored apartment. */
+/** The "Wohnung C" placeholder exactly as it shipped before D47, as a stored apartment. */
 function placeholderFlatC() {
   return {
-    ...SUPERSEDED_PLACEHOLDER_FLAT_C,
-    kfwTermYears: 20,
+    id: "flat-c",
+    label: "Wohnung C",
+    purchasePrice: 600000,
+    renovation: 5000,
+    hausgeld: 670,
     closingCostRate: 11.57,
     monthlyPayment: 1900,
-    annualSpecialRepayments: [...SUPERSEDED_PLACEHOLDER_FLAT_C.annualSpecialRepaymentPlans[0]],
+    kfwAmount: 0,
+    kfwRate: 0,
+    kfwTermYears: 20,
+    moveInMonths: 0,
+    parkingPrice: 0,
+    annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
     rates: DEFAULT_RATES,
     ratesNote: DEFAULT_RATES_NOTE,
   };
@@ -450,119 +457,67 @@ describe("persistence", () => {
     expect(b.ratesNote).toBe("eigene Zinsen");
   });
 
-  it("replaces the placeholder although every global-derived field was changed (D49)", () => {
-    // The first version of this refresh also compared Monatsrate, Kaufnebenkostensatz,
-    // Zinsraster and Zins-Notiz. The placeholder never owned any of them — it showed the
-    // globals, and an older save revives them from its globals — so one changed global
-    // anywhere in the app kept the flat, and the refresh reached nobody. Each of these
-    // shipped on a real save and none of them is an edit to this flat.
+  it("replaces flat-c whatever it holds, once (D50)", () => {
+    // D47 and D49 replaced it only where it still looked like the untouched placeholder.
+    // The owner asked for it to go regardless, their own edits included: the slot had only
+    // ever held a placeholder they did not want.
     const state = defaultState();
-    const inherited = [
-      ["Monatsrate", { monthlyPayment: 2400 }],
-      ["Kaufnebenkosten", { closingCostRate: 8 }],
-      ["Zinsraster", { rates: { 10: { ek10: 4.2, ek15: 4.1, ek20: 3.9 }, 15: { ek10: 4.4, ek15: 4.3, ek20: 4.1 } } }],
-      ["Zins-Notiz", { ratesNote: "eigene Zinsen vom Makler" }],
-      ["leerer Plan", { annualSpecialRepayments: [] }],
-      ["globaler Plan", { annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments] }],
+    const held = [
+      ["unberührt", placeholderFlatC()],
+      ["eigener Preis", { ...placeholderFlatC(), purchasePrice: 610000 }],
+      ["eigener Name", { ...placeholderFlatC(), label: "Maisonette Köpenick" }],
+      ["eigene Notiz", { ...placeholderFlatC(), note: "Besichtigung am Samstag" }],
+      ["eigenes Hausgeld und Plan", { ...placeholderFlatC(), hausgeld: 700, annualSpecialRepayments: [1, 2, 3] }],
+      ["komplett andere Wohnung", { ...placeholderFlatC(), label: "Irgendwas", purchasePrice: 333000, hausgeld: 210, note: "x", parkingPrice: 9000 }],
     ] as const;
-    for (const [name, inheritedFields] of inherited) {
-      const stored = {
-        ...state,
-        shortlistRevision: 2,
-        apartmentCases: state.apartmentCases.map((a) =>
-          a.id === "flat-c" ? { ...placeholderFlatC(), ...inheritedFields } : a,
-        ),
-      };
-      window.localStorage.setItem(`mdh:save:inherited-${name}`, JSON.stringify(stored));
-      const flat = loadNamed(`inherited-${name}`)!.apartmentCases.find((a) => a.id === "flat-c")!;
-      expect(flat.label, name).toBe("SpreeLofts · WE 06");
-      expect(flat.purchasePrice, name).toBe(499000);
+    // Every revision below 5, including the two the earlier attempts stamped.
+    for (const revision of [0, 1, 2, 3, 4]) {
+      for (const [name, flatC] of held) {
+        const key = `force-${revision}-${name}`;
+        const stored = {
+          ...state,
+          shortlistRevision: revision,
+          apartmentCases: state.apartmentCases.map((a) => (a.id === "flat-c" ? flatC : a)),
+        };
+        window.localStorage.setItem(`mdh:save:${key}`, JSON.stringify(stored));
+        const loaded = loadNamed(key)!;
+        const flat = loaded.apartmentCases.find((a) => a.id === "flat-c")!;
+        expect(flat.label, key).toBe("SpreeLofts · WE 06");
+        expect(flat.purchasePrice, key).toBe(499000);
+        expect(flat.hausgeld, key).toBe(428);
+        expect(flat.offerLoans, key).toEqual({ ek10: 444000, ek20: 394000 });
+        expect(flat.annualSpecialRepayments.every((amount) => amount === 0), key).toBe(true);
+        // The slot keeps its place, and no other flat is touched.
+        expect(loaded.apartmentCases.map((a) => a.id), key).toEqual(state.apartmentCases.map((a) => a.id));
+        expect(loaded.apartmentCases.find((a) => a.id === "flat-b"), key).toEqual(
+          state.apartmentCases.find((a) => a.id === "flat-b"),
+        );
+      }
     }
   });
 
-  it("reaches a state the first attempt already stamped as refreshed (D49)", () => {
-    // Loading once after D47 shipped stamped `shortlistRevision: 3` whether or not the
-    // step did anything. Those states are the ones that need the corrected step most.
+  it("never touches flat-c again once that migration has run (D50)", () => {
+    // The point of a one-shot: an edit made after the migration has to survive every
+    // later load. A standing "always reset" would quietly undo their work on every open.
     const state = defaultState();
-    const stored = {
-      ...state,
-      shortlistRevision: 3,
-      apartmentCases: state.apartmentCases.map((a) =>
-        a.id === "flat-c" ? { ...placeholderFlatC(), monthlyPayment: 2400 } : a,
-      ),
-    };
-    window.localStorage.setItem("mdh:save:stamped3", JSON.stringify(stored));
-    const loaded = loadNamed("stamped3")!;
-    expect(loaded.apartmentCases.find((a) => a.id === "flat-c")!.label).toBe("SpreeLofts · WE 06");
-    expect(loaded.shortlistRevision).toBe(4);
-  });
-
-  it("replaces an untouched 'Wohnung C' placeholder with the real flat behind it (D47)", () => {
-    const state = defaultState();
-    const placeholder = {
-      ...SUPERSEDED_PLACEHOLDER_FLAT_C,
-      closingCostRate: 11.57,
-      monthlyPayment: 1900,
-      annualSpecialRepayments: SUPERSEDED_PLACEHOLDER_FLAT_C.annualSpecialRepaymentPlans[0],
-      rates: DEFAULT_RATES,
-      ratesNote: DEFAULT_RATES_NOTE,
-      kfwTermYears: 20,
+    const theirs = {
+      ...state.apartmentCases.find((a) => a.id === "flat-c")!,
+      label: "Maisonette, nachverhandelt",
+      purchasePrice: 489000,
+      note: "Preis nachverhandelt am 02.12.",
+      annualSpecialRepayments: [10000, 10000, 10000, 0, 0, 0, 0, 0, 0, 0],
     };
     const stored = {
       ...state,
-      shortlistRevision: 2,
-      apartmentCases: state.apartmentCases.map((a) => (a.id === "flat-c" ? placeholder : a)),
+      shortlistRevision: SHORTLIST_REVISION,
+      apartmentCases: state.apartmentCases.map((a) => (a.id === "flat-c" ? theirs : a)),
     };
-    window.localStorage.setItem("mdh:save:rev2", JSON.stringify(stored));
-
-    const flat = loadNamed("rev2")!.apartmentCases.find((a) => a.id === "flat-c")!;
-    expect(flat.label).toBe("SpreeLofts · WE 06");
-    expect(flat.purchasePrice).toBe(499000);
-    expect(flat.hausgeld).toBe(428);
-    expect(flat.monthlyPayment).toBe(2570.85);
-    expect(flat.offerLoans).toEqual({ ek10: 444000, ek20: 394000 });
-    // The placeholder's own Sondertilgung plan goes too: it was shipped, and the new
-    // flat starts at zero on purpose so it can be read against its bank offer.
-    expect(flat.annualSpecialRepayments.every((amount) => amount === 0)).toBe(true);
-    // The other flats are untouched by this step.
-    expect(loadNamed("rev2")!.apartmentCases.map((a) => a.id)).toEqual(
-      state.apartmentCases.map((a) => a.id),
-    );
+    window.localStorage.setItem("mdh:save:after", JSON.stringify(stored));
+    const flat = loadNamed("after")!.apartmentCases.find((a) => a.id === "flat-c")!;
+    expect(flat).toEqual(theirs);
   });
 
-  it("leaves a 'Wohnung C' the couple edited exactly as it is (D47)", () => {
-    const state = defaultState();
-    const base = placeholderFlatC();
-    // One edited field each. `ratesNote` is NOT here: the placeholder never had its own,
-    // so a different one says nothing about this flat (D49).
-    const edits: Partial<Record<"purchasePrice" | "hausgeld" | "renovation" | "parkingPrice", number> &
-      Record<"label" | "note", string> &
-      Record<"annualSpecialRepayments", number[]>>[] = [
-      { purchasePrice: 610000 },
-      { hausgeld: 700 },
-      { renovation: 0 },
-      { label: "Maisonette Köpenick" },
-      { annualSpecialRepayments: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-      { note: "Besichtigung am Samstag" },
-      { parkingPrice: 20000 },
-    ];
-    for (const [index, edit] of edits.entries()) {
-      const stored = {
-        ...state,
-        shortlistRevision: 2,
-        apartmentCases: state.apartmentCases.map((a) => (a.id === "flat-c" ? { ...base, ...edit } : a)),
-      };
-      window.localStorage.setItem(`mdh:save:edited-${index}`, JSON.stringify(stored));
-      const flat = loadNamed(`edited-${index}`)!.apartmentCases.find((a) => a.id === "flat-c")!;
-      // Still their flat, in every field: not renamed, not repriced, no offer attached.
-      expect(flat.label, String(index)).toBe(edit.label ?? "Wohnung C");
-      expect(flat.purchasePrice, String(index)).toBe(edit.purchasePrice ?? 600000);
-      expect(flat.hausgeld, String(index)).toBe(edit.hausgeld ?? 670);
-      expect(flat.offerLoans, String(index)).toBeUndefined();
-    }
-  });
-
-  it("applies both the Shortlist and the placeholder step to a state from before either (D45, D47)", () => {
+  it("applies both the Shortlist and the placeholder step to a state from before either (D45, D50)", () => {
     const state = defaultState();
     const placeholder = { ...placeholderFlatC(), rates: OFFER_RATES, ratesNote: OFFER_RATES_NOTE };
     const stored = {
