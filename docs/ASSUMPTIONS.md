@@ -324,9 +324,13 @@ pinned twice — mid-binding and at the end:
 | 2a Commerzbank | 394.000 € | 4,02 % | 10 J | 3,81 % ✓ | 209.603,48 / 209.603,49 | — |
 | 2b OLB | 394.000 € | 4,16 % | 15 J | 3,67 % ✓ | 215.061,46 / 215.061 | 93.553,96 / 93.553,90 |
 
-Largest deviation: **6 cents**. The cost structure reproduces as well: Kaufnebenkosten
-57.734,30 € = 11,57 % of 499.000 €, Eigenkapital = Anzahlung + Nebenkosten (112.734,30 €
-and 162.734,30 €), Gesamtbelastung = Kreditrate + Hausgeld (2.999,50 € and 2.998,85 €).
+Largest deviation against a figure the offers print to the cent: **6 cents**. The two
+they print rounded to whole euros (1b and 2b after ten years) are reproduced as
+299.700,43 € and 215.061,46 €, both inside the rounding of the printed figure, so they
+confirm the schedule without pinning it as tightly. The cost structure reproduces as
+well: Kaufnebenkosten 57.734,30 € = 11,57 % of 499.000 €, Eigenkapital = Anzahlung +
+Nebenkosten (112.734,30 € and 162.734,30 €), Gesamtbelastung = Kreditrate + Hausgeld
+(2.999,50 € and 2.998,85 €).
 Neither the price nor the Kaufnebenkostensatz is printed on the offers; both follow from
 Eigenkapital + Darlehen and are pinned that way.
 

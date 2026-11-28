@@ -752,9 +752,10 @@ persisted field keeps its name although it no longer governs only Shortlist flat
 it would break every existing save for a comment's worth of clarity.
 
 **Consequence.** `offer2026-11-27.test.ts` pins all four offers, each 15-year one twice —
-mid-binding and at the end, since the offers print both. Largest deviation 6 cents, and the
-Anfangstilgung of all four (2,78 / 2,60 / 3,81 / 3,67 %) comes out exact, which is the real
-check that loan, rate and Rate belong together. Three tests had been reading the placeholder
+mid-binding and at the end, since the offers print both. Largest deviation 6 cents against
+the figures printed to the cent; the two printed as whole euros land inside their rounding.
+The Anfangstilgung of all four (2,78 / 2,60 / 3,81 / 3,67 %) comes out exact, which is the
+real check that loan, rate and Rate belong together. Three tests had been reading the placeholder
 as if it were a fixture: the refinancing-stress case that needed a payment too small to cover
 interest now pins its own 600.000 € / 1.900 € inputs (D12) instead of borrowing a shipped
 apartment, the D35 ownership-cost guard now covers only the two flats that are still
