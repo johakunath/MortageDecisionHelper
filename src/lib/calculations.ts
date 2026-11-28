@@ -1289,6 +1289,66 @@ export function compareApartmentCases(
   });
 }
 
+export type ApartmentChipStatus = {
+  tone: Tone;
+  label: string;
+};
+
+/**
+ * What the apartment chip says about a flat at the EK level currently on screen.
+ *
+ * The chip used to re-derive this from `noSafeScenario` and the warning list, with a
+ * green "tragbar" as the fallback branch. That fallback also caught the case this
+ * function exists for: the selected level fails while another one passes, so
+ * `noSafeScenario` is false. Four of the five shipped flats landed there at 20% EK —
+ * a green "tragbar" chip above a right panel reading "Geld reicht nicht" (D48).
+ *
+ * Three things follow from the rules the app already has:
+ *
+ * - **Red is reserved for "works nowhere".** A flat that is tragbar at 10% EK must not
+ *   carry the same chip as one that fails at every level; collapsing the two is the
+ *   same defect as the green fallback, pointed the other way. So the failing-level case
+ *   is amber and the label names the escape, the way the verdict already does
+ *   ("Nicht tragbar: 15% EK (Geld reicht nicht)").
+ * - **The tone comes from the scenario's own `statusTone`**, not from a second reading
+ *   of the diagnosis. The comparison table has always rendered `statusTone`/`status`
+ *   directly; the chip is the only place that re-derived them, and it drifted — a flat
+ *   whose status says "Gerade so tragbar" in amber read green on its chip.
+ * - **The word carries the meaning, never the colour** (CLAUDE.md rule 4): every state
+ *   is distinguishable with the colour removed.
+ */
+export function apartmentChipStatus(result: ApartmentComparisonResult): ApartmentChipStatus {
+  const { decision, selectedScenario } = result;
+
+  // Nothing works at any level. The only state that earns red.
+  if (decision.noSafeScenario) {
+    return { tone: "red", label: "nicht tragbar" };
+  }
+
+  // The level on screen fails, but the flat is reachable: say where.
+  if (!selectedScenario.feasible) {
+    return { tone: "amber", label: `nur bei ${joinEkLevels(decision.feasibleScenarios)} tragbar` };
+  }
+
+  // Tragbar, but with a reserve or retirement-deadline warning (D44).
+  if (selectedScenario.diagnosis.warnings.length > 0) {
+    return { tone: "amber", label: "tragbar, mit Hinweis" };
+  }
+
+  // Tragbar with no warning, yet the status is not green: little cash left over.
+  // Taking the tone from the scenario keeps chip and status from disagreeing.
+  if (selectedScenario.statusTone !== "green") {
+    return { tone: selectedScenario.statusTone, label: "gerade so tragbar" };
+  }
+
+  return { tone: "green", label: "tragbar" };
+}
+
+/** "10%", "10/15%", "10/15/20%" — compact enough for a chip at 560px. */
+function joinEkLevels(scenarios: ScenarioResult[]): string {
+  return `${scenarios.map((scenario) => scenario.ekRate).join("/")}%`;
+}
+
 /** Lowest `score` wins. Returns null for an empty list rather than throwing. */
 function pickBest(
   scenarios: ScenarioResult[],
