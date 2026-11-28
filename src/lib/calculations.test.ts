@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   afterTaxAnnualReturn,
+  apartmentChipStatus,
   apartmentColumn,
   bindingMonths,
   blendedRate,
@@ -1102,5 +1103,109 @@ describe("calculation engine", () => {
     expect(boundary.mortgage.regularMonthlyPayment - boundary.diagnosis.checks[0].actual)
       .toBeCloseTo(0.25, 6);
     expect(boundary.paymentSubstituted).toBe(true);
+  });
+});
+
+
+/**
+ * The chip over each apartment is the only verdict visible for a flat that is not the
+ * active one, so it has to be true on its own. It used to fall through to a green
+ * "tragbar" whenever `noSafeScenario` was false — including when the EK level actually
+ * on screen failed. Four of the five shipped flats sat in that branch at 20% EK, each
+ * showing green while its own right panel read "Geld reicht nicht" (D48).
+ */
+describe("apartment chip status", () => {
+  const EK_LEVELS: ScenarioId[] = ["ek10", "ek15", "ek20"];
+
+  const resultFor = (apartmentId: string, selectedId: ScenarioId, inputs = DEFAULT_INPUTS) => {
+    const results = compareApartmentCases(DEFAULT_APARTMENT_CASES, EK_SCENARIOS, inputs, selectedId);
+    return results.find((result) => result.apartment.id === apartmentId)!;
+  };
+
+  it("never shows green at an EK level that is not tragbar — any flat, any level", () => {
+    for (const selectedId of EK_LEVELS) {
+      const results = compareApartmentCases(
+        DEFAULT_APARTMENT_CASES,
+        EK_SCENARIOS,
+        DEFAULT_INPUTS,
+        selectedId,
+      );
+
+      for (const result of results) {
+        const chip = apartmentChipStatus(result);
+
+        if (!result.selectedScenario.feasible) {
+          expect(
+            chip.tone,
+            `${result.apartment.label} at ${selectedId}: ${result.selectedScenario.status}`,
+          ).not.toBe("green");
+          expect(chip.label).not.toBe("tragbar");
+        } else {
+          // Tragbar: the chip speaks with the same voice as the flat's own status, so
+          // the two cannot disagree the way they did for "Gerade so tragbar".
+          expect(chip.tone, `${result.apartment.label} at ${selectedId}`).toBe(
+            result.selectedScenario.statusTone,
+          );
+        }
+      }
+    }
+  });
+
+  it("names the levels that work when the one on screen does not", () => {
+    // Lindenstraße is tragbar at 10% EK only: at 15 and 20 the cash runs out.
+    const atTwenty = resultFor("lindenstrasse-31g-we49", "ek20");
+    expect(atTwenty.selectedScenario.feasible).toBe(false);
+    expect(atTwenty.selectedScenario.status).toBe("Geld reicht nicht");
+    expect(atTwenty.decision.noSafeScenario).toBe(false);
+    expect(apartmentChipStatus(atTwenty)).toEqual({ tone: "amber", label: "nur bei 10% tragbar" });
+
+    // Two escapes are both named rather than reduced to the nearest one.
+    const twoLevels = resultFor("flat-b", "ek20");
+    expect(twoLevels.selectedScenario.feasible).toBe(false);
+    expect(twoLevels.decision.feasibleScenarios.map((scenario) => scenario.id)).toEqual([
+      "ek10",
+      "ek15",
+    ]);
+    expect(apartmentChipStatus(twoLevels)).toEqual({
+      tone: "amber",
+      label: "nur bei 10/15% tragbar",
+    });
+  });
+
+  it("keeps red for a flat that works at no level at all", () => {
+    const unaffordable = DEFAULT_APARTMENT_CASES.map((apartment) =>
+      apartment.id === "flat-a" ? { ...apartment, purchasePrice: 1_200_000 } : apartment,
+    );
+    const result = compareApartmentCases(unaffordable, EK_SCENARIOS, DEFAULT_INPUTS, "ek10").find(
+      (entry) => entry.apartment.id === "flat-a",
+    )!;
+
+    expect(result.decision.noSafeScenario).toBe(true);
+    expect(apartmentChipStatus(result)).toEqual({ tone: "red", label: "nicht tragbar" });
+  });
+
+  it("separates the three tragbar states: clean, warned, and only just", () => {
+    // A reserve or deadline warning keeps its D44 wording.
+    const warned = resultFor("flat-a", "ek20");
+    expect(warned.selectedScenario.feasible).toBe(true);
+    expect(warned.selectedScenario.diagnosis.warnings).toContain("reserve");
+    expect(apartmentChipStatus(warned)).toEqual({ tone: "amber", label: "tragbar, mit Hinweis" });
+
+    // Tragbar, no warning, but little left over. The status says "Gerade so tragbar" in
+    // amber; the chip used to print green "tragbar" over it.
+    const thin = resultFor("lindenstrasse-31g-we49", "ek10");
+    expect(thin.selectedScenario.feasible).toBe(true);
+    expect(thin.selectedScenario.diagnosis.warnings).toHaveLength(0);
+    expect(thin.selectedScenario.status).toBe("Gerade so tragbar");
+    expect(apartmentChipStatus(thin)).toEqual({ tone: "amber", label: "gerade so tragbar" });
+
+    // Green is still reachable — it just has to be earned.
+    const comfortable = resultFor("flat-a", "ek10", {
+      ...DEFAULT_INPUTS,
+      availableCapital: 200_000,
+      maxRuntimeYears: 60,
+    });
+    expect(comfortable.selectedScenario.status).toBe("Tragbar");
+    expect(apartmentChipStatus(comfortable)).toEqual({ tone: "green", label: "tragbar" });
   });
 });

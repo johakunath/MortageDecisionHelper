@@ -710,3 +710,21 @@ The owner expected that the bank's household calculation would need less than 2 
 **Context.** The broker recalculated both 85 % variants with 15 Jahre Sollzinsbindung at the same Monatsrate (lower Tilgung): Lindenstraße Commerzbank 4,27 % (+0,21 Pkt.), BUWOG Mischzins 3,11 % (+0,15 Pkt.), the KfW part unchanged at 0,78 % with 10 years' binding.
 
 **Decision.** The 15-year column takes 4,27 % for Lindenstraße and ≈ 4,15 % for BUWOG's bank part, derived from the blended rate ((550.508 × 3,11 % − 170.000 × 0,78 %) / 380.508 = 4,151 %; the engine's blend gives back 3,109 %). 10 % and 20 % EK at 15 years have no offer and take the observed +0,21 points. Saved flats still holding the grid of 24.11. get the new grid and note (`SHORTLIST_REVISION` 2, rates only); any other edit is kept. The KfW's shorter binding stays as recorded in ASSUMPTIONS §4.19.
+
+---
+
+## D48: The apartment chip says what is true at the EK level on screen
+
+**Date:** 2026-11-28 · **Status:** accepted · **Refines** [D44](#d44-reserve-and-retirement-deadline-warn-kfw-and-bank-run-as-two-loans), [D3](#d3--apartments-are-a-context-switcher-plus-a-read-only-comparison-table)
+
+**Context.** The chip over each apartment picked its pill from `decision.noSafeScenario` first, then from the warning list, with green *"tragbar"* as the fallback branch. That fallback also caught the case nobody had named: the EK level actually selected fails, while some other level passes, so `noSafeScenario` is false. With the shipped defaults this is not an edge case — at 20 % EK four of the five flats land there, each showing a green *"tragbar"* chip above a right panel reading *"Geld reicht nicht"*; at 15 % EK two of them do. That is CLAUDE.md rule 1 (never present the least-bad option as safe) broken by the one verdict that is visible for a flat the couple has not opened.
+
+A second, quieter drift sat in the same chain: a scenario whose own status reads *"Gerade so tragbar"* in amber got a green chip, because the chain re-derived the verdict from the diagnosis instead of reading the status the rest of the app already renders.
+
+**Decision.**
+- The failing-selected-level case is **amber, and the label names the escape**: *"nur bei 10% tragbar"*, *"nur bei 10/15% tragbar"*. It is the same thing the verdict already says in longhand (*"Nicht tragbar: 15% EK (Geld reicht nicht)"*), compressed to pill width.
+- **Red stays reserved for a flat that works at no level at all.** Spending red on "fails at the level on screen" would make a flat that is tragbar at 10 % EK indistinguishable from one that is tragbar nowhere — the same defect as the green fallback, pointed the other way. The chip's word, not its colour, carries this (rule 4): every state reads correctly in greyscale.
+- **The tone of a tragbar chip is the scenario's own `statusTone`**, not a second reading of the diagnosis. *"Gerade so tragbar"* therefore reads amber on the chip too, and gets its own label rather than borrowing *"tragbar, mit Hinweis"*, which would point at a warning list that is empty.
+- The whole decision moves into `apartmentChipStatus` in `src/lib/calculations.ts`, beside `status`/`statusTone`, so it is covered by the model tests rather than living in an inline ternary chain in a component. `ApartmentComparison.tsx` already rendered `statusTone`/`status` directly; the chip was the only second derivation.
+
+**Consequence.** Five chip states: red *"nicht tragbar"*, amber *"nur bei … tragbar"*, amber *"tragbar, mit Hinweis"*, amber *"gerade so tragbar"*, green *"tragbar"*. With the shipped defaults no flat is plain green at any EK level — each either carries a warning, sits close to the reserve, or fails at that level. That is the honest reading; the previous screen showed four green chips for flats whose selected level does not work. `calculations.test.ts` adds a sweep asserting that no flat at any level can be green while `selectedScenario.feasible` is false, and that a tragbar chip's tone always equals the scenario's `statusTone`. Widths were checked at 560 px: the longest label, *"nur bei 10/15% tragbar"*, is 22 characters against *"tragbar, mit Hinweis"* at 20, and the chip row already wraps.
