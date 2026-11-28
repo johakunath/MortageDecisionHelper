@@ -20,6 +20,7 @@ import {
   OFFER_RATES,
   OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
+  SUPERSEDED_PLACEHOLDER_FLAT_C,
   SUPERSEDED_SHORTLIST_RATES,
 } from "./defaults";
 
@@ -433,5 +434,74 @@ describe("persistence", () => {
     const b = loaded.apartmentCases.find((a) => a.id === "buwog-arbor-h2-we08")!;
     expect(b.rates).toEqual(DEFAULT_RATES);
     expect(b.ratesNote).toBe("eigene Zinsen");
+  });
+
+  it("replaces an untouched 'Wohnung C' placeholder with the real flat behind it (D47)", () => {
+    const state = defaultState();
+    const placeholder = {
+      ...SUPERSEDED_PLACEHOLDER_FLAT_C,
+      rates: DEFAULT_RATES,
+      ratesNote: DEFAULT_RATES_NOTE,
+      kfwTermYears: 20,
+    };
+    const stored = {
+      ...state,
+      shortlistRevision: 2,
+      apartmentCases: state.apartmentCases.map((a) => (a.id === "flat-c" ? placeholder : a)),
+    };
+    window.localStorage.setItem("mdh:save:rev2", JSON.stringify(stored));
+
+    const flat = loadNamed("rev2")!.apartmentCases.find((a) => a.id === "flat-c")!;
+    expect(flat.label).toBe("SpreeLofts · WE 06");
+    expect(flat.purchasePrice).toBe(499000);
+    expect(flat.hausgeld).toBe(428);
+    expect(flat.monthlyPayment).toBe(2570.85);
+    expect(flat.offerLoans).toEqual({ ek10: 444000, ek20: 394000 });
+    // The placeholder's own Sondertilgung plan goes too: it was shipped, and the new
+    // flat starts at zero on purpose so it can be read against its bank offer.
+    expect(flat.annualSpecialRepayments.every((amount) => amount === 0)).toBe(true);
+    // The other flats are untouched by this step.
+    expect(loadNamed("rev2")!.apartmentCases.map((a) => a.id)).toEqual(
+      state.apartmentCases.map((a) => a.id),
+    );
+  });
+
+  it("leaves a 'Wohnung C' the couple edited exactly as it is (D47)", () => {
+    const state = defaultState();
+    const base = { ...SUPERSEDED_PLACEHOLDER_FLAT_C, rates: DEFAULT_RATES, ratesNote: DEFAULT_RATES_NOTE, kfwTermYears: 20 };
+    // One edited field each: a price, a Hausgeld, a Sondertilgung plan, a note.
+    const edits = [
+      { purchasePrice: 610000 },
+      { hausgeld: 700 },
+      { annualSpecialRepayments: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+      { note: "Besichtigung am Samstag" },
+      { ratesNote: "eigene Zinsen" },
+    ];
+    for (const [index, edit] of edits.entries()) {
+      const stored = {
+        ...state,
+        shortlistRevision: 2,
+        apartmentCases: state.apartmentCases.map((a) => (a.id === "flat-c" ? { ...base, ...edit } : a)),
+      };
+      window.localStorage.setItem(`mdh:save:edited-${index}`, JSON.stringify(stored));
+      const flat = loadNamed(`edited-${index}`)!.apartmentCases.find((a) => a.id === "flat-c")!;
+      expect(flat.label).toBe("Wohnung C");
+      expect(flat.purchasePrice).toBe(edit.purchasePrice ?? 600000);
+      expect(flat.offerLoans).toBeUndefined();
+    }
+  });
+
+  it("applies both the Shortlist and the placeholder step to a state from before either (D45, D47)", () => {
+    const state = defaultState();
+    const placeholder = { ...SUPERSEDED_PLACEHOLDER_FLAT_C, rates: OFFER_RATES, ratesNote: OFFER_RATES_NOTE, kfwTermYears: 20 };
+    const stored = {
+      ...state,
+      shortlistRevision: 0,
+      apartmentCases: state.apartmentCases.map((a) => (a.id === "flat-c" ? placeholder : a)),
+    };
+    window.localStorage.setItem("mdh:save:rev0", JSON.stringify(stored));
+    const loaded = loadNamed("rev0")!;
+    expect(loaded.apartmentCases.find((a) => a.id === "flat-c")!.purchasePrice).toBe(499000);
+    expect(loaded.shortlistRevision).toBe(3);
   });
 });

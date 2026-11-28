@@ -227,7 +227,8 @@ Winners (cost minimum, liquidity maximum, lowest monthly, compromise) are only e
 18. **The 15-year Sollzins column** is the owners' 10-year assumption plus 0,2 points for the default flats ([D41](DECISIONS.md)). For the Shortlist flats, 85 % comes from the offers of 25.11.2026 (Lindenstraße 4,27 %, BUWOG bank part ≈ 4,15 % derived from the blended 3,11 %); 10 % and 20 % at 15 years take the same +0,21 points ([D46](DECISIONS.md)).
 19. **KfW and bank are two loans** (`simulateSplitLoan`, [D44](DECISIONS.md)). The KfW part: its own rate, one repayment-free year counted from the start of repayment (handover), then an annuity ending `kfwTermYears` after it; no Sondertilgung. The bank part: the rest of the one Monatsrate, all Sondertilgung, the 5 % cap taken on the bank part. In the free year the couple pays less (bank rate plus KfW interest only). Both rates are held for the whole term (§1); KfW's Zinsbindung is at most 10 years, so with a 15-year bank binding the KfW part would in reality refinance earlier. The refinancing stress shifts both rates. Whether the free year starts at first disbursement rather than at handover is not modelled. The blended rate is shown as an average only. At refinancing (also in the stress run) the KfW part gets a new annuity for its remaining term at its new rate, and the bank part the rest of the unchanged Monatsrate ([D45](DECISIONS.md)); whether the KfW really recomputes this way is the broker's to confirm.
 20. **A Neubau's handover delay** (`moveInMonths`) shortens the amortising part of the Zinsbindung; every "within the binding" horizon uses `bindingMonths`, only the rate lookup uses the full binding. Bauzeit- and Bereitstellungszinsen are a rough estimate shown in the comparison only (loan × rate × months × 50 % drawn on average, `CONSTRUCTION_DRAW_SHARE`) and are not deducted from cash or the ledger: they are paid from income while rent continues. EK is assumed due at signing. In practice EK is drawn first, then KfW, then the bank loan (broker, 20.05.2026), so 50 % drawn on average is likely on the high side. The rest of the page measures from handover; only the comparison section puts both flats on one calendar from signing.
-21. **The parking space's cost** is its share of the price: that share of the Monatsrate and of EK plus Kaufnebenkosten. No separate Hausgeld for the space.
+21. **The parking space's cost** is its share of the price: that share of the Monatsrate and of EK plus Kaufnebenkosten. No separate Hausgeld for the space. A space that comes with the flat as a Sondernutzungsrecht, with no separate price in the offer, carries `parkingPrice: 0` — the model then finances it inside the price and shows nothing separate, which is what the offer says (`flat-c`, [D47](DECISIONS.md)).
+22. **15 % EK on the Henriette-Lustig flat is a model assumption, not an offer.** The bank quoted ca. 10 % and ca. 20 % only. The middle column takes the rounded midpoint of the two — 4,10 % at 10 Jahren, 4,26 % at 15 — and has no `offerLoans` entry, so its loan is 85 % of the price by share. Both are named as assumptions in the apartment's rates note. Two further roundings on that flat: the offers' EK levels are really 11,02 % and 21,04 % (55.000 € and 105.000 € on 499.000 €), and the one Monatsrate is Variante 2a's 2.570,85 € while the 10 %-Angebote run 0,65 €/Monat higher ([D14](DECISIONS.md), [D47](DECISIONS.md)).
 
 ## 5. Defect log
 
@@ -310,6 +311,34 @@ from 01.01.), and Commerzbank's first month is a one-day stub; both are disburse
 timing. The BUWOG offers assume payout in 12/2026 and repayment from 2027, as for an
 existing flat; the app starts repayment at handover (§4.20), so its BUWOG Restschuld is
 higher than the offers'.
+
+**Validated against four more offers** (27.11.2026, BauDarlehen24, Henriette-Lustig-Straße 13),
+pinned in `src/lib/offer2026-11-27.test.ts`. Two loan amounts × two Sollzinsbindungen;
+the offers print a Restschuld after ten years for all four, so the 15-year offers are
+pinned twice — mid-binding and at the end:
+
+| Angebot | Darlehen | Sollzins | Bindung | Tilgung | Restschuld 10 J. (Modell / Angebot) | Restschuld Bindungsende (Modell / Angebot) |
+|---|---|---|---|---|---|---|
+| 1a Lloyds Bank | 444.000 € | 4,17 % | 10 J | 2,78 % ✓ | 291.173,41 / 291.173,42 | — |
+| 1b PSD Bank Nürnberg | 444.000 € | 4,35 % | 15 J | 2,60 % ✓ | 299.700,43 / 299.700 | 200.362,85 / 200.362,89 |
+| 2a Commerzbank | 394.000 € | 4,02 % | 10 J | 3,81 % ✓ | 209.603,48 / 209.603,49 | — |
+| 2b OLB | 394.000 € | 4,16 % | 15 J | 3,67 % ✓ | 215.061,46 / 215.061 | 93.553,96 / 93.553,90 |
+
+Largest deviation against a figure the offers print to the cent: **6 cents**. The two
+they print rounded to whole euros (1b and 2b after ten years) are reproduced as
+299.700,43 € and 215.061,46 €, both inside the rounding of the printed figure, so they
+confirm the schedule without pinning it as tightly. The cost structure reproduces as
+well: Kaufnebenkosten 57.734,30 € = 11,57 % of 499.000 €, Eigenkapital = Anzahlung +
+Nebenkosten (112.734,30 € and 162.734,30 €), Gesamtbelastung = Kreditrate + Hausgeld
+(2.999,50 € and 2.998,85 €).
+Neither the price nor the Kaufnebenkostensatz is printed on the offers; both follow from
+Eigenkapital + Darlehen and are pinned that way.
+
+Not modelled: the Effektivzins (§4.9), and the bank's Sondertilgungstermin. The bank's
+plan of five 10.000 €-Sondertilgungen to 30.06. 2028–2032 reaches ca. 144.596 € Restschuld
+and ca. 15.007 € Zinsersparnis; the same sums at the app's year-end timing (§4.2) reach
+ca. 145.888 € and ca. 13.716 €. The difference is timing, not method. The shipped flat's
+plan is therefore all zeros, so the screen reads directly against the offer.
 
 Still outstanding from [PRODUCT_SPEC §19](PRODUCT_SPEC.md#19-validation-before-real-use):
 an independent German mortgage calculator, and an offer that models a Neubau's staged

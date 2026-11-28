@@ -9,6 +9,7 @@ import {
   OFFER_RATES_NOTE,
   SHORTLIST_APARTMENT_CASES,
   SHORTLIST_REVISION,
+  SUPERSEDED_PLACEHOLDER_FLAT_C,
   SUPERSEDED_SHORTLIST,
   SUPERSEDED_SHORTLIST_RATES,
 } from "./defaults";
@@ -28,8 +29,10 @@ export type PersistedState = {
   activeApartmentId: string;
   selectedId: ScenarioId;
   /**
-   * Which shipped data the Shortlist flats were last refreshed to (D45). A state below
-   * `SHORTLIST_REVISION` gets untouched Shortlist flats replaced by the current ones.
+   * Which shipped apartment data this state was last refreshed to (D45). Below
+   * `SHORTLIST_REVISION`, untouched shipped flats are replaced by the current ones —
+   * the Shortlist flats (D45, D46) and, from revision 3, the `flat-c` placeholder (D47).
+   * The field keeps its original name so older saves still read.
    */
   shortlistRevision: number;
 };
@@ -239,41 +242,90 @@ export function textHash(text: string): number {
 }
 
 /**
- * Shipped Shortlist data the couple never touched is replaced when newer data ships
- * (D45: the bank offers of 24.11.2026). "Untouched" means price and Monatsrate still
- * equal one of the values shipped before, and every field that never changed between
- * versions (name, Hausgeld, renovation, Kaufnebenkosten, parking) still equals it; a
- * flat they edited in any of these is left exactly as it is.
+ * Shipped apartment data the couple never touched is replaced when newer data ships.
+ * Each revision step is applied in order to a state below it, so a state that skipped
+ * several versions still arrives at the current data. A flat they edited is never
+ * touched by any step — what counts as "untouched" is each step's own business.
  */
 function refreshShortlist(cases: ApartmentCase[], revision: number): ApartmentCase[] {
   if (revision >= SHORTLIST_REVISION) return cases;
-  // Revision 1 → 2 changed only the rate grids: refresh them where still as shipped.
-  if (revision >= 1) return cases.map(refreshShortlistRates);
-  return cases.map((apartment) => {
-    const superseded = SUPERSEDED_SHORTLIST[apartment.id];
-    const current = SHORTLIST_APARTMENT_CASES.find((entry) => entry.id === apartment.id);
-    if (!superseded || !current) return apartment;
-    const untouched =
-      apartment.purchasePrice === superseded.purchasePrice &&
-      superseded.monthlyPayments.includes(apartment.monthlyPayment) &&
-      apartment.kfwAmount === superseded.kfwAmount &&
-      superseded.kfwRates.includes(apartment.kfwRate) &&
-      superseded.kfwTermYears.includes(apartment.kfwTermYears) &&
-      apartment.moveInMonths === superseded.moveInMonths &&
-      apartment.label === current.label &&
-      apartment.hausgeld === current.hausgeld &&
-      apartment.renovation === current.renovation &&
-      apartment.closingCostRate === current.closingCostRate &&
-      apartment.parkingPrice === current.parkingPrice;
-    if (!untouched) return apartment;
-    // A note the couple wrote stays; only a note the app shipped is replaced. The
-    // Sondertilgung plan is theirs in any case.
-    const shippedNote = apartment.note !== undefined && superseded.noteHashes.includes(textHash(apartment.note));
-    const refreshed = { ...cloneApartment(current), annualSpecialRepayments: [...apartment.annualSpecialRepayments] };
-    if (shippedNote) return refreshed;
-    const { note: _shipped, ...withoutNote } = refreshed;
-    return apartment.note !== undefined ? { ...withoutNote, note: apartment.note } : withoutNote;
-  });
+  let next = cases;
+  // 0 → 1 replaced the Shortlist flats wholesale; 1 → 2 changed only their rate grids.
+  if (revision < 1) next = next.map(refreshShortlistFully);
+  else if (revision < 2) next = next.map(refreshShortlistRates);
+  // 2 → 3 replaces the "Wohnung C" placeholder with the real flat behind it (D47).
+  if (revision < 3) next = next.map(refreshPlaceholderFlat);
+  return next;
+}
+
+/**
+ * Revision 0 → 1 (D45: the bank offers of 24.11.2026). "Untouched" means price and
+ * Monatsrate still equal one of the values shipped before, and every field that never
+ * changed between versions (name, Hausgeld, renovation, Kaufnebenkosten, parking) still
+ * equals it; a flat they edited in any of these is left exactly as it is.
+ */
+function refreshShortlistFully(apartment: ApartmentCase): ApartmentCase {
+  const superseded = SUPERSEDED_SHORTLIST[apartment.id];
+  const current = SHORTLIST_APARTMENT_CASES.find((entry) => entry.id === apartment.id);
+  if (!superseded || !current) return apartment;
+  const untouched =
+    apartment.purchasePrice === superseded.purchasePrice &&
+    superseded.monthlyPayments.includes(apartment.monthlyPayment) &&
+    apartment.kfwAmount === superseded.kfwAmount &&
+    superseded.kfwRates.includes(apartment.kfwRate) &&
+    superseded.kfwTermYears.includes(apartment.kfwTermYears) &&
+    apartment.moveInMonths === superseded.moveInMonths &&
+    apartment.label === current.label &&
+    apartment.hausgeld === current.hausgeld &&
+    apartment.renovation === current.renovation &&
+    apartment.closingCostRate === current.closingCostRate &&
+    apartment.parkingPrice === current.parkingPrice;
+  if (!untouched) return apartment;
+  // A note the couple wrote stays; only a note the app shipped is replaced. The
+  // Sondertilgung plan is theirs in any case.
+  const shippedNote = apartment.note !== undefined && superseded.noteHashes.includes(textHash(apartment.note));
+  const refreshed = { ...cloneApartment(current), annualSpecialRepayments: [...apartment.annualSpecialRepayments] };
+  if (shippedNote) return refreshed;
+  const { note: _shipped, ...withoutNote } = refreshed;
+  return apartment.note !== undefined ? { ...withoutNote, note: apartment.note } : withoutNote;
+}
+
+function sameAmounts(a: number[], b: readonly number[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+/**
+ * The `flat-c` placeholder ("Wohnung C", 600.000 €) becomes the real flat behind it
+ * (D47), but only where every shipped field is still exactly as shipped — the rate grid
+ * included, in either of the two grids that ever shipped for it, and the Sondertilgung
+ * plan, which was shipped too. Any edit at all and the couple's flat is left alone:
+ * this replaces one property with a different one, not a figure with a newer figure.
+ */
+function refreshPlaceholderFlat(apartment: ApartmentCase): ApartmentCase {
+  const shipped = SUPERSEDED_PLACEHOLDER_FLAT_C;
+  if (apartment.id !== shipped.id) return apartment;
+  const current = DEFAULT_APARTMENT_CASES.find((entry) => entry.id === shipped.id);
+  if (!current) return apartment;
+  const untouched =
+    apartment.label === shipped.label &&
+    apartment.purchasePrice === shipped.purchasePrice &&
+    apartment.renovation === shipped.renovation &&
+    apartment.hausgeld === shipped.hausgeld &&
+    apartment.closingCostRate === shipped.closingCostRate &&
+    apartment.monthlyPayment === shipped.monthlyPayment &&
+    apartment.kfwAmount === shipped.kfwAmount &&
+    apartment.kfwRate === shipped.kfwRate &&
+    shipped.kfwTermYears.includes(apartment.kfwTermYears) &&
+    apartment.moveInMonths === shipped.moveInMonths &&
+    apartment.parkingPrice === shipped.parkingPrice &&
+    apartment.offerLoans === undefined &&
+    apartment.note === undefined &&
+    sameAmounts(apartment.annualSpecialRepayments, shipped.annualSpecialRepayments) &&
+    (ratesEqual(apartment.rates, DEFAULT_RATES) || ratesEqual(apartment.rates, OFFER_RATES)) &&
+    (apartment.ratesNote === DEFAULT_RATES_NOTE ||
+      apartment.ratesNote === OFFER_RATES_NOTE ||
+      apartment.ratesNote === "");
+  return untouched ? cloneApartment(current) : apartment;
 }
 
 function refreshShortlistRates(apartment: ApartmentCase): ApartmentCase {

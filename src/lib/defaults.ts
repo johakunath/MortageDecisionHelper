@@ -187,8 +187,38 @@ export const SHORTLIST_APARTMENT_CASES: ApartmentCase[] = [
   },
 ];
 
-/** Bumped whenever the shipped Shortlist data changes (D45). */
-export const SHORTLIST_REVISION = 2;
+/**
+ * Bumped whenever shipped apartment data changes (D45). Despite the name it now also
+ * governs the default flats: revision 3 replaces the "Wohnung C" placeholder (D47).
+ * The persisted field keeps its name so older saves still read.
+ */
+export const SHORTLIST_REVISION = 3;
+
+/**
+ * What `flat-c` shipped as before D47: a round-number placeholder ("Wohnung C",
+ * 600.000 €), never a real flat. A stored `flat-c` still matching this in every field
+ * was never edited, so `storage.ts` replaces it with the Henriette-Lustig data.
+ *
+ * Unlike the Shortlist refresh (D45) the Sondertilgung plan is part of the check: that
+ * plan was shipped too, and the new flat deliberately starts at zero so the screen can
+ * be read against the bank offer. A plan the couple changed keeps their whole flat.
+ */
+export const SUPERSEDED_PLACEHOLDER_FLAT_C = {
+  id: "flat-c",
+  label: "Wohnung C",
+  purchasePrice: 600000,
+  renovation: 5000,
+  hausgeld: 670,
+  closingCostRate: 11.57,
+  monthlyPayment: 1900,
+  kfwAmount: 0,
+  kfwRate: 0,
+  /** 20 as shipped; saves from before the field revive with today's term. */
+  kfwTermYears: [20],
+  moveInMonths: 0,
+  parkingPrice: 0,
+  annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
+};
 
 /**
  * Revision 1 (24.11.2026) shipped these rate grids and notes. A Shortlist flat that
@@ -286,21 +316,69 @@ export const DEFAULT_APARTMENT_CASES: ApartmentCase[] = [
     annualSpecialRepayments: [...DEFAULT_INPUTS.annualSpecialRepayments],
   },
   {
+    // Henriette-Lustig-Straße 13 (Wasserstadt Spindlersfeld), an den vier Angeboten
+    // von BauDarlehen24 vom 27.11.2026. Ersetzt den früheren Platzhalter "Wohnung C"
+    // (D47). Preis 499.000 € inkl. Stellplatz P6, der als Sondernutzungsrecht zur
+    // Wohnung gehört; ein separater Stellplatzpreis ist unbekannt, daher 0 €.
     id: "flat-c",
-    label: "Wohnung C",
-    purchasePrice: 600000,
-    renovation: 5000,
-    hausgeld: 670,
-    closingCostRate: DEFAULT_INPUTS.closingCostRate,
-    monthlyPayment: DEFAULT_INPUTS.monthlyPayment,
+    label: "SpreeLofts · WE 06",
+    purchasePrice: 499000,
+    // Planwert: 12.000 € Küche + 3.000 € Aufarbeitung EG-Parkett. Fenster, Wallbox
+    // und WEG-Ladeumlage sind darin NICHT enthalten (siehe note).
+    renovation: 15000,
+    // Wirtschaftsplan 2026.
+    hausgeld: 428,
+    // 6 % Grunderwerbsteuer + 2 % Notar/Grundbuch + 3,57 % Käufercourtage
+    // = 57.734,30 €, genau die Kaufnebenkosten der Angebote.
+    closingCostRate: 11.57,
+    // Die Kreditrate der bevorzugten Variante 2a. Die 10-%-Angebote laufen mit
+    // 2.571,50 €, also 0,65 € höher; eine Rate je Wohnung, gerundet wie in D14.
+    monthlyPayment: 2570.85,
+    // Kein KfW-Darlehen in diesen Angeboten.
     kfwAmount: 0,
     kfwRate: 0,
     kfwTermYears: 20,
+    // Bezugsfreier Bestand; Übergabetermin offen.
     moveInMonths: 0,
     parkingPrice: 0,
-    rates: { 10: { ...DEFAULT_RATES[10] }, 15: { ...DEFAULT_RATES[15] } },
-    ratesNote: DEFAULT_RATES_NOTE,
-    annualSpecialRepayments: [3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000, 6000],
+    // 1a/1b Lloyds bzw. PSD 444.000 € (EK 55.000 € auf den Kaufpreis, 11,02 %),
+    // 2a/2b Commerzbank bzw. OLB 394.000 € (EK 105.000 €, 21,04 %). Für 15 % EK
+    // gibt es kein Angebot: dort rechnet das Modell wieder nach Anteil.
+    offerLoans: { ek10: 444000, ek20: 394000 },
+    rates: {
+      // 15 % EK hat kein Angebot: gerundeter Mittelwert der beiden Nachbarstufen,
+      // eine Modellannahme und keine Bankkondition (ASSUMPTIONS §4.22).
+      10: { ek10: 4.17, ek15: 4.1, ek20: 4.02 },
+      15: { ek10: 4.35, ek15: 4.26, ek20: 4.16 },
+    },
+    ratesNote:
+      "Angebote 27.11.2026 (BauDarlehen24, Vorprüfung — verbindliche Zusage offen, gültig bis 02.12.2026 12 Uhr): " +
+      "10 J.: 10 % EK Lloyds Bank 4,17 % (eff. 4,28 %), 20 % EK Commerzbank 4,02 % (eff. 4,09 %) · " +
+      "15 J.: 10 % EK PSD Bank Nürnberg 4,35 % (eff. 4,46 %), 20 % EK OLB 4,16 % (eff. 4,27 %) · " +
+      "15 % EK: kein Angebot, Modellannahme 4,10 % (10 J.) und 4,26 % (15 J.), gerundete Mittelwerte · " +
+      "Modellrate 2.570,85 € = Variante 2a; die 10-%-Angebote laufen mit 2.571,50 € (+0,65 €)",
+    // Für den Abgleich mit dem Bankangebot zunächst null; die Bankterminrechnung
+    // steht als Referenz in der Notiz.
+    annualSpecialRepayments: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    note:
+      "Henriette-Lustig-Straße 13, 12555 Berlin-Köpenick (Wasserstadt Spindlersfeld). " +
+      "Denkmal-Maisonette, 4 Zimmer auf EG + Galerie, Terrasse, ca. 52,20 m² Garten, Außenstellplatz P6 — Garten, Terrasse und P6 als Sondernutzungsrecht. " +
+      "Wohnfläche 97,75 m² laut Teilungserklärung und WEG-Unterlagen, ca. 106 m² laut Exposé; aktuelle Wohnflächenberechnung offen. " +
+      "Energieklasse B, Endenergiebedarf Gebäude 64 kWh/(m²·a), Fernwärme, Fußbodenheizung. " +
+      "Kaufpreis 499.000 € inkl. P6; Kaufbereitschaft telefonisch erklärt, Verkäuferbestätigung offen, Inklusivpreis für P6 schriftlich zu bestätigen. " +
+      "Kaufnebenkosten 57.734,30 € (29.940 € Grunderwerbsteuer, 9.980 € Notar/Grundbuch, 17.814,30 € Käufercourtage). " +
+      "Renovierung 15.000 € Planwert = 12.000 € Küche + 3.000 € Aufarbeitung EG-Parkett. Hausgeld 428 € laut Wirtschaftsplan 2026. " +
+      "ANGEBOTE BauDarlehen24 vom 27.11.2026, alle mit 5 % Sondertilgung p.a. und sechs bereitstellungszinsfreien Monaten: " +
+      "1a Lloyds Bank 444.000 € zu 4,17 %, 10 J., Rate 2.571,50 €, Tilgung 2,78 %, Restschuld 291.173 €. " +
+      "1b PSD Bank Nürnberg 444.000 € zu 4,35 %, 15 J., Rate 2.571,50 €, Tilgung 2,60 %, Restschuld nach 10 J. 299.700 €, zum Bindungsende 200.363 €. " +
+      "2a Commerzbank (BEVORZUGT) 394.000 € zu 4,02 %, 10 J., Rate 2.570,85 €, Tilgung 3,81 %, Restschuld 209.603 €. " +
+      "2b OLB 394.000 € zu 4,16 %, 15 J., Rate 2.570,85 €, Tilgung 3,67 %, Restschuld nach 10 J. 215.061 €, zum Bindungsende 93.554 €. " +
+      "Eigenkapital der Angebote inkl. Kaufnebenkosten: 112.734,30 € (Variante 1) bzw. 162.734,30 € (Variante 2). " +
+      "SONDERTILGUNG: Basisplan 0 €, damit die App gegen das Angebot abgleichbar bleibt. Der Bankterminplan rechnet mit 5 × 10.000 € jeweils zum 30.06. 2028–2032 " +
+      "und kommt auf ca. 144.596 € Restschuld und ca. 15.007 € Zinsersparnis; die App tilgt zum Kreditjahresende und käme mit derselben Summe auf ca. 145.888 € " +
+      "und ca. 13.716 €. Die Differenz ist Terminwirkung, kein Modellfehler. " +
+      "NICHT IM BUDGET: Fenster oben auffällig (Schaden und Kosten offen), Wallbox P6 ca. 1.800 € (Kabel laut Makler vorhanden), " +
+      "separate WEG-Ladeumlage rechnerisch ca. 4.178 € (Zahlungsstatus offen). Küche fehlt; Küchenpartner laut Makler ca. 3–5 Wochen, Rabattangabe 15 % oder 50 % unklar.",
   },
   ...SHORTLIST_APARTMENT_CASES.map((apartment) => ({
     ...apartment,

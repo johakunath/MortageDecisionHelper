@@ -737,6 +737,128 @@ exports[`golden master > default apartment Lindenstraße 31G 1`] = `
 }
 `;
 
+exports[`golden master > default apartment SpreeLofts · WE 06 1`] = `
+{
+  "decision": {
+    "failedInAll": [],
+    "feasible": [
+      "ek10",
+    ],
+    "noSafeScenario": false,
+  },
+  "scenarios": {
+    "ek10": {
+      "cashLeft": 17266,
+      "feasible": true,
+      "interestFixed": 141936,
+      "interestTotal": 206040,
+      "loan": 444000,
+      "remainingAfterFixed": 277434,
+      "runtimeYears": 21.08,
+      "status": "Reserve unter Ziel",
+      "stressExtraYears": 1.75,
+    },
+    "ek15": {
+      "cashLeft": -2584,
+      "feasible": false,
+      "interestFixed": 132150,
+      "interestTotal": 181449,
+      "loan": 424150,
+      "remainingAfterFixed": 247798,
+      "runtimeYears": 19.67,
+      "status": "Geld reicht nicht",
+      "stressExtraYears": 1.25,
+    },
+    "ek20": {
+      "cashLeft": -32734,
+      "feasible": false,
+      "interestFixed": 114200,
+      "interestTotal": 143700,
+      "loan": 394000,
+      "remainingAfterFixed": 199698,
+      "runtimeYears": 17.5,
+      "status": "Geld reicht nicht",
+      "stressExtraYears": 0.67,
+    },
+  },
+  "special": {
+    "catchUp": [
+      {
+        "amount": null,
+        "id": "ek10",
+        "payer": null,
+        "planCovers": null,
+      },
+      {
+        "amount": 2589,
+        "id": "ek15",
+        "payer": "selection",
+        "planCovers": false,
+      },
+      {
+        "amount": 8458,
+        "id": "ek20",
+        "payer": "selection",
+        "planCovers": false,
+      },
+    ],
+    "effectInBinding": {
+      "debtReduction": 0,
+      "paid": 0,
+      "wealthDelta": 0,
+    },
+    "planSaving": 0,
+  },
+  "tradeoff": {
+    "etfForegone": 25639,
+    "extraCashRequired": 50000,
+    "interestSavedFixed": 27737,
+    "netAdvantageFixed": 2098,
+  },
+  "wait": [
+    {
+      "cashLeftAfterPurchase": 17266,
+      "deltaWealth": 0,
+      "months": 0,
+    },
+    {
+      "cashLeftAfterPurchase": 45872,
+      "deltaWealth": 5151,
+      "months": 12,
+    },
+    {
+      "cashLeftAfterPurchase": 70618,
+      "deltaWealth": -3146,
+      "months": 24,
+    },
+  ],
+  "waitWealthDelta": [
+    {
+      "delta": 5151,
+      "months": 12,
+    },
+    {
+      "delta": -3146,
+      "months": 24,
+    },
+  ],
+  "wealthAtFixedEnd": {
+    "ek10": {
+      "liquidAfterTax": 82537,
+      "wealth": 413381,
+    },
+    "ek15": {
+      "liquidAfterTax": 52508,
+      "wealth": 412988,
+    },
+    "ek20": {
+      "liquidAfterTax": 6897,
+      "wealth": 415478,
+    },
+  },
+}
+`;
+
 exports[`golden master > default apartment Wohnung B 1`] = `
 {
   "decision": {
@@ -855,128 +977,6 @@ exports[`golden master > default apartment Wohnung B 1`] = `
     "ek20": {
       "liquidAfterTax": 23078,
       "wealth": 398058,
-    },
-  },
-}
-`;
-
-exports[`golden master > default apartment Wohnung C 1`] = `
-{
-  "decision": {
-    "failedInAll": [],
-    "feasible": [
-      "ek10",
-    ],
-    "noSafeScenario": false,
-  },
-  "scenarios": {
-    "ek10": {
-      "cashLeft": 10580,
-      "feasible": true,
-      "interestFixed": 196843,
-      "interestTotal": 635469,
-      "loan": 540000,
-      "remainingAfterFixed": 460843,
-      "runtimeYears": 49.5,
-      "status": "Reserve unter Ziel",
-      "stressExtraYears": "never",
-    },
-    "ek15": {
-      "cashLeft": -19420,
-      "feasible": false,
-      "interestFixed": 182115,
-      "interestTotal": 487192,
-      "loan": 510000,
-      "remainingAfterFixed": 416115,
-      "runtimeYears": 41.67,
-      "status": "Geld reicht nicht",
-      "stressExtraYears": "never",
-    },
-    "ek20": {
-      "cashLeft": -49420,
-      "feasible": false,
-      "interestFixed": 162696,
-      "interestTotal": 359714,
-      "loan": 480000,
-      "remainingAfterFixed": 366696,
-      "runtimeYears": 34.75,
-      "status": "Geld reicht nicht",
-      "stressExtraYears": 20.67,
-    },
-  },
-  "special": {
-    "catchUp": [
-      {
-        "amount": null,
-        "id": "ek10",
-        "payer": null,
-        "planCovers": null,
-      },
-      {
-        "amount": 314,
-        "id": "ek15",
-        "payer": "row",
-        "planCovers": true,
-      },
-      {
-        "amount": 4928,
-        "id": "ek20",
-        "payer": "selection",
-        "planCovers": false,
-      },
-    ],
-    "effectInBinding": {
-      "debtReduction": 55977,
-      "paid": 48000,
-      "wealthDelta": -499,
-    },
-    "planSaving": -290247,
-  },
-  "tradeoff": {
-    "etfForegone": 30767,
-    "extraCashRequired": 60000,
-    "interestSavedFixed": 34147,
-    "netAdvantageFixed": 3380,
-  },
-  "wait": [
-    {
-      "cashLeftAfterPurchase": 10580,
-      "deltaWealth": 0,
-      "months": 0,
-    },
-    {
-      "cashLeftAfterPurchase": 33650,
-      "deltaWealth": 15866,
-      "months": 12,
-    },
-    {
-      "cashLeftAfterPurchase": 57952,
-      "deltaWealth": 13538,
-      "months": 24,
-    },
-  ],
-  "waitWealthDelta": [
-    {
-      "delta": 15866,
-      "months": 12,
-    },
-    {
-      "delta": 13538,
-      "months": 24,
-    },
-  ],
-  "wealthAtFixedEnd": {
-    "ek10": {
-      "liquidAfterTax": 79425,
-      "wealth": 349978,
-    },
-    "ek15": {
-      "liquidAfterTax": 34041,
-      "wealth": 349323,
-    },
-    "ek20": {
-      "liquidAfterTax": -11342,
-      "wealth": 353358,
     },
   },
 }
