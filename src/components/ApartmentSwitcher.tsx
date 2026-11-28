@@ -1,4 +1,5 @@
 import type { ApartmentCase, ApartmentComparisonResult } from "../lib/calculations";
+import { apartmentChipStatus } from "../lib/calculations";
 import { formatEur } from "../lib/format";
 import { EK_SCENARIOS } from "../lib/defaults";
 import { GLOSSARY } from "../lib/glossary";
@@ -58,27 +59,28 @@ export default function ApartmentSwitcher({
         selection controls on this screen announce themselves the same way.
       */}
       <div className="apartment-chip-row" role="group" aria-label="Wohnung wählen">
-        {results.map((result) => (
-          <button
-            key={result.apartment.id}
-            type="button"
-            aria-pressed={result.apartment.id === activeApartmentId}
-            className={`apartment-chip ${result.apartment.id === activeApartmentId ? "is-active" : ""}`}
-            onClick={() => onSelect(result.apartment.id)}
-          >
-            <span className="apartment-chip-label">{result.apartment.label}</span>
-            <span className="apartment-chip-price">{formatEur(result.apartment.purchasePrice)}</span>
-            {/* At the EK level on screen: tragbar with a reserve or deadline warning reads
-                amber, so a green chip never hides one (D44). */}
-            {result.decision.noSafeScenario ? (
-              <StatusPill tone="red">nicht tragbar</StatusPill>
-            ) : result.selectedScenario.feasible && result.selectedScenario.diagnosis.warnings.length > 0 ? (
-              <StatusPill tone="amber">tragbar, mit Hinweis</StatusPill>
-            ) : (
-              <StatusPill tone="green">tragbar</StatusPill>
-            )}
-          </button>
-        ))}
+        {results.map((result) => {
+          // Tone and wording come from one pure function, covered by the model tests.
+          // The old inline chain fell through to a green "tragbar" whenever the flat
+          // worked at *some* EK level, including when the one on screen did not (D48).
+          const chip = apartmentChipStatus(result);
+
+          return (
+            <button
+              key={result.apartment.id}
+              type="button"
+              aria-pressed={result.apartment.id === activeApartmentId}
+              className={`apartment-chip ${result.apartment.id === activeApartmentId ? "is-active" : ""}`}
+              onClick={() => onSelect(result.apartment.id)}
+            >
+              <span className="apartment-chip-label">{result.apartment.label}</span>
+              <span className="apartment-chip-price">
+                {formatEur(result.apartment.purchasePrice)}
+              </span>
+              <StatusPill tone={chip.tone}>{chip.label}</StatusPill>
+            </button>
+          );
+        })}
         <Button variant="action" onClick={onAdd}>+ Neue Wohnung</Button>
       </div>
     </div>
