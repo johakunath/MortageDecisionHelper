@@ -831,3 +831,40 @@ seven real edits that must keep the couple's flat.
 A save where the couple did put their own data into `flat-c` is still left alone, by
 design. Nothing short of the JSON export and import under "Annahmen" will move the new
 flat into such a state, and that is the right trade.
+
+
+---
+
+## D50: flat-c is overwritten once, whatever it holds
+
+**Date:** 2026-11-28 · **Status:** accepted · **Supersedes** the refresh condition in [D47](#d47-the-henriette-lustig-flat-replaces-the-wohnung-c-placeholder) and [D49](#d49-the-flat-c-refresh-checked-fields-the-placeholder-never-owned-so-it-fired-for-nobody)
+
+**Context.** D47 and D49 both replaced `flat-c` only where it still looked like the
+untouched placeholder, so that data the couple had entered there could not be lost. After
+D49 shipped, the owner asked for it to be overwritten anyway, their own edits included:
+*"nee, bitte überschreibe einfach wohnung C, auch meine!"*
+
+The protection was aimed at the wrong thing. The slot had only ever held a placeholder
+nobody wanted — "Wohnung C", 600.000 €, round numbers invented before any flat was real.
+Whatever had been typed into it was worth less to them than seeing the Maisonette, and
+they are the only two people who use this app.
+
+**Decision.** For a state below revision 5, `flat-c` is set to the shipped flat, whatever
+it currently holds. No fingerprint, no field comparison. `SUPERSEDED_PLACEHOLDER_FLAT_C`
+and the comparison it fed are deleted rather than left unused.
+
+**It is a one-shot migration, not a rule.** It runs once per state and never again, so an
+edit made to this flat from now on survives every later load. A standing "always reset"
+would quietly undo their work each time the app opened, which is not what was asked and
+would be worse than the problem.
+
+**Consequence.** It applies wherever a state is revived, named saves included: a save
+holding the old "Wohnung C" shows the Maisonette after this. That follows from the ask and
+from `loadNamed` sharing one migration path with the autosave; splitting them so a named
+save could keep a flat that is being deleted everywhere else would preserve a snapshot
+nobody asked to keep.
+
+`storage.test.ts` pins thirty cases — five revisions below 5 × six things the slot might
+hold, from the pristine placeholder to a completely different flat — and, separately, that
+a state already at revision 5 keeps an edited `flat-c` untouched. That second test is the
+one that matters: it is what makes this a migration rather than a reset.
